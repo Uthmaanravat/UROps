@@ -106,7 +106,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             }
         }
         loadCatalog()
-    }, [])
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         async function fetchSuggestions() {
@@ -127,7 +127,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             }
         }
         fetchSuggestions()
-    }, [initialItems])
+    }, [initialItems, aiEnabled])
 
     const updateItem = (index: number, field: string, value: any) => {
         const newItems = [...items]

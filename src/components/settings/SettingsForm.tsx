@@ -143,7 +143,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                     onChange={handleChange}
                                 />
                                 <p className="text-[10px] text-muted-foreground italic">
-                                    Used as the "From" address for sent documents. To send to any recipient, verify this domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="text-primary hover:underline">resend.com/domains</a>.
+                                    Used as the &quot;From&quot; address for sent documents. To send to any recipient, verify this domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="text-primary hover:underline">resend.com/domains</a>.
                                 </p>
                             </div>
                             <div className="space-y-2">

@@ -52,7 +52,7 @@ export function KnowledgeBaseClient({ historicalItems, aiEnabled = true }: Knowl
                             </h1>
                             <div className="bg-primary/10 border-l-4 border-primary px-4 py-2">
                                 <p className="text-primary font-bold text-sm uppercase tracking-widest italic">
-                                    "Dynamic memory extracted from past quotations and project work."
+                                    &quot;Dynamic memory extracted from past quotations and project work.&quot;
                                 </p>
                             </div>
                         </div>
@@ -121,7 +121,7 @@ export function KnowledgeBaseClient({ historicalItems, aiEnabled = true }: Knowl
                             </h1>
                             <div className="bg-primary/10 border-l-4 border-primary px-4 py-2">
                                 <p className="text-primary font-bold text-sm uppercase tracking-widest italic">
-                                    "Controlled pricing for your most common services and materials."
+                                    &quot;Controlled pricing for your most common services and materials.&quot;
                                 </p>
                             </div>
                         </div>
