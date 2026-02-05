@@ -4,16 +4,18 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { UserCircle, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { User } from "@prisma/client";
+import { LogOut, Rocket } from "lucide-react";
+import { CompanySettings, User } from "@prisma/client";
 import { signOutAction } from "@/app/actions/auth";
-import { LogOut } from "lucide-react";
 
 export default function DashboardLayout({
     children,
     user,
+    settings,
 }: {
     children: React.ReactNode;
     user: User;
+    settings: CompanySettings | null;
 }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -22,8 +24,14 @@ export default function DashboardLayout({
             {/* Desktop Sidebar */}
             <aside className="hidden w-64 border-r bg-card p-4 md:flex flex-col gap-4 sticky top-0 h-screen">
                 <div className="flex items-center gap-2 px-2 font-bold text-xl text-primary">
-                    <div className="h-8 w-8 rounded-lg bg-primary " />
-                    UROps
+                    {settings?.logoUrl ? (
+                        <img src={settings.logoUrl} alt="Logo" className="h-8 w-8 rounded-lg object-contain" />
+                    ) : (
+                        <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
+                            <Rocket className="h-5 w-5" />
+                        </div>
+                    )}
+                    {settings?.name || "UROps"}
                 </div>
                 <Sidebar role={user.role} />
                 <div className="mt-auto border-t pt-4 space-y-2">
@@ -49,8 +57,14 @@ export default function DashboardLayout({
             {/* Mobile Header */}
             <header className="flex h-16 items-center border-b px-4 md:hidden bg-card justify-between sticky top-0 z-50">
                 <div className="font-bold text-xl flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-lg bg-primary" />
-                    UROps
+                    {settings?.logoUrl ? (
+                        <img src={settings.logoUrl} alt="Logo" className="h-6 w-6 rounded-lg object-contain" />
+                    ) : (
+                        <div className="h-6 w-6 rounded-lg bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
+                            <Rocket className="h-4 w-4" />
+                        </div>
+                    )}
+                    {settings?.name || "UROps"}
                 </div>
                 <button
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -75,8 +89,14 @@ export default function DashboardLayout({
             )}>
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 px-2 font-bold text-xl text-primary">
-                        <div className="h-8 w-8 rounded-lg bg-primary " />
-                        UROps
+                        {settings?.logoUrl ? (
+                            <img src={settings.logoUrl} alt="Logo" className="h-8 w-8 rounded-lg object-contain" />
+                        ) : (
+                            <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
+                                <Rocket className="h-5 w-5" />
+                            </div>
+                        )}
+                        {settings?.name || "UROps"}
                     </div>
                     <button onClick={() => setIsMobileMenuOpen(false)}><X className="h-5 w-5" /></button>
                 </div>

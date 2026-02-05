@@ -8,8 +8,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Save } from "lucide-react"
+import { Loader2, Save, Trash2, AlertTriangle } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
+import { resetAppDataAction } from "@/app/(dashboard)/settings/actions"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
+// import { toast } from "sonner" // Removed as not in package.json
 
 interface SettingsFormProps {
     initialSettings: any
@@ -18,6 +29,7 @@ interface SettingsFormProps {
 export function SettingsForm({ initialSettings }: SettingsFormProps) {
     const router = useRouter()
     const [loading, setLoading] = useState(false)
+    const [confirmText, setConfirmText] = useState("")
     const [formData, setFormData] = useState({
         name: initialSettings?.name || "",
         address: initialSettings?.address || "",
@@ -327,6 +339,91 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                             )}
                         </Button>
                     </CardFooter>
+                </Card>
+
+                {/* Danger Zone */}
+                <Card className="border-destructive/20 bg-destructive/5">
+                    <CardHeader>
+                        <CardTitle className="text-destructive flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            Danger Zone
+                        </CardTitle>
+                        <CardDescription>
+                            Destructive actions that cannot be undone.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h4 className="font-bold text-white">Reset App Data</h4>
+                                <p className="text-sm text-muted-foreground">
+                                    This will delete all projects, invoices, quotes, and interactions.
+                                    Your <strong>Company Settings</strong> and <strong>Clients</strong> will be preserved.
+                                </p>
+                            </div>
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button variant="destructive" className="shrink-0">
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Reset All Data
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[425px] border-destructive/20">
+                                    <DialogHeader>
+                                        <DialogTitle className="text-destructive flex items-center gap-2">
+                                            <AlertTriangle className="h-5 w-5" />
+                                            Are you absolutely sure?
+                                        </DialogTitle>
+                                        <DialogDescription className="text-muted-foreground pt-2">
+                                            This action <strong>cannot be undone</strong>. This will permanently delete your:
+                                            <ul className="list-disc list-inside mt-2 space-y-1">
+                                                <li>Projects & Scopes of Work</li>
+                                                <li>Quotes & Invoices</li>
+                                                <li>Payments & Interactions</li>
+                                                <li>AI Training Knowledge</li>
+                                            </ul>
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="py-4">
+                                        <Label htmlFor="confirmReset" className="text-white mb-2 block">
+                                            Type <span className="text-destructive font-black">RESET</span> to confirm
+                                        </Label>
+                                        <Input
+                                            id="confirmReset"
+                                            placeholder="RESET"
+                                            className="uppercase border-destructive/20 focus-visible:ring-destructive"
+                                            onChange={(e) => {
+                                                if (e.target.value === "RESET") {
+                                                    setConfirmText("RESET")
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <DialogFooter>
+                                        <Button
+                                            variant="destructive"
+                                            className="w-full"
+                                            disabled={confirmText !== "RESET" || loading}
+                                            onClick={async () => {
+                                                setLoading(true)
+                                                const res = await resetAppDataAction()
+                                                if (res.success) {
+                                                    alert("All transactional data has been cleared.")
+                                                    router.refresh()
+                                                } else {
+                                                    alert(res.error || "Failed to reset data.")
+                                                }
+                                                setLoading(false)
+                                            }}
+                                        >
+                                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                                            I understand, reset all data
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+                    </CardContent>
                 </Card>
             </div>
         </form>

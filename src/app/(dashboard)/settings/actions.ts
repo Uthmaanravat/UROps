@@ -47,3 +47,30 @@ export async function updateCompanySettings(data: {
         return { success: false, error: "Failed to update settings" }
     }
 }
+export async function resetAppDataAction() {
+    try {
+        await prisma.$transaction([
+            // Order matters for some relations if not cascaded, 
+            // but prisma handles it well with deleteMany in transaction
+            prisma.submissionLog.deleteMany(),
+            prisma.interaction.deleteMany(),
+            prisma.meeting.deleteMany(),
+            prisma.payment.deleteMany(),
+            prisma.invoiceItem.deleteMany(),
+            prisma.invoice.deleteMany(),
+            prisma.scopeItem.deleteMany(),
+            prisma.scopeOfWork.deleteMany(),
+            prisma.workBreakdownPricingItem.deleteMany(),
+            prisma.workBreakdownPricing.deleteMany(),
+            prisma.project.deleteMany(),
+            prisma.pricingKnowledge.deleteMany(),
+            prisma.fixedPriceItem.deleteMany(),
+        ])
+
+        revalidatePath("/")
+        return { success: true }
+    } catch (error) {
+        console.error("Error resetting app data:", error)
+        return { success: false, error: "Failed to reset app data" }
+    }
+}

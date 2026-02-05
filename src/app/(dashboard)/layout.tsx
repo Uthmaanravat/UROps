@@ -34,12 +34,16 @@ export default async function DashboardLayout({
             redirect("/onboarding")
         }
 
-        return <DashboardLayoutClient user={newUser}>{children}</DashboardLayoutClient>
+        return <DashboardLayoutClient user={newUser} settings={null}>{children}</DashboardLayoutClient>
     }
 
     if (!dbUser.hasCompletedOnboarding) {
         redirect("/onboarding")
     }
 
-    return <DashboardLayoutClient user={dbUser}>{children}</DashboardLayoutClient>
+    const settings = await prisma.companySettings.findUnique({
+        where: { id: "default" }
+    })
+
+    return <DashboardLayoutClient user={dbUser} settings={settings}>{children}</DashboardLayoutClient>
 }
