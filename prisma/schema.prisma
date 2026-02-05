@@ -1,0 +1,304 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING_SCOPE // PM has entered scope, Admin needs to price
+  SENT
+  ACCEPTED
+  REJECTED
+  INVOICED
+  PAID
+  PARTIAL
+  CANCELLED
+}
+
+enum InvoiceType {
+  QUOTE
+  INVOICE
+}
+
+model User {
+  id        String   @id // Connects to Supabase Auth UID
+  email     String   @unique
+  name      String?
+  role      Role     @default(MANAGER)
+  hasCompletedOnboarding Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+enum ProjectStatus {
+  SOW
+  SOW_SUBMITTED
+  LEAD
+  QUOTED
+  PLANNING
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  INVOICED
+  PAID
+  ON_HOLD
+  CANCELLED
+}
+
+enum InteractionType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+}
+
+model CompanySettings {
+  id          String   @id @default("default") // Singleton
+  name        String   @default("My Company")
+  address     String?
+  phone       String?
+  email       String?
+  website     String?
+  logoUrl     String?
+  taxId       String?
+  bankDetails String?
+  paymentTerms String?
+  currency    String   @default("R") // Default to Rand as seen in context
+  theme       String   @default("dark")
+  aiEnabled   Boolean  @default(true)
+  layoutPreferences Json?
+  updatedAt   DateTime @updatedAt
+}
+
+enum SubmissionType {
+  SOW
+  QUOTATION
+  INVOICE
+  WBP
+}
+
+model Client {
+  id           String        @id @default(uuid())
+  name         String        // Display Name
+  companyName  String?       // Legal Company Name
+  attentionTo  String?       // Person's name for invoice
+  email        String?
+  phone        String?
+  address      String?
+  vatNumber    String?
+  registrationNumber String?
+  vendorNumber String?
+  notes        String?
+  tags         String[]      @default([]) // e.g. ["VIP", "Residential"]
+  customFields Json?         // For flexible extra info
+  invoices     Invoice[]
+  projects     Project[]
+  interactions Interaction[]
+  meetings     Meeting[]
+  submissionLogs SubmissionLog[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+enum WorkflowStage {
+  SOW
+  QUOTATION
+  INVOICE
+  PAYMENT
+  COMPLETED
+}
+
+model Project {
+  id            String        @id @default(uuid())
+  name          String
+  description   String?
+  status        ProjectStatus @default(PLANNING)
+  workflowStage WorkflowStage @default(SOW)
+  startDate     DateTime?
+  endDate       DateTime?
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  invoices      Invoice[]
+  scopes        ScopeOfWork[]
+  workBreakdowns WorkBreakdownPricing[]
+  meetings      Meeting[]
+  submissionLogs SubmissionLog[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model ScopeOfWork {
+  id          String      @id @default(uuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status      String      @default("DRAFT") // DRAFT, SUBMITTED
+  version     Int         @default(1)
+  items       ScopeItem[]
+  site        String?     // Installation site/location
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model ScopeItem {
+  id          String      @id @default(uuid())
+  scopeId     String
+  scope       ScopeOfWork @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float       @default(1)
+  unit        String?
+  notes       String?
+}
+
+model WorkBreakdownPricing {
+  id          String      @id @default(uuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status      String      @default( "DRAFT") // DRAFT, APPROVED
+  version     Int         @default(1)
+  items       WorkBreakdownPricingItem[]
+  invoices    Invoice[]
+  notes       String?     // Overall quotation notes and requirements
+  site        String?     // Installation site/location (inherited from SOW)
+  quoteNumber String?     // Automatically generated/suggested quote number
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model WorkBreakdownPricingItem {
+  id          String      @id @default(uuid())
+  wbpId       String
+  wbp         WorkBreakdownPricing @relation(fields: [wbpId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float       @default(1)
+  unit        String?
+  unitPrice   Float       @default(0)
+  total       Float       @default(0)
+  notes       String?
+}
+
+model Interaction {
+  id        String          @id @default(uuid())
+  type      InteractionType @default(NOTE)
+  content   String
+  date      DateTime        @default(now())
+  read      Boolean         @default(false)
+  clientId  String
+  client    Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+}
+
+model Meeting {
+  id        String   @id @default(uuid())
+  title     String
+  date      DateTime
+  duration  Int      @default(60) // minutes
+  location  String?
+  notes     String?
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id])
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  number      Int           @default(autoincrement())
+  type        InvoiceType   @default(QUOTE)
+  status      InvoiceStatus @default(DRAFT)
+  date        DateTime      @default(now())
+  dueDate     DateTime?
+  clientId    String
+  client      Client        @relation(fields: [clientId], references: [id])
+  projectId   String?
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbpId       String?       // Link to the Work Breakdown & Pricing this quote is based on
+  wbp         WorkBreakdownPricing? @relation(fields: [wbpId], references: [id])
+  items       InvoiceItem[]
+  payments    Payment[]
+  subtotal    Float         @default(0)
+  taxRate     Float         @default(0.15) // 15% VAT
+  taxAmount   Float         @default(0)
+  total       Float         @default(0)
+  notes       String?
+  site        String?
+  quoteNumber String?       // Custom quotation number if needed
+  reference   String?       // Customer reference
+  clientPoNumber String?    // Purchase Order Number from Client
+  paymentNotes String?      // e.g. "50% deposit required"
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float   @default(1)
+  unit        String?
+  unitPrice   Float   @default(0)
+  total       Float   @default(0)
+  notes       String?
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade) // Added cascade delete for easier cleanup
+  amount    Float
+  date      DateTime @default(now())
+  method    String?  // CASH, EFT, CARD
+  reference String?
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model PricingKnowledge {
+  id           String   @id @default(uuid())
+  description  String   // The text description line
+  typicalPrice Float
+  minPrice     Float
+  maxPrice     Float
+  frequency    Int      @default(1)
+  source       String?  // Filename or origin
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FixedPriceItem {
+  id           String   @id @default(uuid())
+  description  String
+  unitPrice    Float
+  unit         String?  // e.g. "hr", "m2", "ea"
+  category     String?  // e.g. "Labor", "Materials", "Transport"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SubmissionLog {
+  id            String         @id @default(uuid())
+  type          SubmissionType
+  documentId    String         // ID of the submitted document
+  documentRef   String?        // Quote number, Invoice number, etc.
+  projectId     String?
+  project       Project?       @relation(fields: [projectId], references: [id])
+  clientId      String?
+  client        Client?        @relation(fields: [clientId], references: [id])
+  submittedBy   String         // "ADMIN" or "MANAGER"
+  message       String         // "Quotation submitted", etc.
+  metadata      Json?          // Additional context (site name, WBP ID, etc.)
+  createdAt     DateTime       @default(now())
+}

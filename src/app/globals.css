@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 230 40% 10%; /* Deep Navy */
+    --foreground: 0 0% 98%;
+    --card: 230 40% 13%; /* Navy Card */
+    --card-foreground: 0 0% 98%;
+    --popover: 230 40% 13%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 85 100% 50%; /* Lime #A3FF00 */
+    --primary-foreground: 230 40% 10%;
+    --secondary: 230 40% 18%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 230 40% 18%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 85 100% 50%; /* Lime Accent */
+    --accent-foreground: 230 40% 10%;
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 230 40% 20%;
+    --input: 230 40% 20%;
+    --ring: 85 100% 50%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 230 40% 10%;
+    --foreground: 0 0% 98%;
+    --card: 230 40% 13%;
+    --card-foreground: 0 0% 98%;
+    --popover: 230 40% 13%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 85 100% 50%;
+    --primary-foreground: 230 40% 10%;
+    --secondary: 230 40% 18%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 230 40% 18%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 85 100% 50%;
+    --accent-foreground: 230 40% 10%;
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 230 40% 20%;
+    --input: 230 40% 20%;
+    --ring: 85 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+@layer base {
+  .theme-blue {
+    --primary: 221 83% 53%;
+    --ring: 221 83% 53%;
+    --accent: 221 83% 53%;
+  }
+  .theme-orange {
+    --primary: 25 95% 53%;
+    --ring: 25 95% 53%;
+    --accent: 25 95% 53%;
+  }
+  .theme-violet {
+    --primary: 262 83% 58%;
+    --ring: 262 83% 58%;
+    --accent: 262 83% 58%;
+  }
+}
