@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { submitScopeOfWork } from "@/lib/workflow"
 import { revalidatePath } from "next/cache"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export async function createMobileSOWAction(data: {
     clientId: string
@@ -10,9 +11,11 @@ export async function createMobileSOWAction(data: {
     date: string
     items: { description: string }[]
 }) {
+    const companyId = await ensureAuth()
     // 1. Create a placeholder project for this scope
     const project = await prisma.project.create({
         data: {
+            companyId,
             name: `${data.site || "New Project"} - ${new Date(data.date).toLocaleDateString()}`,
             clientId: data.clientId,
             status: 'SOW',

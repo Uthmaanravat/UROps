@@ -8,12 +8,14 @@ import { DeleteClientButton } from "@/components/clients/DeleteClientButton";
 import { InteractionList } from "@/components/clients/InteractionList";
 import { ActivityTimeline } from "@/components/clients/ActivityTimeline";
 import { notFound } from "next/navigation";
+import { ensureAuth } from "@/lib/auth-actions";
 
 export const dynamic = 'force-dynamic';
 
 export default async function ClientPage({ params }: { params: { id: string } }) {
+    const companyId = await ensureAuth();
     const client = await prisma.client.findUnique({
-        where: { id: params.id },
+        where: { id: params.id, companyId },
         include: {
             projects: {
                 orderBy: { updatedAt: 'desc' }

@@ -2,11 +2,13 @@
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export async function getCompanySettings() {
     try {
+        const companyId = await ensureAuth()
         const settings = await prisma.companySettings.findUnique({
-            where: { id: "default" }
+            where: { companyId }
         })
         return settings
     } catch (error) {
@@ -31,12 +33,13 @@ export async function updateCompanySettings(data: {
     layoutPreferences?: any
 }) {
     try {
+        const companyId = await ensureAuth()
         const settings = await prisma.companySettings.upsert({
-            where: { id: "default" },
+            where: { companyId },
             update: data,
             create: {
-                id: "default",
-                ...data
+                ...data,
+                companyId
             }
         })
 
@@ -49,22 +52,36 @@ export async function updateCompanySettings(data: {
 }
 export async function resetAppDataAction() {
     try {
+        const companyId = await ensureAuth()
+
         await prisma.$transaction([
             // Order matters for some relations if not cascaded, 
             // but prisma handles it well with deleteMany in transaction
-            prisma.submissionLog.deleteMany(),
-            prisma.interaction.deleteMany(),
-            prisma.meeting.deleteMany(),
-            prisma.payment.deleteMany(),
-            prisma.invoiceItem.deleteMany(),
-            prisma.invoice.deleteMany(),
-            prisma.scopeItem.deleteMany(),
-            prisma.scopeOfWork.deleteMany(),
-            prisma.workBreakdownPricingItem.deleteMany(),
-            prisma.workBreakdownPricing.deleteMany(),
-            prisma.project.deleteMany(),
-            prisma.pricingKnowledge.deleteMany(),
-            prisma.fixedPriceItem.deleteMany(),
+            prisma.submissionLog.deleteMany({ where: { companyId } }),
+            prisma.interaction.deleteMany({ where: { companyId } }),
+            prisma.meeting.deleteMany({ where: { companyId } }),
+            prisma.payment.deleteMany({ where: { companyId } }),
+            prisma.invoiceItem.deleteMany({
+                where: {
+                    invoice: { companyId }
+                }
+            }),
+            prisma.invoice.deleteMany({ where: { companyId } }),
+            prisma.scopeItem.deleteMany({
+                where: {
+                    scope: { companyId }
+                }
+            }),
+            prisma.scopeOfWork.deleteMany({ where: { companyId } }),
+            prisma.workBreakdownPricingItem.deleteMany({
+                where: {
+                    wbp: { companyId }
+                }
+            }),
+            prisma.workBreakdownPricing.deleteMany({ where: { companyId } }),
+            prisma.project.deleteMany({ where: { companyId } }),
+            prisma.pricingKnowledge.deleteMany({ where: { companyId } }),
+            prisma.fixedPriceItem.deleteMany({ where: { companyId } }),
         ])
 
         revalidatePath("/")

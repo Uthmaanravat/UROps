@@ -5,11 +5,14 @@ import { Plus } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { deleteProject } from "./actions"
 import { DeleteButton } from "@/components/ui/DeleteButton"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProjectsPage() {
+    const companyId = await ensureAuth()
     const projects = await prisma.project.findMany({
+        where: { companyId },
         orderBy: { updatedAt: 'desc' },
         include: {
             client: true,

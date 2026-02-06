@@ -18,6 +18,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
     // 2. Create SOW Record (Frozen snapshot)
     const sow = await prisma.scopeOfWork.create({
         data: {
+            companyId: project!.companyId,
             projectId,
             status: 'SUBMITTED',
             version: 1,
@@ -36,6 +37,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
     // 3. Create the Work Breakdown & Pricing (WB&P) record for Admin
     const wbp = await prisma.workBreakdownPricing.create({
         data: {
+            companyId: project!.companyId,
             projectId,
             status: 'DRAFT',
             version: 1,
@@ -153,6 +155,7 @@ export async function generateQuotationFromWBP(
     // 3. Create Official Quote
     const quote = await prisma.invoice.create({
         data: {
+            companyId: wbp.project.companyId,
             projectId: wbp.projectId,
             clientId: wbp.project.clientId,
             type: 'QUOTE',
@@ -225,6 +228,7 @@ export async function approveQuote(quoteId: string) {
     // 2. Create Draft Invoice from Quote
     await prisma.invoice.create({
         data: {
+            companyId: quote.companyId,
             projectId: quote.projectId,
             clientId: quote.clientId,
             type: 'INVOICE',

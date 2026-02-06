@@ -138,7 +138,7 @@ export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onIt
 
     return (
 
-        <div className="flex flex-col h-full gap-6">
+        <div className="flex-1 overflow-y-auto pr-2 -mr-2">
             <nav className="grid items-start gap-1">
                 {items.map((item, index) => {
                     // @ts-ignore

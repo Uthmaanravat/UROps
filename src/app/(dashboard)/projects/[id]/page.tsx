@@ -9,12 +9,14 @@ import { updateProjectStatus, deleteProject } from "@/app/(dashboard)/projects/a
 import { deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { DeleteButton } from "@/components/ui/DeleteButton"
 import { deleteSOWAction } from "./sow/actions"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
-    const project = await prisma.project.findUnique({
-        where: { id: params.id },
+    const companyId = await ensureAuth()
+    const project = await (prisma as any).project.findFirst({
+        where: { id: params.id, companyId },
         include: {
             client: true,
             invoices: {

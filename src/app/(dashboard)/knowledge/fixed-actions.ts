@@ -2,10 +2,13 @@
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export async function getFixedPriceItemsAction() {
+    const companyId = await ensureAuth()
     try {
         return await prisma.fixedPriceItem.findMany({
+            where: { companyId },
             orderBy: { description: 'asc' }
         })
     } catch (error) {
@@ -21,12 +24,13 @@ export async function saveFixedPriceItemAction(data: {
     unit?: string,
     category?: string
 }) {
+    const companyId = await ensureAuth()
     try {
         console.log("Saving fixed price item:", data);
 
         if (data.id) {
             await prisma.fixedPriceItem.update({
-                where: { id: data.id },
+                where: { id: data.id, companyId },
                 data: {
                     description: data.description,
                     unitPrice: data.unitPrice,
@@ -37,6 +41,7 @@ export async function saveFixedPriceItemAction(data: {
         } else {
             await prisma.fixedPriceItem.create({
                 data: {
+                    companyId,
                     description: data.description,
                     unitPrice: data.unitPrice,
                     unit: data.unit,
@@ -53,11 +58,12 @@ export async function saveFixedPriceItemAction(data: {
 }
 
 export async function deleteFixedPriceItemAction(id: string) {
+    const companyId = await ensureAuth()
     try {
         console.log("Deleting fixed price item:", id);
 
         await prisma.fixedPriceItem.delete({
-            where: { id }
+            where: { id, companyId }
         })
         revalidatePath("/knowledge")
         return { success: true }

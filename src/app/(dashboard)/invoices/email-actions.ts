@@ -49,6 +49,7 @@ The UROps Team`
             await prisma.interaction.create({
                 data: {
                     clientId: invoice.clientId,
+                    companyId: invoice.companyId,
                     type: "EMAIL",
                     content: `Sent ${invoice.type}: ${subject} \n\nTo: ${toEmails.join(', ')} `
                 }

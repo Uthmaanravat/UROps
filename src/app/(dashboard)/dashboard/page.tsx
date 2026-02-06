@@ -5,10 +5,12 @@ import { formatCurrency } from "@/lib/utils";
 import { Users, FileText, CreditCard, AlertTriangle, Briefcase, Calendar, Settings } from "lucide-react";
 import Link from "next/link";
 import { RejectScopeButton } from "./RejectScopeButton";
+import { ensureAuth } from "@/lib/auth-actions";
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
+    const companyId = await ensureAuth();
     let clientCount = 0;
     let invoiceCount = 0;
     let unpaidCount = 0;
@@ -25,34 +27,38 @@ export default async function DashboardPage() {
 
     try {
         const [clients, invoices, payments, unpaidInvs, recent, meetings, interactions, projects, scopes, sowCount, quoteCount, invoicedCount, paidCount] = await Promise.all([
-            prisma.client.count(),
-            prisma.invoice.count(),
-            prisma.payment.findMany(),
+            prisma.client.count({ where: { companyId } }),
+            prisma.invoice.count({ where: { companyId } }),
+            prisma.payment.findMany({ where: { companyId } }),
             prisma.invoice.findMany({
                 where: {
+                    companyId,
                     type: 'INVOICE',
                     status: { notIn: ['PAID', 'CANCELLED'] }
                 },
                 include: { payments: true }
             }),
             prisma.invoice.findMany({
+                where: { companyId },
                 take: 5,
                 orderBy: { createdAt: 'desc' },
                 include: { client: true }
             }),
             (prisma as any).meeting.findMany({
-                where: { date: { gte: new Date() } },
+                where: { companyId, date: { gte: new Date() } },
                 orderBy: { date: 'asc' },
                 take: 5,
                 include: { client: true }
             }),
             (prisma as any).interaction.findMany({
+                where: { companyId },
                 orderBy: { createdAt: 'desc' },
                 take: 5,
                 include: { client: true }
             }),
             (prisma as any).project.findMany({
                 where: {
+                    companyId,
                     status: {
                         in: ['IN_PROGRESS', 'PLANNING', 'SCHEDULED', 'QUOTED', 'INVOICED', 'SOW_SUBMITTED']
                     }
@@ -62,15 +68,15 @@ export default async function DashboardPage() {
                 take: 5
             }),
             (prisma as any).invoice.findMany({
-                where: { type: 'QUOTE', status: 'DRAFT' },
+                where: { companyId, type: 'QUOTE', status: 'DRAFT' },
                 include: { client: true, project: true },
                 orderBy: { createdAt: 'desc' }
             }),
 
-            (prisma as any).scopeOfWork.count(), // Total Scopes
-            (prisma as any).invoice.count({ where: { type: 'QUOTE' } }), // Total Quotes
-            (prisma as any).invoice.count({ where: { type: 'INVOICE', status: { notIn: ['DRAFT', 'CANCELLED'] } } }), // Count Issued Invoices
-            (prisma as any).invoice.count({ where: { status: 'PAID' } }) // Count Paid
+            (prisma as any).scopeOfWork?.count({ where: { companyId } }) || 0, // Total Scopes
+            (prisma as any).invoice.count({ where: { companyId, type: 'QUOTE' } }), // Total Quotes
+            (prisma as any).invoice.count({ where: { companyId, type: 'INVOICE', status: { notIn: ['DRAFT', 'CANCELLED'] } } }), // Count Issued Invoices
+            (prisma as any).invoice.count({ where: { companyId, status: 'PAID' } }) // Count Paid
         ]);
         unpaidInvoices = unpaidInvs;
 
@@ -84,6 +90,7 @@ export default async function DashboardPage() {
         activeProjects = projects;
         projectCount = await (prisma as any).project.count({
             where: {
+                companyId,
                 status: {
                     in: ['IN_PROGRESS', 'PLANNING', 'SCHEDULED', 'QUOTED', 'INVOICED', 'SOW_SUBMITTED']
                 }

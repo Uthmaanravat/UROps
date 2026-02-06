@@ -1,5 +1,6 @@
 'use server'
 
+import { getAuthCompanyId } from "@/lib/auth-actions"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { InteractionType } from "@prisma/client"
@@ -15,10 +16,16 @@ export async function createInteraction(data: {
         return { success: false, error: "Missing required fields" }
     }
 
+    const companyId = await getAuthCompanyId();
+    if (!companyId) {
+        return { success: false, error: "Unauthorized" }
+    }
+
     try {
         const interaction = await prisma.interaction.create({
             data: {
                 clientId: data.clientId,
+                companyId,
                 type: data.type as InteractionType, // unsafe cast if not validated, but UI provides valid types
                 content: data.content,
                 date: data.date || new Date()

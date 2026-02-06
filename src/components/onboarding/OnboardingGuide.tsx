@@ -59,12 +59,7 @@ export function OnboardingGuide({ onComplete }: { onComplete: () => Promise<void
             setCurrentStep(currentStep + 1)
         } else {
             startTransition(async () => {
-                try {
-                    await onComplete()
-                } catch (error) {
-                    console.error("Onboarding completion failed:", error)
-                    // Optionally add toast notification here
-                }
+                await onComplete()
             })
         }
     }

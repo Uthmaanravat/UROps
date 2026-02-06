@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { getAuthCompanyId } from "@/lib/auth-actions"
 
 export type SubmissionType = 'SOW' | 'QUOTATION' | 'INVOICE' | 'WBP'
 
@@ -18,8 +19,12 @@ export interface LogSubmissionParams {
  * This creates an explicit record of what was submitted
  */
 export async function logSubmission(params: LogSubmissionParams) {
+    const companyId = await getAuthCompanyId()
+    if (!companyId) throw new Error("Unauthorized: No company ID found")
+
     const log = await prisma.submissionLog.create({
         data: {
+            companyId,
             type: params.type,
             documentId: params.documentId,
             documentRef: params.documentRef,

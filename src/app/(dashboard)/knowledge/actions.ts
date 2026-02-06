@@ -3,9 +3,11 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { extractPricingFromText } from "@/app/actions/ai"
+import { ensureAuth } from "@/lib/auth-actions"
 import path from "path"
 
 export async function uploadQuotationAction(formData: FormData) {
+    const companyId = await ensureAuth()
     const file = formData.get('file') as File
     if (!file) throw new Error("No file selected")
 
@@ -63,6 +65,7 @@ export async function uploadQuotationAction(formData: FormData) {
             // Upsert logic for PricingKnowledge
             const existing = await prisma.pricingKnowledge.findFirst({
                 where: {
+                    companyId,
                     description: {
                         equals: item.description,
                         mode: 'insensitive'
@@ -85,6 +88,7 @@ export async function uploadQuotationAction(formData: FormData) {
                 console.log("Creating new knowledge for:", item.description);
                 await prisma.pricingKnowledge.create({
                     data: {
+                        companyId,
                         description: item.description,
                         typicalPrice: item.typicalPrice,
                         minPrice: item.typicalPrice * 0.9,

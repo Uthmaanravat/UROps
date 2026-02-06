@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export async function createProject(data: {
     name: string
@@ -12,9 +13,11 @@ export async function createProject(data: {
     endDate?: Date
     status?: string
 }) {
+    const companyId = await ensureAuth()
     try {
         const project = await prisma.project.create({
             data: {
+                companyId,
                 name: data.name,
                 clientId: data.clientId,
                 description: data.description,
@@ -34,9 +37,10 @@ export async function createProject(data: {
 }
 
 export async function updateProject(id: string, data: any) {
+    const companyId = await ensureAuth()
     try {
         const project = await prisma.project.update({
-            where: { id },
+            where: { id, companyId },
             data
         })
         revalidatePath(`/projects/${id}`)
@@ -48,9 +52,10 @@ export async function updateProject(id: string, data: any) {
 }
 
 export async function deleteProject(id: string) {
+    const companyId = await ensureAuth()
     try {
         await prisma.project.delete({
-            where: { id }
+            where: { id, companyId }
         })
         revalidatePath("/projects")
         return { success: true }
@@ -61,9 +66,10 @@ export async function deleteProject(id: string) {
 }
 
 export async function updateProjectStatus(id: string, status: string) {
+    const companyId = await ensureAuth()
     try {
         await prisma.project.update({
-            where: { id },
+            where: { id, companyId },
             data: { status: status as any }
         })
         revalidatePath(`/projects/${id}`)

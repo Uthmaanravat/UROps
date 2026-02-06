@@ -29,6 +29,29 @@ export async function signUpAction(formData: FormData) {
         if (error) throw error
 
         if (data.user) {
+            // Extract domain
+            const domain = email.split("@")[1].toLowerCase()
+
+            // Find or create company
+            let company = await prisma.company.findUnique({
+                where: { domain }
+            })
+
+            if (!company) {
+                // Create company and default settings
+                company = await prisma.company.create({
+                    data: {
+                        name: domain.split(".")[0].toUpperCase(), // Default name
+                        domain,
+                        settings: {
+                            create: {
+                                name: domain.split(".")[0].toUpperCase()
+                            }
+                        }
+                    }
+                })
+            }
+
             // Create user in Prisma
             await prisma.user.upsert({
                 where: { id: data.user.id },
@@ -36,12 +59,14 @@ export async function signUpAction(formData: FormData) {
                     email,
                     name,
                     role,
+                    company: { connect: { id: company.id } }
                 },
                 create: {
                     id: data.user.id,
                     email,
                     name,
                     role,
+                    company: { connect: { id: company.id } }
                 },
             })
         }
@@ -77,6 +102,15 @@ export async function signInAction(formData: FormData) {
 export async function signOutAction() {
     const supabase = createClient()
     await supabase.auth.signOut()
+    revalidatePath('/', 'layout')
+    return { success: true }
+}
+
+export async function updateUserRoleAction(userId: string, role: Role) {
+    await prisma.user.update({
+        where: { id: userId },
+        data: { role }
+    })
     revalidatePath('/', 'layout')
     return { success: true }
 }

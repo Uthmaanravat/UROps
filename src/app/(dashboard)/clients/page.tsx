@@ -3,22 +3,27 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus, MapPin, Phone, Mail } from "lucide-react";
 import { SearchInput } from "@/components/ui/search-input";
+import { ensureAuth } from "@/lib/auth-actions";
 
 export const dynamic = 'force-dynamic';
 
 export default async function ClientsPage({ searchParams }: { searchParams: { q?: string } }) {
+    const companyId = await ensureAuth();
     let clients: any[] = [];
     const query = searchParams.q || "";
 
     try {
         clients = await prisma.client.findMany({
-            where: query ? {
-                OR: [
-                    { name: { contains: query, mode: 'insensitive' } },
-                    { email: { contains: query, mode: 'insensitive' } },
-                    { phone: { contains: query, mode: 'insensitive' } },
-                ]
-            } : undefined,
+            where: {
+                companyId,
+                ...(query ? {
+                    OR: [
+                        { name: { contains: query, mode: 'insensitive' } },
+                        { email: { contains: query, mode: 'insensitive' } },
+                        { phone: { contains: query, mode: 'insensitive' } },
+                    ]
+                } : {})
+            },
             orderBy: { createdAt: 'desc' },
             include: { _count: { select: { invoices: true } } }
         });

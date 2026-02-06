@@ -24,15 +24,23 @@ export const viewport: Viewport = {
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { prisma } from "@/lib/prisma";
+import { getAuthCompanyId } from "@/lib/auth-actions";
 
 export default async function RootLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const settings = await prisma.companySettings.findUnique({
-        where: { id: "default" }
-    });
+    const companyId = await getAuthCompanyId();
+    console.log("RootLayout: Fetching settings for companyId:", companyId || "FIRST_AVAILABLE")
+
+    // If we have a companyId (logged in), use it. 
+    // Otherwise fallback to the first settings record (for login/branding)
+    const settings = companyId
+        ? await prisma.companySettings.findUnique({ where: { companyId } })
+        : await prisma.companySettings.findFirst();
+
+    console.log("RootLayout: Settings found:", settings ? "YES" : "NO")
     const initialTheme = (settings?.theme as "light" | "dark") || "dark";
 
     return (

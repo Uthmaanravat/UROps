@@ -2,13 +2,15 @@ import { prisma } from "@/lib/prisma";
 import { InvoiceViewer } from "@/components/invoices/InvoiceViewer";
 import { getCompanySettings } from "@/app/(dashboard)/settings/actions";
 import { notFound } from "next/navigation";
+import { ensureAuth } from "@/lib/auth-actions";
 
 export const dynamic = 'force-dynamic';
 
 export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
+    const companyId = await ensureAuth();
     const [invoice, companySettings] = await Promise.all([
-        prisma.invoice.findUnique({
-            where: { id: params.id },
+        prisma.invoice.findFirst({
+            where: { id: params.id, companyId },
             include: {
                 client: true,
                 items: true,

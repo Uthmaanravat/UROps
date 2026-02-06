@@ -7,6 +7,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { InvoiceFilters } from "@/components/invoices/InvoiceFilters";
 import { deleteInvoiceAction } from "./actions";
 import { DeleteButton } from "@/components/ui/DeleteButton";
+import { ensureAuth } from "@/lib/auth-actions";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,14 +16,16 @@ export default async function InvoicesPage({
 }: {
     searchParams: { q?: string; status?: string; type?: string }
 }) {
-    let invoices: any[] = [];
+    const companyId = await ensureAuth();
     const query = searchParams.q || "";
     const statusFilter = searchParams.status || "";
     const typeFilter = searchParams.type || "";
+    let invoices: any[] = [];
 
     try {
         invoices = await prisma.invoice.findMany({
             where: {
+                companyId,
                 AND: [
                     query ? {
                         OR: [

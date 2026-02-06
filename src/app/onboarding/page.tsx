@@ -7,16 +7,52 @@ import { prisma } from "@/lib/prisma"
 export default async function OnboardingPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
+    console.log("OnboardingPage: Supabase user:", user?.id)
 
     if (!user) {
         redirect("/login")
     }
 
-    const dbUser = await prisma.user.findUnique({
+    let dbUser = await prisma.user.findUnique({
         where: { id: user.id }
     })
 
-    if (dbUser?.hasCompletedOnboarding) {
+    if (!dbUser) {
+        const email = user.email!
+        const domain = email.split("@")[1].toLowerCase()
+
+        let company = await prisma.company.findUnique({
+            where: { domain }
+        })
+
+        if (!company) {
+            company = await prisma.company.create({
+                data: {
+                    name: domain.split(".")[0].toUpperCase(),
+                    domain,
+                    settings: {
+                        create: {
+                            name: domain.split(".")[0].toUpperCase()
+                        }
+                    }
+                }
+            })
+        }
+
+        console.log("OnboardingPage: Creating new user in Prisma with connect syntax")
+        dbUser = await prisma.user.create({
+            data: {
+                id: user.id,
+                email,
+                name: user.user_metadata.full_name,
+                role: user.user_metadata.role || 'MANAGER',
+                company: { connect: { id: company.id } }
+            }
+        })
+        console.log("OnboardingPage: New user created:", dbUser.id)
+    }
+
+    if (dbUser.hasCompletedOnboarding) {
         redirect("/dashboard")
     }
 

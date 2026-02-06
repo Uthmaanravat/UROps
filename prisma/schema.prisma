@@ -8,6 +8,288 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model Company {
+  id             String                 @id @default(uuid())
+  name           String
+  domain         String                 @unique
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  clients        Client[]
+  settings       CompanySettings?
+  fixedItems     FixedPriceItem[]
+  interactions   Interaction[]
+  invoices       Invoice[]
+  meetings       Meeting[]
+  payments       Payment[]
+  knowledge      PricingKnowledge[]
+  projects       Project[]
+  scopes         ScopeOfWork[]
+  logs           SubmissionLog[]
+  users          User[]
+  workBreakdowns WorkBreakdownPricing[]
+}
+
+model User {
+  id                     String   @id
+  email                  String   @unique
+  name                   String?
+  role                   Role     @default(MANAGER)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  companyId              String
+  hasCompletedOnboarding Boolean  @default(false)
+  company                Company  @relation(fields: [companyId], references: [id])
+}
+
+model CompanySettings {
+  id                String   @id @default(uuid())
+  name              String   @default("My Company")
+  address           String?
+  phone             String?
+  email             String?
+  website           String?
+  logoUrl           String?
+  taxId             String?
+  bankDetails       String?
+  paymentTerms      String?
+  currency          String   @default("R")
+  theme             String   @default("dark")
+  layoutPreferences Json?
+  updatedAt         DateTime @updatedAt
+  aiEnabled         Boolean  @default(true)
+  companyId         String   @unique
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Client {
+  id                 String          @id @default(uuid())
+  name               String
+  companyName        String?
+  attentionTo        String?
+  email              String?
+  phone              String?
+  address            String?
+  vatNumber          String?
+  registrationNumber String?
+  vendorNumber       String?
+  notes              String?
+  tags               String[]        @default([])
+  customFields       Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  companyId          String
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  interactions       Interaction[]
+  invoices           Invoice[]
+  meetings           Meeting[]
+  projects           Project[]
+  submissionLogs     SubmissionLog[]
+}
+
+model Project {
+  id             String                 @id @default(uuid())
+  name           String
+  description    String?
+  status         ProjectStatus          @default(PLANNING)
+  workflowStage  WorkflowStage          @default(SOW)
+  startDate      DateTime?
+  endDate        DateTime?
+  clientId       String
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  companyId      String
+  invoices       Invoice[]
+  meetings       Meeting[]
+  client         Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company        Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  scopes         ScopeOfWork[]
+  submissionLogs SubmissionLog[]
+  workBreakdowns WorkBreakdownPricing[]
+}
+
+model ScopeOfWork {
+  id        String      @id @default(uuid())
+  projectId String
+  status    String      @default("DRAFT")
+  version   Int         @default(1)
+  site      String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  companyId String
+  items     ScopeItem[]
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ScopeItem {
+  id          String      @id @default(uuid())
+  scopeId     String
+  description String
+  quantity    Float       @default(1)
+  unit        String?
+  notes       String?
+  scope       ScopeOfWork @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+}
+
+model WorkBreakdownPricing {
+  id          String                     @id @default(uuid())
+  projectId   String
+  status      String                     @default("DRAFT")
+  version     Int                        @default(1)
+  notes       String?
+  site        String?
+  quoteNumber String?
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+  companyId   String
+  invoices    Invoice[]
+  company     Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project     Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items       WorkBreakdownPricingItem[]
+}
+
+model WorkBreakdownPricingItem {
+  id          String               @id @default(uuid())
+  wbpId       String
+  description String
+  quantity    Float                @default(1)
+  unit        String?
+  unitPrice   Float                @default(0)
+  total       Float                @default(0)
+  notes       String?
+  wbp         WorkBreakdownPricing @relation(fields: [wbpId], references: [id], onDelete: Cascade)
+}
+
+model Interaction {
+  id        String          @id @default(uuid())
+  type      InteractionType @default(NOTE)
+  content   String
+  date      DateTime        @default(now())
+  read      Boolean         @default(false)
+  clientId  String
+  createdAt DateTime        @default(now())
+  companyId String
+  client    Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Meeting {
+  id        String   @id @default(uuid())
+  title     String
+  date      DateTime
+  duration  Int      @default(60)
+  location  String?
+  notes     String?
+  clientId  String?
+  projectId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  companyId String
+  client    Client?  @relation(fields: [clientId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id])
+}
+
+model Invoice {
+  id             String                @id @default(uuid())
+  number         Int                   @default(autoincrement())
+  type           InvoiceType           @default(QUOTE)
+  status         InvoiceStatus         @default(DRAFT)
+  date           DateTime              @default(now())
+  dueDate        DateTime?
+  clientId       String
+  projectId      String?
+  wbpId          String?
+  subtotal       Float                 @default(0)
+  taxRate        Float                 @default(0.15)
+  taxAmount      Float                 @default(0)
+  total          Float                 @default(0)
+  notes          String?
+  site           String?
+  quoteNumber    String?
+  reference      String?
+  clientPoNumber String?
+  paymentNotes   String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  companyId      String
+  client         Client                @relation(fields: [clientId], references: [id])
+  company        Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project        Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbp            WorkBreakdownPricing? @relation(fields: [wbpId], references: [id])
+  items          InvoiceItem[]
+  payments       Payment[]
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid())
+  invoiceId   String
+  description String
+  quantity    Float   @default(1)
+  unit        String?
+  unitPrice   Float   @default(0)
+  total       Float   @default(0)
+  notes       String?
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  invoiceId String
+  amount    Float
+  date      DateTime @default(now())
+  method    String?
+  reference String?
+  notes     String?
+  createdAt DateTime @default(now())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model PricingKnowledge {
+  id           String   @id @default(uuid())
+  description  String
+  typicalPrice Float
+  minPrice     Float
+  maxPrice     Float
+  frequency    Int      @default(1)
+  source       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model FixedPriceItem {
+  id          String   @id @default(uuid())
+  companyId   String
+  description String
+  unitPrice   Float
+  unit        String?
+  category    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model SubmissionLog {
+  id          String         @id @default(uuid())
+  type        SubmissionType
+  documentId  String
+  documentRef String?
+  projectId   String?
+  clientId    String?
+  submittedBy String
+  message     String
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+  companyId   String
+  client      Client?        @relation(fields: [clientId], references: [id])
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project     Project?       @relation(fields: [projectId], references: [id])
+}
+
 enum Role {
   ADMIN
   MANAGER
@@ -15,7 +297,7 @@ enum Role {
 
 enum InvoiceStatus {
   DRAFT
-  PENDING_SCOPE // PM has entered scope, Admin needs to price
+  PENDING_SCOPE
   SENT
   ACCEPTED
   REJECTED
@@ -29,17 +311,6 @@ enum InvoiceType {
   QUOTE
   INVOICE
 }
-
-model User {
-  id        String   @id // Connects to Supabase Auth UID
-  email     String   @unique
-  name      String?
-  role      Role     @default(MANAGER)
-  hasCompletedOnboarding Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 
 enum ProjectStatus {
   SOW
@@ -63,52 +334,11 @@ enum InteractionType {
   NOTE
 }
 
-model CompanySettings {
-  id          String   @id @default("default") // Singleton
-  name        String   @default("My Company")
-  address     String?
-  phone       String?
-  email       String?
-  website     String?
-  logoUrl     String?
-  taxId       String?
-  bankDetails String?
-  paymentTerms String?
-  currency    String   @default("R") // Default to Rand as seen in context
-  theme       String   @default("dark")
-  aiEnabled   Boolean  @default(true)
-  layoutPreferences Json?
-  updatedAt   DateTime @updatedAt
-}
-
 enum SubmissionType {
   SOW
   QUOTATION
   INVOICE
   WBP
-}
-
-model Client {
-  id           String        @id @default(uuid())
-  name         String        // Display Name
-  companyName  String?       // Legal Company Name
-  attentionTo  String?       // Person's name for invoice
-  email        String?
-  phone        String?
-  address      String?
-  vatNumber    String?
-  registrationNumber String?
-  vendorNumber String?
-  notes        String?
-  tags         String[]      @default([]) // e.g. ["VIP", "Residential"]
-  customFields Json?         // For flexible extra info
-  invoices     Invoice[]
-  projects     Project[]
-  interactions Interaction[]
-  meetings     Meeting[]
-  submissionLogs SubmissionLog[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
 }
 
 enum WorkflowStage {
@@ -117,188 +347,4 @@ enum WorkflowStage {
   INVOICE
   PAYMENT
   COMPLETED
-}
-
-model Project {
-  id            String        @id @default(uuid())
-  name          String
-  description   String?
-  status        ProjectStatus @default(PLANNING)
-  workflowStage WorkflowStage @default(SOW)
-  startDate     DateTime?
-  endDate       DateTime?
-  clientId      String
-  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  invoices      Invoice[]
-  scopes        ScopeOfWork[]
-  workBreakdowns WorkBreakdownPricing[]
-  meetings      Meeting[]
-  submissionLogs SubmissionLog[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-}
-
-model ScopeOfWork {
-  id          String      @id @default(uuid())
-  projectId   String
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status      String      @default("DRAFT") // DRAFT, SUBMITTED
-  version     Int         @default(1)
-  items       ScopeItem[]
-  site        String?     // Installation site/location
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-}
-
-model ScopeItem {
-  id          String      @id @default(uuid())
-  scopeId     String
-  scope       ScopeOfWork @relation(fields: [scopeId], references: [id], onDelete: Cascade)
-  description String
-  quantity    Float       @default(1)
-  unit        String?
-  notes       String?
-}
-
-model WorkBreakdownPricing {
-  id          String      @id @default(uuid())
-  projectId   String
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status      String      @default( "DRAFT") // DRAFT, APPROVED
-  version     Int         @default(1)
-  items       WorkBreakdownPricingItem[]
-  invoices    Invoice[]
-  notes       String?     // Overall quotation notes and requirements
-  site        String?     // Installation site/location (inherited from SOW)
-  quoteNumber String?     // Automatically generated/suggested quote number
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-}
-
-model WorkBreakdownPricingItem {
-  id          String      @id @default(uuid())
-  wbpId       String
-  wbp         WorkBreakdownPricing @relation(fields: [wbpId], references: [id], onDelete: Cascade)
-  description String
-  quantity    Float       @default(1)
-  unit        String?
-  unitPrice   Float       @default(0)
-  total       Float       @default(0)
-  notes       String?
-}
-
-model Interaction {
-  id        String          @id @default(uuid())
-  type      InteractionType @default(NOTE)
-  content   String
-  date      DateTime        @default(now())
-  read      Boolean         @default(false)
-  clientId  String
-  client    Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  createdAt DateTime        @default(now())
-}
-
-model Meeting {
-  id        String   @id @default(uuid())
-  title     String
-  date      DateTime
-  duration  Int      @default(60) // minutes
-  location  String?
-  notes     String?
-  clientId  String?
-  client    Client?  @relation(fields: [clientId], references: [id])
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Invoice {
-  id          String        @id @default(uuid())
-  number      Int           @default(autoincrement())
-  type        InvoiceType   @default(QUOTE)
-  status      InvoiceStatus @default(DRAFT)
-  date        DateTime      @default(now())
-  dueDate     DateTime?
-  clientId    String
-  client      Client        @relation(fields: [clientId], references: [id])
-  projectId   String?
-  project     Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  wbpId       String?       // Link to the Work Breakdown & Pricing this quote is based on
-  wbp         WorkBreakdownPricing? @relation(fields: [wbpId], references: [id])
-  items       InvoiceItem[]
-  payments    Payment[]
-  subtotal    Float         @default(0)
-  taxRate     Float         @default(0.15) // 15% VAT
-  taxAmount   Float         @default(0)
-  total       Float         @default(0)
-  notes       String?
-  site        String?
-  quoteNumber String?       // Custom quotation number if needed
-  reference   String?       // Customer reference
-  clientPoNumber String?    // Purchase Order Number from Client
-  paymentNotes String?      // e.g. "50% deposit required"
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-}
-
-model InvoiceItem {
-  id          String  @id @default(uuid())
-  invoiceId   String
-  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  description String
-  quantity    Float   @default(1)
-  unit        String?
-  unitPrice   Float   @default(0)
-  total       Float   @default(0)
-  notes       String?
-}
-
-model Payment {
-  id        String   @id @default(uuid())
-  invoiceId String
-  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade) // Added cascade delete for easier cleanup
-  amount    Float
-  date      DateTime @default(now())
-  method    String?  // CASH, EFT, CARD
-  reference String?
-  notes     String?
-  createdAt DateTime @default(now())
-}
-
-model PricingKnowledge {
-  id           String   @id @default(uuid())
-  description  String   // The text description line
-  typicalPrice Float
-  minPrice     Float
-  maxPrice     Float
-  frequency    Int      @default(1)
-  source       String?  // Filename or origin
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-model FixedPriceItem {
-  id           String   @id @default(uuid())
-  description  String
-  unitPrice    Float
-  unit         String?  // e.g. "hr", "m2", "ea"
-  category     String?  // e.g. "Labor", "Materials", "Transport"
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-model SubmissionLog {
-  id            String         @id @default(uuid())
-  type          SubmissionType
-  documentId    String         // ID of the submitted document
-  documentRef   String?        // Quote number, Invoice number, etc.
-  projectId     String?
-  project       Project?       @relation(fields: [projectId], references: [id])
-  clientId      String?
-  client        Client?        @relation(fields: [clientId], references: [id])
-  submittedBy   String         // "ADMIN" or "MANAGER"
-  message       String         // "Quotation submitted", etc.
-  metadata      Json?          // Additional context (site name, WBP ID, etc.)
-  createdAt     DateTime       @default(now())
 }

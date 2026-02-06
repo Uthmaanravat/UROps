@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { ensureAuth } from "@/lib/auth-actions"
 
 import { updateProjectStatus } from "../projects/actions"
 
@@ -16,6 +17,7 @@ export async function createInvoiceAction(data: {
     reference?: string
     paymentNotes?: string
 }) {
+    const companyId = await ensureAuth()
     const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
     const taxRate = 0.15
     const taxAmount = subtotal * taxRate
@@ -23,6 +25,7 @@ export async function createInvoiceAction(data: {
 
     const invoice = await prisma.invoice.create({
         data: {
+            companyId,
             clientId: data.clientId,
             projectId: data.projectId,
             date: new Date(data.date),
@@ -60,17 +63,19 @@ export async function createInvoiceAction(data: {
 }
 
 export async function updateInvoiceStatus(id: string, status: any) { // Type check loose for brevity
+    const companyId = await ensureAuth()
     await prisma.invoice.update({
-        where: { id },
+        where: { id, companyId },
         data: { status }
     })
     revalidatePath(`/invoices/${id}`)
 }
 
 export async function convertToInvoiceAction(id: string, clientPoNumber?: string) {
+    const companyId = await ensureAuth()
     // First, get the current invoice with its items
     const currentInvoice = await prisma.invoice.findUnique({
-        where: { id },
+        where: { id, companyId },
         include: { items: true }
     });
 
@@ -78,7 +83,8 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
         throw new Error("Invoice not found");
     }
 
-    // Delete all existing line items
+    // Delete all existing line items - we still only need id here as it's a join table without companyId
+    // but we confirmed the parent belongs to the company above
     await prisma.invoiceItem.deleteMany({
         where: { invoiceId: id }
     });
@@ -101,12 +107,13 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
 
     // Update the invoice type and status, and clear notes for a fresh invoice
     const invoice = await prisma.invoice.update({
-        where: { id },
+        where: { id, companyId },
         data: {
             type: 'INVOICE',
             status: 'INVOICED',
             clientPoNumber: clientPoNumber || null,
             notes: "", // Independent notes for invoice
+            paymentNotes: "", // Clear deposit notes for official invoice as requested
         }
     })
 
@@ -124,8 +131,16 @@ export async function recordPaymentAction(data: {
     notes?: string
     date: string
 }) {
+    const companyId = await ensureAuth()
+    // Verify invoice belongs to company
+    const currentInvoice = await prisma.invoice.findUnique({
+        where: { id: data.invoiceId, companyId }
+    })
+    if (!currentInvoice) throw new Error("Invoice not found")
+
     const payment = await prisma.payment.create({
         data: {
+            companyId,
             invoiceId: data.invoiceId,
             amount: data.amount,
             method: data.method,
@@ -136,7 +151,7 @@ export async function recordPaymentAction(data: {
 
     // Calculate totals
     const invoice = await prisma.invoice.findUnique({
-        where: { id: data.invoiceId },
+        where: { id: data.invoiceId, companyId },
         include: { payments: true }
     })
 
@@ -152,7 +167,7 @@ export async function recordPaymentAction(data: {
 
         if (newStatus !== invoice.status) {
             await prisma.invoice.update({
-                where: { id: data.invoiceId },
+                where: { id: data.invoiceId, companyId },
                 data: { status: newStatus }
             })
         }
@@ -170,6 +185,13 @@ export async function recordPaymentAction(data: {
 }
 
 export async function deleteInvoiceAction(id: string) {
+    const companyId = await ensureAuth()
+    // Verify invoice belongs to company
+    const invoice = await prisma.invoice.findUnique({
+        where: { id, companyId }
+    })
+    if (!invoice) throw new Error("Invoice not found")
+
     // Delete related payments first
     await prisma.payment.deleteMany({
         where: { invoiceId: id }
@@ -182,7 +204,7 @@ export async function deleteInvoiceAction(id: string) {
 
     // Delete the invoice
     await prisma.invoice.delete({
-        where: { id }
+        where: { id, companyId }
     })
 
     revalidatePath("/invoices")
