@@ -9,7 +9,7 @@ import { CompanySettings, User } from "@prisma/client";
 import { signOutAction, updateUserRoleAction } from "@/app/actions/auth";
 import { Role } from "@prisma/client";
 
-export default function DashboardLayout({
+export default function DashboardLayoutClient({
     children,
     user,
     settings,

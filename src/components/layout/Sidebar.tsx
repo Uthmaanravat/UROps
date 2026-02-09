@@ -116,35 +116,23 @@ export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onIt
     const [notifications, setNotifications] = React.useState<Record<string, number>>({});
 
     const fetchNotifications = async () => {
-        // Don't poll if document is hidden or if we are likely logged out
-        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-
-        try {
-            const counts = await getSidebarNotifications();
-            setNotifications({
-                'Projects': counts.projects,
-                'Work Breakdown & Pricing': counts.wbp,
-                'Quotations': counts.quotations,
-                'Invoices': counts.invoices
-            });
-        } catch (err) {
-            console.error("Error fetching notifications:", err);
-        }
+        // Temporarily disabled to debug Vercel crash
+        return;
     }
 
     React.useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 60000);
+        // fetchNotifications();
+        // const interval = setInterval(fetchNotifications, 60000);
 
-        const handleVisibility = () => {
-            if (document.visibilityState === 'visible') fetchNotifications();
-        };
-        document.addEventListener('visibilitychange', handleVisibility);
+        // const handleVisibility = () => {
+        //     if (document.visibilityState === 'visible') fetchNotifications();
+        // };
+        // document.addEventListener('visibilitychange', handleVisibility);
 
-        return () => {
-            clearInterval(interval);
-            document.removeEventListener('visibilitychange', handleVisibility);
-        };
+        // return () => {
+        //     clearInterval(interval);
+        //     document.removeEventListener('visibilitychange', handleVisibility);
+        // };
     }, []);
 
     const handleItemClick = () => {
