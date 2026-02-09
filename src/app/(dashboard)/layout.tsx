@@ -85,7 +85,7 @@ export default async function DashboardLayout({
             redirect("/onboarding")
         }
 
-        return <DashboardLayoutClient user={newUser} settings={company.settings}>{children}</DashboardLayoutClient>
+        return <DashboardLayoutClient user={JSON.parse(JSON.stringify(newUser))} settings={JSON.parse(JSON.stringify(company.settings))}>{children}</DashboardLayoutClient>
     }
 
     if (!dbUser.hasCompletedOnboarding) {
@@ -95,5 +95,5 @@ export default async function DashboardLayout({
     const settings = dbUser.company?.settings || null;
     console.log("DashboardLayout: Settings found via include:", settings ? "YES" : "NO")
 
-    return <DashboardLayoutClient user={dbUser} settings={settings}>{children}</DashboardLayoutClient>
+    return <DashboardLayoutClient user={JSON.parse(JSON.stringify(dbUser))} settings={JSON.parse(JSON.stringify(settings))}>{children}</DashboardLayoutClient>
 }
