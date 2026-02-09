@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
 
-export async function getAuthCompanyId() {
+import { cache } from "react"
+
+export const getAuthCompanyId = cache(async () => {
     const supabase = createClient()
     if (!supabase) return null
 
@@ -15,7 +17,7 @@ export async function getAuthCompanyId() {
     })
 
     return dbUser?.companyId || null
-}
+})
 
 export async function ensureAuth() {
     const companyId = await getAuthCompanyId()

@@ -39,7 +39,8 @@ export default async function InvoicesPage({
                 ]
             },
             orderBy: { date: 'desc' },
-            include: { client: true, payments: true, project: true } as any
+            include: { client: true, payments: true, project: true } as any,
+            take: 50
         });
     } catch (e) {
         console.error("Invoices DB Error:", e);

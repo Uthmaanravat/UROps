@@ -18,7 +18,15 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-            const mediaRecorder = new MediaRecorder(stream)
+
+            // Mobile compatibility: check supported types
+            const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+                ? "audio/webm;codecs=opus"
+                : MediaRecorder.isTypeSupported("audio/mp4")
+                    ? "audio/mp4"
+                    : "audio/webm"
+
+            const mediaRecorder = new MediaRecorder(stream, { mimeType })
             mediaRecorderRef.current = mediaRecorder
             chunksRef.current = []
 
@@ -29,15 +37,16 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
             }
 
             mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" })
+                const audioBlob = new Blob(chunksRef.current, { type: mimeType })
                 await processAudio(audioBlob)
             }
 
-            mediaRecorder.start()
+            // Start with a timeslice to ensure data is captured even if interrupted
+            mediaRecorder.start(1000)
             setIsRecording(true)
         } catch (error) {
             console.error("Error accessing microphone:", error)
-            alert("Could not access microphone. Please ensure permissions are granted.")
+            alert("Could not access microphone. Please ensure permissions are granted and no other app is using it.")
         }
     }
 
@@ -53,7 +62,8 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
         setIsProcessing(true)
         try {
             const formData = new FormData()
-            formData.append("file", blob, "recording.webm")
+            const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
+            formData.append("file", blob, `recording.${extension}`)
 
             const transcriptionResult = await transcribeAudio(formData)
             if (!transcriptionResult.success || !transcriptionResult.text) {

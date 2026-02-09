@@ -26,17 +26,24 @@ export default async function DashboardPage() {
     let trackingCounts = { sow: 0, quotation: 0, invoice: 0, payment: 0 };
 
     try {
-        const [clients, invoices, payments, unpaidInvs, recent, meetings, interactions, projects, scopes, sowCount, quoteCount, invoicedCount, paidCount] = await Promise.all([
+        const [clients, invoices, payments, unpaidInvs, recent, meetings, interactions, projects, scopes, sowCount, quoteCount, invoicedCount, paidCount, allUnpaidInvoices] = await Promise.all([
             prisma.client.count({ where: { companyId } }),
             prisma.invoice.count({ where: { companyId } }),
-            prisma.payment.findMany({ where: { companyId } }),
+            // Optimized: Use aggregate for revenue instead of fetching all payments
+            // prisma.payment.findMany({ where: { companyId } }), 
+            prisma.payment.aggregate({
+                where: { companyId },
+                _sum: { amount: true }
+            }),
             prisma.invoice.findMany({
                 where: {
                     companyId,
                     type: 'INVOICE',
                     status: { notIn: ['PAID', 'CANCELLED'] }
                 },
-                include: { payments: true }
+                include: { payments: true },
+                orderBy: { date: 'desc' }, // Add ordering
+                take: 50 // Limit to 50 unpaid invoices for display list to prevent crash
             }),
             prisma.invoice.findMany({
                 where: { companyId },
@@ -76,16 +83,28 @@ export default async function DashboardPage() {
             (prisma as any).scopeOfWork?.count({ where: { companyId } }) || 0, // Total Scopes
             (prisma as any).invoice.count({ where: { companyId, type: 'QUOTE' } }), // Total Quotes
             (prisma as any).invoice.count({ where: { companyId, type: 'INVOICE', status: { notIn: ['DRAFT', 'CANCELLED'] } } }), // Count Issued Invoices
-            (prisma as any).invoice.count({ where: { companyId, status: 'PAID' } }) // Count Paid
+            (prisma as any).invoice.count({ where: { companyId, status: 'PAID' } }), // Count Paid
+            prisma.invoice.findMany({
+                where: { companyId, type: 'INVOICE', status: { notIn: ['PAID', 'CANCELLED'] } },
+                select: { total: true, payments: { select: { amount: true } } }
+            })
         ]);
         unpaidInvoices = unpaidInvs;
 
-        clientCount = clients;
-        invoiceCount = invoices;
-        totalRevenue = payments.reduce((acc: number, p: any) => acc + p.amount, 0);
-        recentInvoices = recent;
-        upcomingMeetings = meetings;
-        recentInteractions = interactions;
+        allUnpaidInvoices.forEach(inv => {
+            const paid = inv.payments.reduce((acc, p) => acc + p.amount, 0);
+            if (paid < inv.total) {
+                unpaidTotal += (inv.total - paid);
+                // We count total unpaid count from here to be accurate
+            }
+        });
+        unpaidCount = allUnpaidInvoices.filter(i => {
+            const p = i.payments.reduce((a, b) => a + b.amount, 0);
+            return p < i.total - 0.01;
+        }).length;
+
+        // Assign the limited list to the UI variable
+        unpaidInvoices = unpaidInvs; // This is the detailed list (limit 50)
         // projectCount is now a list
         activeProjects = projects;
         projectCount = await (prisma as any).project.count({
@@ -107,14 +126,10 @@ export default async function DashboardPage() {
             payment: paidCount
         };
 
-        // Calculate unpaid invoices
-        unpaidInvoices.forEach(inv => {
-            const paid = inv.payments.reduce((acc: number, p: any) => acc + p.amount, 0);
-            if (paid < inv.total) {
-                unpaidCount++;
-                unpaidTotal += (inv.total - paid);
-            }
-        });
+        // Logic moved above for optimization
+        /* 
+         * Previous logic removed to prevent double calculation
+         */
     } catch (e) {
         console.error("Dashboard DB Error:", e);
     }

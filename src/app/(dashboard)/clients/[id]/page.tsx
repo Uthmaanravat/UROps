@@ -27,10 +27,14 @@ export default async function ClientPage({ params }: { params: { id: string } })
             interactions: {
                 orderBy: { date: 'desc' }
             }
-        } as any
-    }) as any;
+        }
+    });
 
     if (!client) notFound();
+
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId }
+    });
 
     const totalInvoiced = client.invoices.filter((i: any) => i.type === 'INVOICE').reduce((acc: number, i: any) => acc + i.total, 0);
     const totalPaid = client.invoices.reduce((acc: number, i: any) => acc + i.payments.reduce((pAcc: number, p: any) => pAcc + p.amount, 0), 0);
@@ -73,7 +77,9 @@ export default async function ClientPage({ params }: { params: { id: string } })
                 date: new Date(pay.date),
                 title: `Payment for #${inv.number}`,
                 amount: pay.amount,
-                description: pay.method
+                description: pay.method,
+                read: true, // Auto-read for payments
+                status: "COMPLETED"
             })
         })
     })
@@ -101,7 +107,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <ClientStatementButton client={client} />
+                    <ClientStatementButton client={client} settings={settings} />
                     <Link href={`/clients/${client.id}/edit`}>
                         <Button variant="outline">
                             <Pencil className="mr-2 h-4 w-4" /> Edit

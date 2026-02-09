@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef, memo } from "react"
 import React from "react"
 import { Button } from "@/components/ui/button"
-import { Mic, MicOff, Loader2 } from "lucide-react"
+import { Mic, MicOff } from "lucide-react"
+import { toTitleCase } from "@/lib/utils"
 
 interface VoiceInputProps {
     onResult: (text: string) => void
@@ -12,72 +13,88 @@ interface VoiceInputProps {
     className?: string
 }
 
-export function VoiceInput({ onResult, isRecording: externalIsRecording, onToggle, className }: VoiceInputProps) {
+export const VoiceInput = memo(({ onResult, isRecording: externalIsRecording, onToggle, className }: VoiceInputProps) => {
     const [isRecording, setIsRecording] = useState(false)
-    const [recognition, setRecognition] = useState<any>(null)
     const [supported, setSupported] = useState(false)
+    const recognitionRef = useRef<any>(null)
+    const onResultRef = useRef(onResult)
+    const onToggleRef = useRef(onToggle)
 
-    const handleStop = useCallback(() => {
-        if (recognition) {
-            recognition.stop()
-            setIsRecording(false)
-            onToggle?.(false)
-        }
-    }, [recognition, onToggle])
+    // Keep refs up to date without triggering effects
+    useEffect(() => {
+        onResultRef.current = onResult
+        onToggleRef.current = onToggle
+    }, [onResult, onToggle])
 
-    const handleStart = useCallback(() => {
-        if (recognition) {
-            try {
-                recognition.start()
-                setIsRecording(true)
-                onToggle?.(true)
-            } catch (e) {
-                console.error("Speech recognition error:", e)
+    // Lazy initialization of the recognition engine
+    const initRecognition = useCallback(() => {
+        if (typeof window === 'undefined' || recognitionRef.current) return recognitionRef.current
+
+        // @ts-ignore
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+        if (!SpeechRecognition) return null
+
+        const searchVoice = new SpeechRecognition()
+        searchVoice.continuous = true
+        searchVoice.interimResults = true
+        searchVoice.lang = 'en-ZA'
+
+        searchVoice.onresult = (event: any) => {
+            let finalTranscript = ''
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript
+                }
+            }
+            if (finalTranscript) {
+                onResultRef.current(toTitleCase(finalTranscript))
             }
         }
-    }, [recognition, onToggle])
 
+        searchVoice.onend = () => {
+            setIsRecording(false)
+            onToggleRef.current?.(false)
+        }
+
+        recognitionRef.current = searchVoice
+        setSupported(true)
+        return searchVoice
+    }, [])
+
+    // Check support on mount but don't initialize instance yet
     useEffect(() => {
         if (typeof window !== 'undefined') {
             // @ts-ignore
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-            if (SpeechRecognition) {
-                const searchVoice = new SpeechRecognition()
-                searchVoice.continuous = true
-                searchVoice.interimResults = true
-                searchVoice.lang = 'en-US' // Default to English
+            if (SpeechRecognition) setSupported(true)
+        }
+    }, [])
 
-                searchVoice.onresult = (event: any) => {
-                    let finalTranscript = ''
-                    for (let i = event.resultIndex; i < event.results.length; ++i) {
-                        if (event.results[i].isFinal) {
-                            finalTranscript += event.results[i][0].transcript
-                        }
-                    }
-                    if (finalTranscript) {
-                        onResult(finalTranscript)
-                    }
-                }
+    const handleStop = useCallback(() => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop()
+            setIsRecording(false)
+            onToggleRef.current?.(false)
+        }
+    }, [])
 
-                searchVoice.onend = () => {
-                    if (isRecording) {
-                        handleStop()
-                    }
-                }
-
-                setRecognition(searchVoice)
-                setSupported(true)
+    const handleStart = useCallback(() => {
+        const recognition = initRecognition()
+        if (recognition) {
+            try {
+                recognition.start()
+                setIsRecording(true)
+                onToggleRef.current?.(true)
+            } catch (e) {
+                console.error("Speech recognition error:", e)
             }
         }
-    }, [onResult, isRecording, handleStop])
+    }, [initRecognition])
 
-    const toggleRecording = () => {
-        if (isRecording) {
-            handleStop()
-        } else {
-            handleStart()
-        }
-    }
+    const toggleRecording = useCallback(() => {
+        if (isRecording) handleStop()
+        else handleStart()
+    }, [isRecording, handleStop, handleStart])
 
     // Sync with external state if provided
     useEffect(() => {
@@ -87,18 +104,29 @@ export function VoiceInput({ onResult, isRecording: externalIsRecording, onToggl
         }
     }, [externalIsRecording, isRecording, handleStart, handleStop])
 
-    if (!supported) return null // Don't show if not supported
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (recognitionRef.current) {
+                recognitionRef.current.stop()
+            }
+        }
+    }, [])
+
+    if (!supported) return null
 
     return (
         <Button
             type="button"
             variant={isRecording ? "destructive" : "outline"}
             size="icon"
-            className={`${className} ${isRecording ? "animate-pulse" : ""}`}
+            className={`${className} ${isRecording ? "animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]" : ""}`}
             onClick={toggleRecording}
             title={isRecording ? "Stop Recording" : "Start Voice Input"}
         >
             {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
         </Button>
     )
-}
+})
+
+VoiceInput.displayName = "VoiceInput"

@@ -89,18 +89,21 @@ function NavItem({
             href={item.href}
             onClick={handleItemClick}
             className={cn(
-                "group flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-all duration-200",
+                "group flex items-center justify-between rounded-xl px-4 py-2 text-[13px] font-bold transition-all duration-300 relative overflow-hidden",
                 isActive
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                    : "text-muted-foreground hover:bg-white/5 hover:text-white"
+                    ? "bg-primary/10 text-primary border border-primary/20"
+                    : "text-muted-foreground/70 hover:bg-white/[0.03] hover:text-white"
             )}
         >
-            <div className="flex items-center">
-                <Icon className={cn("mr-2 h-4 w-4 transition-colors", isActive ? "" : "group-hover:text-primary")} />
+            {isActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
+            )}
+            <div className="flex items-center min-w-0 flex-1">
+                <Icon className={cn("mr-3 h-4 w-4 shrink-0 transition-colors", isActive ? "text-primary" : "group-hover:text-primary")} />
                 <span className="truncate">{displayTitle}</span>
             </div>
             {showDot && (
-                <div className="flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-[10px] font-black text-white px-1 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse border border-white/20">
+                <div className="flex items-center justify-center min-w-[20px] h-[20px] rounded-full bg-red-500 text-[10px] font-black text-white px-1 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse border border-white/10 shrink-0 ml-2">
                     {notificationCount}
                 </div>
             )}
@@ -113,6 +116,9 @@ export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onIt
     const [notifications, setNotifications] = React.useState<Record<string, number>>({});
 
     const fetchNotifications = async () => {
+        // Don't poll if document is hidden or if we are likely logged out
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+
         try {
             const counts = await getSidebarNotifications();
             setNotifications({
@@ -129,7 +135,16 @@ export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onIt
     React.useEffect(() => {
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 60000);
-        return () => clearInterval(interval);
+
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') fetchNotifications();
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibility);
+        };
     }, []);
 
     const handleItemClick = () => {
@@ -138,7 +153,7 @@ export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onIt
 
     return (
 
-        <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+        <div className="flex-1 overflow-y-auto scrollbar-hide px-2">
             <nav className="grid items-start gap-1">
                 {items.map((item, index) => {
                     // @ts-ignore

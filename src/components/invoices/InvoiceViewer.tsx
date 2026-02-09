@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/utils"
 import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText } from "lucide-react"
 import Link from "next/link"
 import jsPDF from "jspdf"
+import { drawPdfHeader } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
@@ -103,40 +104,9 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
         const doc = new jsPDF();
         const currencySymbol = companySettings?.currency || "R";
 
-        // 1. Solid Header Bar (Classic Navy)
-        doc.setFillColor(20, 20, 30); // Dark Navy
-        doc.rect(0, 0, 210, 40, 'F');
-
-        // Logo
-        if (company.logoUrl) {
-            try {
-                const img = new Image();
-                img.crossOrigin = 'Anonymous';
-                img.src = company.logoUrl;
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                });
-                const ext = company.logoUrl.split('.').pop()?.toUpperCase() || 'PNG';
-                doc.addImage(img, ext, 14, 5, 30, 30, undefined, 'FAST');
-            } catch (err) { console.warn(err); }
-        }
-
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "bold");
-        const nameX = company.logoUrl ? 50 : 14;
-        doc.text(company.name, nameX, 22);
-
-        doc.setFontSize(14);
-        doc.setTextColor(163, 230, 53); // Lime
-        doc.text(invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', 196, 20, { align: 'right' });
-
-        doc.setFontSize(10);
-        doc.setTextColor(255, 255, 255);
-        doc.setFont("helvetica", "normal");
+        // 1. Header Bar (Shared)
         const numberLabel = invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(4, '0')}`;
-        doc.text(numberLabel, 196, 30, { align: 'right' });
+        await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel);
 
         // 2. Metadata Section (Black text)
         doc.setTextColor(20, 20, 30); // Dark Navy for contrast

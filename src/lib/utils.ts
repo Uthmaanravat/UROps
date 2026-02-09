@@ -13,3 +13,13 @@ export function formatCurrency(amount: number, currencySymbol: string = "R") {
 
     return `${currencySymbol}${formatted}`
 }
+
+export function toTitleCase(str: string) {
+    const minorWords = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'as', 'at', 'by', 'for', 'from', 'in', 'into', 'near', 'of', 'on', 'onto', 'to', 'with']);
+    return str.replace(/\w\S*/g, function (txt, offset) {
+        if (offset !== 0 && minorWords.has(txt.toLowerCase())) {
+            return txt.toLowerCase();
+        }
+        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+    });
+}

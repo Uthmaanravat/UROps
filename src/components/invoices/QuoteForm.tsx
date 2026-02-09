@@ -401,59 +401,77 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                     </div>
 
                     <div className="space-y-3">
-                        {items.map((item, index) => (
-                            <div key={index} className="flex flex-col md:flex-row gap-3 md:gap-2 items-start p-3 md:p-0 rounded-lg border md:border-none bg-muted/20 md:bg-transparent">
-                                <div className="flex-1 w-full">
-                                    <Label className="md:hidden text-[10px] uppercase font-bold text-muted-foreground mb-1">Description</Label>
-                                    <Input
-                                        placeholder="Description"
-                                        value={item.description}
-                                        onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                <div className="flex gap-2 w-full md:w-auto">
-                                    <div className="w-20">
-                                        <Label className="md:hidden text-[10px] uppercase font-bold text-muted-foreground mb-1">Qty</Label>
+                        <div className="space-y-4">
+                            {items.map((item, index) => (
+                                <div key={index} className="flex flex-col md:flex-row gap-4 md:gap-3 items-start p-4 md:p-0 rounded-2xl border md:border-none bg-white/[0.02] md:bg-transparent shadow-sm md:shadow-none border-white/5 md:border-transparent group/row">
+                                    <div className="flex-1 w-full space-y-2 md:space-y-0">
+                                        <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Description & Details</Label>
                                         <Input
-                                            type="number"
-                                            placeholder="Qty"
-                                            value={item.quantity}
-                                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
+                                            placeholder="Item description..."
+                                            value={item.description}
+                                            onChange={(e) => updateItem(index, 'description', e.target.value)}
+                                            className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium"
                                             required
                                         />
                                     </div>
-                                    <div className="w-24">
-                                        <Label className="md:hidden text-[10px] uppercase font-bold text-muted-foreground mb-1">Unit</Label>
-                                        <Input
-                                            placeholder="Unit"
-                                            // @ts-ignore
-                                            value={item.unit || ""}
-                                            onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                        />
+                                    <div className="grid grid-cols-3 gap-3 w-full md:w-auto">
+                                        <div className="space-y-2 md:space-y-0 md:w-20">
+                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-muted-foreground/60">Qty</Label>
+                                            <Input
+                                                type="number"
+                                                placeholder="1"
+                                                value={item.quantity}
+                                                onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2 md:space-y-0 md:w-24">
+                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-muted-foreground/60">Unit</Label>
+                                            <Input
+                                                placeholder="ea"
+                                                // @ts-ignore
+                                                value={item.unit || ""}
+                                                onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center"
+                                            />
+                                        </div>
+                                        <div className="space-y-2 md:space-y-0 md:w-32">
+                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-muted-foreground/60">R Price</Label>
+                                            <div className="relative">
+                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground/30">R</span>
+                                                <Input
+                                                    type="number"
+                                                    placeholder="0.00"
+                                                    value={item.unitPrice}
+                                                    onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
+                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="w-28">
-                                        <Label className="md:hidden text-[10px] uppercase font-bold text-muted-foreground mb-1">Price</Label>
-                                        <Input
-                                            type="number"
-                                            placeholder="Price"
-                                            value={item.unitPrice}
-                                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
-                                            required
-                                        />
+                                    <div className="flex items-center justify-between w-full md:w-auto md:pt-1">
+                                        <div className="md:hidden text-[10px] font-black uppercase tracking-widest text-primary drop-shadow-[0_0_10px_rgba(var(--primary),0.2)]">Line Total</div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-lg md:text-sm font-black text-white md:w-28 text-right">
+                                                {formatCurrency(item.quantity * item.unitPrice)}
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                                                onClick={() => removeItem(index)}
+                                                disabled={items.length === 1}
+                                            >
+                                                <Trash className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between w-full md:w-auto md:pt-2">
-                                    <div className="md:hidden text-[10px] uppercase font-bold text-muted-foreground">Line Total</div>
-                                    <div className="text-sm font-medium">
-                                        {formatCurrency(item.quantity * item.unitPrice)}
-                                    </div>
-                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} className="md:ml-2">
-                                        <Trash className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
                 </div>
 

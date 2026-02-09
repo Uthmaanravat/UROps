@@ -55,10 +55,18 @@ export default async function WorkBreakdownPricingListPage() {
                                         <h3 className="text-2xl font-black text-white tracking-widest uppercase italic group-hover:text-primary transition-colors leading-tight">
                                             {wbp.site || 'Project Delta'}
                                         </h3>
-                                        <div className="mt-4">
+                                        <div className="mt-4 flex flex-wrap gap-2">
                                             <Badge variant={wbp.status === 'APPROVED' ? 'default' : 'secondary'} className="rounded-md font-black text-[9px] uppercase tracking-tighter px-2 py-0.5 shadow-lg">
                                                 {wbp.status}
                                             </Badge>
+                                            {wbp.project?.commercialStatus && (
+                                                <Badge className={`rounded-md font-black text-[9px] uppercase tracking-tighter px-2 py-0.5 shadow-lg border-2
+                                                    ${wbp.project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white animate-pulse border-white/50' :
+                                                        wbp.project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border-primary' :
+                                                            'bg-amber-500/20 text-amber-500 border-amber-500'}`}>
+                                                    {wbp.project.commercialStatus.replace('_', ' ')}
+                                                </Badge>
+                                            )}
                                         </div>
                                     </div>
 

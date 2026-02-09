@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, memo, useRef, useDeferredValue, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -8,12 +8,141 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Sparkles, Loader2, DollarSign, Trash2, Plus, Scissors, CheckCircle, Search, Book } from "lucide-react"
+import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save } from "lucide-react"
 import { formatCurrency, cn } from "@/lib/utils"
 import { generateQuotationAction, getPricingSuggestionsAction, getSuggestedQuoteNumberAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
+import { saveWBPDraftAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
 import { updateClientJsonAction, getClientsAction } from "@/app/(dashboard)/clients/actions"
-import { updateProject } from "@/app/(dashboard)/projects/actions"
+import { updateProject, updateProjectCommercialStatus } from "@/app/(dashboard)/projects/actions"
 import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-actions"
+
+// Memoized individual item row to prevent full-table re-renders
+const WbpItemRow = memo(({
+    item,
+    index,
+    suggestion,
+    aiEnabled,
+    onUpdate,
+    onRemove,
+    onSplit
+}: {
+    item: any,
+    index: number,
+    suggestion: any,
+    aiEnabled: boolean,
+    onUpdate: (index: number, field: string, value: any) => void,
+    onRemove: (index: number) => void,
+    onSplit: (index: number) => void
+}) => {
+    // Local stable handlers to bind the index
+    const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        onUpdate(index, 'description', e.target.value)
+    }, [index, onUpdate])
+
+    const handleNotesChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onUpdate(index, 'notes', e.target.value)
+    }, [index, onUpdate])
+
+    const handleQuantityChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onUpdate(index, 'quantity', parseFloat(e.target.value) || 0)
+    }, [index, onUpdate])
+
+    const handleUnitChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onUpdate(index, 'unit', e.target.value)
+    }, [index, onUpdate])
+
+    const handleUnitPriceChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onUpdate(index, 'unitPrice', parseFloat(e.target.value) || 0)
+    }, [index, onUpdate])
+
+    const handleSplit = useCallback(() => {
+        onSplit(index)
+    }, [index, onSplit])
+
+    const handleRemove = useCallback(() => {
+        onRemove(index)
+    }, [index, onRemove])
+
+    return (
+        <tr className="hover:bg-white/[0.02] transition-colors group">
+            <td className="px-8 py-6 space-y-3">
+                <div className="relative">
+                    <Textarea
+                        value={item.description}
+                        onChange={handleDescriptionChange}
+                        className="min-h-[70px] bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black text-base resize-none"
+                        placeholder="Item specification..."
+                    />
+                    {item.description.includes('\n') && (
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="absolute bottom-2 right-2 h-7 w-7 text-primary hover:bg-primary/20"
+                            onClick={handleSplit}
+                            title="Split into multiple lines"
+                        >
+                            <Scissors className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+                <Input
+                    value={item.notes}
+                    onChange={handleNotesChange}
+                    className="h-8 text-[11px] font-bold text-muted-foreground/60 bg-transparent border-white/5 hover:border-white/20 transition-all italic"
+                    placeholder="Commercial or technical notes..."
+                />
+            </td>
+            <td className="px-4 py-6 text-center align-top">
+                <Input
+                    type="number"
+                    value={item.quantity}
+                    onChange={handleQuantityChange}
+                    className="h-10 text-center font-black bg-[#14141E] border-white/10 text-white"
+                />
+            </td>
+            <td className="px-4 py-6 text-center align-top">
+                <Input
+                    value={item.unit}
+                    onChange={handleUnitChange}
+                    className="h-10 text-center font-bold bg-[#14141E] border-white/10 text-muted-foreground uppercase text-[10px] tracking-widest"
+                    placeholder="ea"
+                />
+            </td>
+            <td className="px-4 py-6 text-right align-top">
+                <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 font-black">R</span>
+                    <Input
+                        type="number"
+                        value={item.unitPrice}
+                        onChange={handleUnitPriceChange}
+                        className="pl-8 text-right h-10 font-black bg-[#14141E] border-white/10 text-white"
+                    />
+                </div>
+                {aiEnabled && suggestion && (
+                    <div className="text-[10px] text-primary mt-2 font-black flex items-center justify-end gap-1 uppercase tracking-widest animate-pulse">
+                        <Sparkles className="h-3 w-3" />
+                        AI Suggests: R{suggestion.typicalPrice}
+                    </div>
+                )}
+            </td>
+            <td className="px-8 py-6 text-right align-top font-black text-white text-lg pt-8">
+                {formatCurrency(item.quantity * item.unitPrice)}
+            </td>
+            <td className="px-4 py-6 align-top pt-8">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-red-500 hover:bg-red-500/10 transition-colors opacity-100"
+                    onClick={handleRemove}
+                >
+                    <Trash2 className="h-5 w-5" />
+                </Button>
+            </td>
+        </tr>
+    )
+})
+
+WbpItemRow.displayName = "WbpItemRow"
 
 interface WorkBreakdownPricingEditorProps {
     wbp: any
@@ -24,7 +153,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const { id: wbpId, items: initialItems, project } = wbp
     const { client } = project
     const router = useRouter()
-    const [items, setItems] = useState(initialItems.map((i: any) => ({
+    const [items, setItems] = useState<any[]>(initialItems.map((i: any) => ({
         id: i.id || Math.random().toString(36).substr(2, 9),
         description: i.description,
         quantity: i.quantity,
@@ -35,13 +164,47 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const [site, setSite] = useState(wbp.site || "")
     const [quoteNumber, setQuoteNumber] = useState(wbp.quoteNumber || "")
     const [reference, setReference] = useState("")
+    const [commercialStatus, setCommercialStatus] = useState<any>(project.commercialStatus || "AWAITING_PO")
     const [quotationNotes, setQuotationNotes] = useState(wbp.notes || "")
     const [suggestions, setSuggestions] = useState<Record<string, { typicalPrice: number; source: string }>>({})
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
     const [isGenerating, setIsGenerating] = useState(false)
+    const [isSavingDraft, setIsSavingDraft] = useState(false)
     const [submitted, setSubmitted] = useState(false)
     const [lastQuoteId, setLastQuoteId] = useState<string | null>(null)
     const [lastQuoteNumber, setLastQuoteNumber] = useState<string | null>(null)
+
+    const STORAGE_KEY = `wbp-draft-${wbpId}`
+
+    // Check localStorage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem(STORAGE_KEY)
+        if (saved) {
+            try {
+                const { items: savedItems, site: savedSite, quoteNumber: savedQuote, reference: savedRef, notes: savedNotes } = JSON.parse(saved)
+                if (confirm("You have an unsaved session. Would you like to resume?")) {
+                    setItems(savedItems)
+                    setSite(savedSite)
+                    setQuoteNumber(savedQuote)
+                    setReference(savedRef)
+                    setQuotationNotes(savedNotes)
+                } else {
+                    localStorage.removeItem(STORAGE_KEY)
+                }
+            } catch (e) {
+                console.error("Failed to parse saved session", e)
+            }
+        }
+    }, [wbpId, STORAGE_KEY])
+
+    // Auto-save to localStorage
+    useEffect(() => {
+        if (items.length > 0 && !submitted) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                items, site, quoteNumber, reference, notes: quotationNotes, timestamp: Date.now()
+            }))
+        }
+    }, [items, site, quoteNumber, reference, quotationNotes, submitted, STORAGE_KEY])
 
     // Catalog state
     const [catalog, setCatalog] = useState<any[]>([])
@@ -55,15 +218,32 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const [clientVat, setClientVat] = useState(client.vatNumber || "")
     const [clientReg, setClientReg] = useState(client.registrationNumber || "")
 
-    const handleClientUpdate = async (field: string, value: string) => {
+    // Ref for debounced client updates
+    const clientUpdatesRef = useRef<{ vat?: string, reg?: string }>({})
+
+    const handleClientUpdateSync = useCallback(async (updates: { vatNumber?: string, registrationNumber?: string }) => {
         try {
-            await updateClientJsonAction(selectedClientId, { [field]: value })
+            await updateClientJsonAction(selectedClientId, updates)
         } catch (err) {
             console.error("Failed to update client:", err)
         }
-    }
+    }, [selectedClientId])
 
-    const handleClientSwitch = async (clientId: string) => {
+    // Debounce client updates
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (Object.keys(clientUpdatesRef.current).length > 0) {
+                const updates: any = {}
+                if (clientUpdatesRef.current.vat !== undefined) updates.vatNumber = clientUpdatesRef.current.vat
+                if (clientUpdatesRef.current.reg !== undefined) updates.registrationNumber = clientUpdatesRef.current.reg
+                handleClientUpdateSync(updates)
+                clientUpdatesRef.current = {}
+            }
+        }, 1000)
+        return () => clearTimeout(timer)
+    }, [clientVat, clientReg, handleClientUpdateSync])
+
+    const handleClientSwitch = useCallback(async (clientId: string) => {
         const newClient = allClients.find(c => c.id === clientId)
         if (!newClient) return
 
@@ -73,12 +253,21 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
         setClientReg(newClient.registrationNumber || "")
 
         try {
-            // Logic to update the project's client if switched in this workspace
-            await updateProject(client.projectId, { clientId })
+            await updateProject(project.id, { clientId })
         } catch (err) {
             console.error("Failed to switch client on project:", err)
         }
-    }
+    }, [allClients, project.id])
+
+    const handleCommercialStatusChange = useCallback(async (status: any) => {
+        setCommercialStatus(status)
+        try {
+            await updateProjectCommercialStatus(project.id, status)
+            router.refresh()
+        } catch (err) {
+            console.error("Failed to update commercial status:", err)
+        }
+    }, [project.id, router])
 
     useEffect(() => {
         async function loadData() {
@@ -86,7 +275,6 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                 const clients = await getClientsAction()
                 setAllClients(clients)
 
-                // Fetch suggested quote number if not already set
                 if (!quoteNumber) {
                     const suggested = await getSuggestedQuoteNumberAction()
                     setQuoteNumber(suggested)
@@ -110,7 +298,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
 
     useEffect(() => {
         async function fetchSuggestions() {
-            if (!aiEnabled) return;
+            if (!aiEnabled || initialItems.length === 0) return;
             setIsLoadingSuggestions(true)
             try {
                 const res = await getPricingSuggestionsAction(initialItems)
@@ -129,15 +317,17 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
         fetchSuggestions()
     }, [initialItems, aiEnabled])
 
-    const updateItem = (index: number, field: string, value: any) => {
-        const newItems = [...items]
-        // @ts-ignore
-        newItems[index][field] = value
-        setItems(newItems)
-    }
+    const updateItem = useCallback((index: number, field: string, value: any) => {
+        setItems((prev: any[]) => {
+            if (prev[index] && (prev[index] as any)[field] === value) return prev
+            const next = [...prev]
+            next[index] = { ...next[index], [field]: value }
+            return next
+        })
+    }, [])
 
-    const addItem = () => {
-        setItems([...items, {
+    const addItem = useCallback(() => {
+        setItems((prev: any[]) => [...prev, {
             id: Math.random().toString(36).substr(2, 9),
             description: "",
             quantity: 1,
@@ -145,64 +335,75 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             notes: "",
             unitPrice: 0
         }])
-    }
+    }, [])
 
-    const removeItem = (index: number) => {
-        if (items.length <= 1) return
-        setItems(items.filter((_: any, i: number) => i !== index))
-    }
+    const removeItem = useCallback((index: number) => {
+        setItems((prev: any[]) => {
+            if (prev.length <= 1) return prev
+            return prev.filter((_: any, i: number) => i !== index)
+        })
+    }, [])
 
-    const splitItem = (index: number) => {
-        const item = items[index]
-        if (!item.description.includes('\n')) return
+    const splitItem = useCallback((index: number) => {
+        setItems((prev: any[]) => {
+            const item = prev[index]
+            if (!item.description.includes('\n')) return prev
 
-        const lines = item.description.split('\n').filter((l: string) => l.trim().length > 0)
-        if (lines.length <= 1) return
+            const lines = item.description.split('\n').filter((l: string) => l.trim().length > 0)
+            if (lines.length <= 1) return prev
 
-        const newItems = [...items]
-        newItems[index].description = lines[0]
+            const next = [...prev]
+            next[index] = { ...next[index], description: lines[0] }
 
-        const additions = lines.slice(1).map((line: string) => ({
-            id: Math.random().toString(36).substr(2, 9),
-            description: line.trim(),
-            quantity: 1,
-            unit: "",
-            notes: "",
-            unitPrice: 0
-        }))
+            const additions = lines.slice(1).map((line: string) => ({
+                id: Math.random().toString(36).substr(2, 9),
+                description: line.trim(),
+                quantity: 1,
+                unit: "",
+                notes: "",
+                unitPrice: 0
+            }))
 
-        newItems.splice(index + 1, 0, ...additions)
-        setItems(newItems)
-    }
+            next.splice(index + 1, 0, ...additions)
+            return next
+        })
+    }, [])
 
-    const filteredCatalog = catalog.filter(item =>
-        item.description.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-        item.category?.toLowerCase().includes(catalogSearch.toLowerCase())
-    )
+    const addFromCatalog = useCallback((catalogItem: any) => {
+        setItems((prev: any[]) => {
+            const newItem = {
+                id: Math.random().toString(36).substr(2, 9),
+                description: catalogItem.description,
+                quantity: 1,
+                unit: catalogItem.unit || "",
+                notes: "",
+                unitPrice: catalogItem.unitPrice
+            }
 
-    const addFromCatalog = (catalogItem: any) => {
-        const newItem = {
-            id: Math.random().toString(36).substr(2, 9),
-            description: catalogItem.description,
-            quantity: 1,
-            unit: catalogItem.unit || "",
-            notes: "",
-            unitPrice: catalogItem.unitPrice
-        }
-
-        // If the last item is empty, replace it
-        const lastItem = items[items.length - 1]
-        if (items.length === 1 && !items[0].description && items[0].unitPrice === 0) {
-            setItems([newItem])
-        } else {
-            setItems([...items, newItem])
-        }
+            if (prev.length === 1 && !prev[0].description && prev[0].unitPrice === 0) {
+                return [newItem]
+            } else {
+                return [...prev, newItem]
+            }
+        })
         setIsCatalogOpen(false)
         setCatalogSearch("")
-    }
+    }, [])
 
-    const subtotal = items.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0)
-    const total = subtotal * 1.15 // 15% VAT
+    const deferredCatalogSearch = useDeferredValue(catalogSearch)
+
+    const filteredCatalog = useMemo(() => {
+        return catalog.filter(item =>
+            item.description.toLowerCase().includes(deferredCatalogSearch.toLowerCase()) ||
+            item.category?.toLowerCase().includes(deferredCatalogSearch.toLowerCase())
+        )
+    }, [catalog, deferredCatalogSearch])
+
+    const subtotal = useMemo(() => {
+        return items.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0)
+    }, [items])
+
+    const total = useMemo(() => subtotal * 1.15, [subtotal]) // 15% VAT
 
     const handleGenerate = async () => {
         setIsGenerating(true)
@@ -213,12 +414,26 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             // @ts-ignore
             setLastQuoteNumber(quote.quoteNumber || quote.number?.toString())
             setSubmitted(true)
+            localStorage.removeItem(STORAGE_KEY)
             router.refresh()
             window.scrollTo({ top: 0, behavior: 'smooth' })
         } catch (error) {
             console.error("Error generating quotation:", error)
         } finally {
             setIsGenerating(false)
+        }
+    }
+
+    const handleSaveDraft = async () => {
+        setIsSavingDraft(true)
+        try {
+            await saveWBPDraftAction(wbpId, items, { site, quoteNumber, reference, notes: quotationNotes })
+            alert("Draft saved successfully!")
+        } catch (error) {
+            console.error("Error saving draft:", error)
+            alert("Failed to save draft.")
+        } finally {
+            setIsSavingDraft(false)
         }
     }
 
@@ -277,7 +492,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                 </Card>
             )}
             <Card className="border-white/5 bg-[#1A1A2E] shadow-2xl overflow-hidden rounded-2xl">
-                <CardHeader className="bg-white/5 p-8 border-b border-white/5">
+                <CardHeader className="bg-white/5 p-6 border-b border-white/5">
                     <div className="flex items-center justify-between">
                         <div>
                             <CardTitle className="flex items-center gap-3 text-2xl font-black text-white">
@@ -293,7 +508,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                         </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 pt-8 border-t border-white/5">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/5">
                         <div className="space-y-2">
                             <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Site Name</Label>
                             <Input
@@ -321,9 +536,26 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 className="bg-[#14141E] border-white/10 text-white font-bold h-12"
                             />
                         </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Commercial Status</Label>
+                            <select
+                                value={commercialStatus}
+                                onChange={(e) => handleCommercialStatusChange(e.target.value)}
+                                className={cn(
+                                    "flex h-12 w-full rounded-md border px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary transition-all cursor-pointer",
+                                    commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 border-red-500 text-red-400" :
+                                        commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 border-primary text-primary" :
+                                            "bg-[#14141E] border-white/10 text-white"
+                                )}
+                            >
+                                <option value="AWAITING_PO">AWAITING PO</option>
+                                <option value="PO_RECEIVED">PO RECEIVED</option>
+                                <option value="EMERGENCY_WORK">EMERGENCY WORK</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 pt-6 border-t border-white/5 bg-primary/5 -mx-8 px-8 py-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/5 bg-primary/5 -mx-6 px-6 py-4">
                         <div className="space-y-2">
                             <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Select Client from CRM</Label>
                             <select
@@ -342,7 +574,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 value={clientVat}
                                 onChange={(e) => {
                                     setClientVat(e.target.value)
-                                    handleClientUpdate('vatNumber', e.target.value)
+                                    clientUpdatesRef.current.vat = e.target.value
                                 }}
                                 placeholder="123456789"
                                 className="bg-[#14141E] border-primary/20 text-white font-bold h-11 focus:border-primary"
@@ -354,7 +586,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 value={clientReg}
                                 onChange={(e) => {
                                     setClientReg(e.target.value)
-                                    handleClientUpdate('registrationNumber', e.target.value)
+                                    clientUpdatesRef.current.reg = e.target.value
                                 }}
                                 placeholder="2024/123456/07"
                                 className="bg-[#14141E] border-primary/20 text-white font-bold h-11 focus:border-primary"
@@ -440,82 +672,16 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 {items.map((item: any, index: number) => {
                                     const suggestion = suggestions[item.description]
                                     return (
-                                        <tr key={item.id} className="hover:bg-white/[0.02] transition-colors group">
-                                            <td className="px-8 py-6 space-y-3">
-                                                <div className="relative">
-                                                    <Textarea
-                                                        value={item.description}
-                                                        onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                                        className="min-h-[70px] bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black text-base resize-none"
-                                                        placeholder="Item specification..."
-                                                    />
-                                                    {item.description.includes('\n') && (
-                                                        <Button
-                                                            size="icon"
-                                                            variant="ghost"
-                                                            className="absolute bottom-2 right-2 h-7 w-7 text-primary hover:bg-primary/20"
-                                                            onClick={() => splitItem(index)}
-                                                            title="Split into multiple lines"
-                                                        >
-                                                            <Scissors className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                                <Input
-                                                    value={item.notes}
-                                                    onChange={(e) => updateItem(index, 'notes', e.target.value)}
-                                                    className="h-8 text-[11px] font-bold text-muted-foreground/60 bg-transparent border-white/5 hover:border-white/20 transition-all italic"
-                                                    placeholder="Commercial or technical notes..."
-                                                />
-                                            </td>
-                                            <td className="px-4 py-6 text-center align-top">
-                                                <Input
-                                                    type="number"
-                                                    value={item.quantity}
-                                                    onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
-                                                    className="h-10 text-center font-black bg-[#14141E] border-white/10 text-white"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-6 text-center align-top">
-                                                <Input
-                                                    value={item.unit}
-                                                    onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                                    className="h-10 text-center font-bold bg-[#14141E] border-white/10 text-muted-foreground uppercase text-[10px] tracking-widest"
-                                                    placeholder="ea"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-6 text-right align-top">
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 font-black">R</span>
-                                                    <Input
-                                                        type="number"
-                                                        value={item.unitPrice}
-                                                        onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
-                                                        className="pl-8 text-right h-10 font-black bg-[#14141E] border-white/10 text-white"
-                                                    />
-                                                </div>
-                                                {aiEnabled && suggestion && (
-                                                    <div className="text-[10px] text-primary mt-2 font-black flex items-center justify-end gap-1 uppercase tracking-widest animate-pulse">
-                                                        <Sparkles className="h-3 w-3" />
-                                                        AI Suggests: R{suggestion.typicalPrice}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-8 py-6 text-right align-top font-black text-white text-lg pt-8">
-                                                {formatCurrency(item.quantity * item.unitPrice)}
-                                            </td>
-                                            <td className="px-4 py-6 align-top pt-8">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-red-500 hover:bg-red-500/10 transition-colors opacity-100"
-                                                    onClick={() => removeItem(index)}
-                                                    disabled={items.length === 1}
-                                                >
-                                                    <Trash2 className="h-5 w-5" />
-                                                </Button>
-                                            </td>
-                                        </tr>
+                                        <WbpItemRow
+                                            key={item.id}
+                                            item={item}
+                                            index={index}
+                                            suggestion={suggestion}
+                                            aiEnabled={aiEnabled}
+                                            onUpdate={updateItem}
+                                            onRemove={removeItem}
+                                            onSplit={splitItem}
+                                        />
                                     )
                                 })}
                             </tbody>
@@ -545,23 +711,35 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-10">
-                            <div className="text-right">
-                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] block mb-3 opacity-50">Grand Commercial Total</span>
-                                <span className="text-5xl font-black text-white shadow-primary/20 drop-shadow-2xl">{formatCurrency(total)}</span>
+                        <div className="flex flex-col sm:flex-row items-center gap-6 w-full md:w-auto">
+                            <div className="text-right flex-1 sm:flex-none">
+                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] block mb-1 md:mb-3 opacity-50">Grand Commercial Total</span>
+                                <span className="text-3xl md:text-5xl font-black text-white shadow-primary/20 drop-shadow-2xl">{formatCurrency(total)}</span>
                             </div>
-                            <Button
-                                size="lg"
-                                onClick={handleGenerate}
-                                disabled={isGenerating}
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-2xl shadow-primary/20 px-12 h-16 rounded-xl transition-all active:scale-95"
-                            >
-                                {isGenerating ? (
-                                    <Loader2 className="h-6 w-6 animate-spin" />
-                                ) : (
-                                    "AUTHORIZE & GENERATE QUOTATION"
-                                )}
-                            </Button>
+                            <div className="flex gap-3 w-full sm:w-auto">
+                                <Button
+                                    size="lg"
+                                    variant="outline"
+                                    onClick={handleSaveDraft}
+                                    disabled={isGenerating || isSavingDraft}
+                                    className="flex-1 sm:flex-none border-primary/20 hover:bg-primary/5 text-primary font-black px-6 h-16 rounded-xl transition-all"
+                                >
+                                    {isSavingDraft ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                                    <span className="sm:hidden ml-2">Save</span>
+                                </Button>
+                                <Button
+                                    size="lg"
+                                    onClick={handleGenerate}
+                                    disabled={isGenerating || isSavingDraft}
+                                    className="flex-[2] sm:flex-none bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-2xl shadow-primary/20 px-4 md:px-12 h-16 rounded-xl transition-all active:scale-95 text-xs md:text-sm"
+                                >
+                                    {isGenerating ? (
+                                        <Loader2 className="h-6 w-6 animate-spin" />
+                                    ) : (
+                                        "AUTHORIZE & GENERATE QUOTATION"
+                                    )}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </CardContent>

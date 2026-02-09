@@ -3,26 +3,45 @@
 import { Button } from "@/components/ui/button"
 import { FileText, Loader2 } from "lucide-react"
 import jsPDF from "jspdf"
+import { drawPdfHeader } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
 import { useState } from "react"
 import { formatCurrency } from "@/lib/utils"
 
-export function ClientStatementButton({ client }: { client: any }) {
+export function ClientStatementButton({ client, settings }: { client: any, settings?: any }) {
     const [loading, setLoading] = useState(false)
 
-    const generateStatement = () => {
+    const company = {
+        name: settings?.name || "LR Builders & Maintenance Pty (Ltd)",
+        address: settings?.address || "15 Culemborg Street, Avondale, Parow, Cape Town, 7500",
+        email: settings?.email || "Loedvi@lrbuilders.co.za",
+        phone: settings?.phone || "082 448 7490",
+        logoUrl: settings?.logoUrl || "",
+        paymentTerms: settings?.paymentTerms || "",
+        bankDetails: settings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510"
+    };
+
+    const generateStatement = async () => {
         setLoading(true)
         try {
             const doc = new jsPDF()
 
-            // Header
-            doc.setFontSize(22)
-            doc.text("STATEMENT OF ACCOUNT", 14, 20)
+            // Header (Shared)
+            await drawPdfHeader(doc, company, 'STATEMENT OF ACCOUNT', '');
 
-            doc.setFontSize(10)
-            doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 30)
-            doc.text(`Client: ${client.companyName || client.name}`, 14, 35)
-            if (client.vatNumber) doc.text(`VAT No: ${client.vatNumber}`, 14, 40)
+            doc.setTextColor(20, 20, 30); // Reset to dark for content
+
+            // Client Info Block
+            const metaY = 50;
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, metaY);
+
+            doc.setFont("helvetica", "bold");
+            doc.text(`Client: ${client.companyName || client.name}`, 14, metaY + 5);
+            doc.setFont("helvetica", "normal");
+
+            if (client.vatNumber) doc.text(`VAT No: ${client.vatNumber}`, 14, metaY + 10);
 
             // Statement of Outstanding Invoices
             doc.setFontSize(14)
@@ -55,8 +74,9 @@ export function ClientStatementButton({ client }: { client: any }) {
             })
 
             // Table
+            // Table
             autoTable(doc, {
-                startY: 55,
+                startY: 65,
                 head: [['Date', 'Invoice #', 'Quote/Ref', 'Site / Project', 'Total', 'Outstanding']],
                 body: rows,
                 theme: 'striped',

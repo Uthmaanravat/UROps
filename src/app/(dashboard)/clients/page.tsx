@@ -33,13 +33,16 @@ export default async function ClientsPage({ searchParams }: { searchParams: { q?
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
-                <div className="flex items-center gap-4">
-                    <SearchInput placeholder="Search clients..." />
-                    <Link href="/clients/new">
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" /> Add Client
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic">Clients</h1>
+                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest opacity-50">Manage your partners and customer base</p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <SearchInput placeholder="Search clients..." className="w-full sm:w-64 bg-white/5 border-white/10 text-white" />
+                    <Link href="/clients/new" className="w-full sm:w-auto">
+                        <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-xs tracking-widest h-11 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95">
+                            <Plus className="mr-2 h-4 w-4" /> Add New Client
                         </Button>
                     </Link>
                 </div>

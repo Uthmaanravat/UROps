@@ -17,7 +17,14 @@ export default async function DashboardLayout({
 
     console.log("DashboardLayout check for user ID:", user.id)
     const dbUser = await prisma.user.findUnique({
-        where: { id: user.id }
+        where: { id: user.id },
+        include: {
+            company: {
+                include: {
+                    settings: true
+                }
+            }
+        }
     })
     console.log("DashboardLayout dbUser found:", dbUser ? "YES" : "NO")
 
@@ -34,13 +41,14 @@ export default async function DashboardLayout({
         // Find or create company
         console.log("DashboardLayout: Finding company for domain:", domain)
         let company = await prisma.company.findUnique({
-            where: { domain }
+            where: { domain },
+            include: { settings: true }
         })
         console.log("DashboardLayout: Company found:", company ? "YES" : "NO")
 
         if (!company) {
             console.log("DashboardLayout: Creating new company for domain:", domain)
-            company = await prisma.company.create({
+            const createdCompany = await prisma.company.create({
                 data: {
                     name: domain.split(".")[0].toUpperCase(),
                     domain,
@@ -49,8 +57,10 @@ export default async function DashboardLayout({
                             name: domain.split(".")[0].toUpperCase()
                         }
                     }
-                }
+                },
+                include: { settings: true }
             })
+            company = createdCompany
             console.log("DashboardLayout: New company created:", company.id)
         }
 
@@ -70,18 +80,15 @@ export default async function DashboardLayout({
             redirect("/onboarding")
         }
 
-        return <DashboardLayoutClient user={newUser} settings={null}>{children}</DashboardLayoutClient>
+        return <DashboardLayoutClient user={newUser} settings={company.settings}>{children}</DashboardLayoutClient>
     }
 
     if (!dbUser.hasCompletedOnboarding) {
         redirect("/onboarding")
     }
 
-    console.log("DashboardLayout: Fetching settings for companyId:", dbUser.companyId)
-    const settings = await prisma.companySettings.findUnique({
-        where: { companyId: dbUser.companyId }
-    })
-    console.log("DashboardLayout: Settings found:", settings ? "YES" : "NO")
+    const settings = dbUser.company?.settings || null;
+    console.log("DashboardLayout: Settings found via include:", settings ? "YES" : "NO")
 
     return <DashboardLayoutClient user={dbUser} settings={settings}>{children}</DashboardLayoutClient>
 }

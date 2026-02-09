@@ -4,8 +4,17 @@ import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useTransition } from "react"
+import { cn } from "@/lib/utils"
 
-export function SearchInput({ placeholder = "Search..." }: { placeholder?: string }) {
+export function SearchInput({
+    placeholder = "Search...",
+    className,
+    containerClassName
+}: {
+    placeholder?: string,
+    className?: string,
+    containerClassName?: string
+}) {
     const router = useRouter()
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
@@ -23,13 +32,13 @@ export function SearchInput({ placeholder = "Search..." }: { placeholder?: strin
     }
 
     return (
-        <div className="relative">
+        <div className={cn("relative", containerClassName)}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
                 placeholder={placeholder}
                 defaultValue={searchParams.get("q") || ""}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="pl-9 w-64"
+                className={cn("pl-9 w-64", className)}
             />
             {isPending && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">

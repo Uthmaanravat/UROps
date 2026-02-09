@@ -73,8 +73,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                             </form>
                         )}
                         <Link href={`/projects/${project.id}/edit`}>
-                            <Button variant="outline" className="border-white/10 hover:bg-white/5 transition-all">
-                                <Pencil className="mr-2 h-4 w-4" /> Edit Details
+                            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-xl shadow-primary/20 transition-all border-none">
+                                <Pencil className="mr-2 h-4 w-4" /> Edit Project Details
                             </Button>
                         </Link>
                         <DeleteButton
@@ -258,7 +258,17 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                         <div className="space-y-3 text-sm">
                             <div className="flex justify-between border-b pb-2">
                                 <span className="text-muted-foreground">Status</span>
-                                <span className="font-medium">{project.status}</span>
+                                <div className="flex flex-col items-end gap-1">
+                                    <span className="font-medium">{project.status}</span>
+                                    {project.commercialStatus && (
+                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded
+                                            ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white animate-pulse' :
+                                                project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border border-primary/20' :
+                                                    'bg-amber-500/20 text-amber-500 border border-amber-500/20'}`}>
+                                            {project.commercialStatus.replace('_', ' ')}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex justify-between border-b pb-2">
                                 <span className="text-muted-foreground">Start Date</span>

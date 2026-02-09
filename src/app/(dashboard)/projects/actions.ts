@@ -79,3 +79,19 @@ export async function updateProjectStatus(id: string, status: string) {
         return { success: false, error: "Failed to update status" }
     }
 }
+
+export async function updateProjectCommercialStatus(id: string, commercialStatus: any) {
+    const companyId = await ensureAuth()
+    try {
+        await (prisma as any).project.update({
+            where: { id, companyId },
+            data: { commercialStatus }
+        })
+        revalidatePath("/projects")
+        revalidatePath(`/projects/${id}`)
+        return { success: true }
+    } catch (error) {
+        console.error("Error updating commercial status:", error)
+        return { success: false, error: "Failed to update commercial status" }
+    }
+}

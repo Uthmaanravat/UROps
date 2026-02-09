@@ -25,6 +25,7 @@ export const viewport: Viewport = {
 import { ThemeProvider } from "@/components/theme-provider";
 import { prisma } from "@/lib/prisma";
 import { getAuthCompanyId } from "@/lib/auth-actions";
+import { SessionMonitor } from "@/components/auth/SessionMonitor";
 
 export default async function RootLayout({
     children,
@@ -46,6 +47,7 @@ export default async function RootLayout({
     return (
         <html lang="en" className={initialTheme}>
             <body className={inter.className}>
+                <SessionMonitor />
                 <ThemeProvider initialTheme={initialTheme}>
                     {children}
                 </ThemeProvider>

@@ -87,24 +87,25 @@ model Client {
 }
 
 model Project {
-  id             String                 @id @default(uuid())
-  name           String
-  description    String?
-  status         ProjectStatus          @default(PLANNING)
-  workflowStage  WorkflowStage          @default(SOW)
-  startDate      DateTime?
-  endDate        DateTime?
-  clientId       String
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
-  companyId      String
-  invoices       Invoice[]
-  meetings       Meeting[]
-  client         Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  company        Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  scopes         ScopeOfWork[]
-  submissionLogs SubmissionLog[]
-  workBreakdowns WorkBreakdownPricing[]
+  id               String           @id @default(uuid())
+  name             String
+  description      String?
+  status           ProjectStatus    @default(PLANNING)
+  workflowStage    WorkflowStage    @default(SOW)
+  commercialStatus CommercialStatus @default(AWAITING_PO)
+  startDate        DateTime?
+  endDate          DateTime?
+  clientId         String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  companyId        String
+  invoices         Invoice[]
+  meetings         Meeting[]
+  client           Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  scopes           ScopeOfWork[]
+  submissionLogs   SubmissionLog[]
+  workBreakdowns   WorkBreakdownPricing[]
 }
 
 model ScopeOfWork {
@@ -347,4 +348,10 @@ enum WorkflowStage {
   INVOICE
   PAYMENT
   COMPLETED
+}
+
+enum CommercialStatus {
+  AWAITING_PO
+  PO_RECEIVED
+  EMERGENCY_WORK
 }

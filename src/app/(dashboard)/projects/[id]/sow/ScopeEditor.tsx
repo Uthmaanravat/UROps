@@ -9,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Trash2, ArrowLeft, Sparkles, Save, Mic, Loader2, CheckCircle2, ExternalLink } from "lucide-react"
 import { VoiceInput } from "@/components/ui/VoiceInput"
-import { submitScopeAction } from "./actions"
+import { submitScopeAction, saveSOWDraftAction } from "./actions"
 import Link from "next/link"
+import { useEffect } from "react"
 
 interface ScopeEditorProps {
     projectId: string
@@ -22,9 +23,37 @@ export function ScopeEditor({ projectId, initialItems }: ScopeEditorProps) {
     const [items, setItems] = useState(initialItems || [{ description: "", quantity: 1, unit: "", notes: "" }])
     const [site, setSite] = useState("")
     const [loading, setLoading] = useState(false)
+    const [saving, setSaving] = useState(false)
     const [recordingIndex, setRecordingIndex] = useState<number | null>(null)
     const [submitted, setSubmitted] = useState(false)
     const [wbpId, setWbpId] = useState<string | null>(null)
+
+    const STORAGE_KEY = `sow-draft-${projectId}`
+
+    // Check localStorage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem(STORAGE_KEY)
+        if (saved) {
+            try {
+                const { items: savedItems, site: savedSite } = JSON.parse(saved)
+                if (confirm("You have an unsaved session. Would you like to resume?")) {
+                    setItems(savedItems)
+                    setSite(savedSite)
+                } else {
+                    localStorage.removeItem(STORAGE_KEY)
+                }
+            } catch (e) {
+                console.error("Failed to parse saved session", e)
+            }
+        }
+    }, [projectId, STORAGE_KEY])
+
+    // Auto-save to localStorage
+    useEffect(() => {
+        if (items.length > 0 && !submitted) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ items, site, timestamp: Date.now() }))
+        }
+    }, [items, site, submitted, STORAGE_KEY])
 
     const addItem = () => setItems([...items, { description: "", quantity: 1, unit: "", notes: "" }])
     const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index))
@@ -59,8 +88,22 @@ export function ScopeEditor({ projectId, initialItems }: ScopeEditorProps) {
         }
     }
 
+    const handleSaveDraft = async () => {
+        setSaving(true)
+        try {
+            await saveSOWDraftAction(projectId, items, site)
+            alert("Draft saved successfully!")
+        } catch (error) {
+            console.error("Error saving draft:", error)
+            alert("Failed to save draft. Please try again.")
+        } finally {
+            setSaving(false)
+        }
+    }
+
     const handleSubmit = async () => {
         if (items.some(i => !i.description)) {
+            alert("Please provide a description for all items.")
             return
         }
 
@@ -70,6 +113,7 @@ export function ScopeEditor({ projectId, initialItems }: ScopeEditorProps) {
             // @ts-ignore
             setWbpId(result.wbpId)
             setSubmitted(true)
+            localStorage.removeItem(STORAGE_KEY)
             // Scroll to top to show confirmation
             window.scrollTo({ top: 0, behavior: 'smooth' })
         } catch (error) {
@@ -229,23 +273,39 @@ export function ScopeEditor({ projectId, initialItems }: ScopeEditorProps) {
                 <Button variant="ghost" onClick={() => router.back()} className="text-muted-foreground hover:text-white font-bold">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Discard Changes
                 </Button>
-                <Button
-                    size="lg"
-                    onClick={handleSubmit}
-                    disabled={loading}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-black px-12 h-14 shadow-xl shadow-primary/20 transition-all active:scale-95"
-                >
-                    {loading ? (
-                        <>
+                <div className="flex gap-4">
+                    <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={handleSaveDraft}
+                        disabled={loading || saving}
+                        className="border-primary/20 hover:bg-primary/5 text-primary font-black px-8 h-14 rounded-xl transition-all"
+                    >
+                        {saving ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Processing Submission...
-                        </>
-                    ) : (
-                        <>
-                            <Save className="mr-2 h-5 w-5" /> Terminate & Submit SOW
-                        </>
-                    )}
-                </Button>
+                        ) : (
+                            <Save className="mr-2 h-5 w-5" />
+                        )}
+                        Save Draft
+                    </Button>
+                    <Button
+                        size="lg"
+                        onClick={handleSubmit}
+                        disabled={loading || saving}
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-black px-12 h-14 shadow-xl shadow-primary/20 transition-all active:scale-95"
+                    >
+                        {loading ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Processing Submission...
+                            </>
+                        ) : (
+                            <>
+                                <CheckCircle2 className="mr-2 h-5 w-5" /> Terminate & Submit SOW
+                            </>
+                        )}
+                    </Button>
+                </div>
             </div>
         </div>
     )

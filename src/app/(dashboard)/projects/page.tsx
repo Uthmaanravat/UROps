@@ -34,7 +34,8 @@ export default async function ProjectsPage() {
                     site: true
                 }
             }
-        }
+        },
+        take: 50
     })
 
     return (
@@ -51,7 +52,70 @@ export default async function ProjectsPage() {
                 </Link>
             </div>
 
-            <div className="rounded-md border bg-card">
+            <div className="md:hidden space-y-4">
+                {projects.map((project: any) => {
+                    const latestWbp = project.workBreakdowns[0]
+                    const latestScope = project.scopes[0]
+                    const totalWorth = latestWbp
+                        ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15
+                        : (project.invoices.find((i: any) => i.type === 'QUOTE' || i.type === 'INVOICE')?.total || 0)
+
+                    return (
+                        <div key={project.id} className="bg-card border border-white/5 rounded-2xl p-5 space-y-4 shadow-xl">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="font-black text-white text-lg leading-tight mb-1">{project.name}</h3>
+                                    <p className="text-muted-foreground text-xs uppercase font-bold tracking-widest">{project.client.name}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 opacity-50">Total Worth</p>
+                                    <p className="text-xl font-black text-primary">{formatCurrency(totalWorth)}</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 opacity-30">Status Tracking</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider
+                                        ${project.status === 'COMPLETED' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' :
+                                            project.status === 'IN_PROGRESS' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                                project.status === 'PAID' ? 'bg-primary/20 text-primary border border-primary/30' :
+                                                    project.status === 'INVOICED' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                                                        project.status === 'QUOTED' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                                                            project.status === 'SOW_SUBMITTED' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
+                                                                project.status === 'SCHEDULED' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
+                                                                    project.status === 'LEAD' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                                                                        'bg-white/5 text-muted-foreground border border-white/10'}`}>
+                                        {project.status === 'SOW_SUBMITTED' ? 'Scope Submitted' : project.status.replace('_', ' ')}
+                                    </span>
+                                    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest
+                                        ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50' :
+                                            project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border border-primary/40' :
+                                                'bg-amber-500/20 text-amber-500 border border-amber-500/30'}`}>
+                                        {project.commercialStatus === 'EMERGENCY_WORK' ? '🚨 EMERGENCY' :
+                                            project.commercialStatus === 'PO_RECEIVED' ? '✅ PO RECEIVED' : '⏳ AWAITING PO'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                                <Link href={`/projects/${project.id}`} className="flex-1">
+                                    <Button className="w-full bg-white/5 hover:bg-primary hover:text-primary-foreground border-white/10 font-black uppercase text-xs tracking-widest h-11 rounded-xl transition-all">
+                                        View Project
+                                    </Button>
+                                </Link>
+                                <DeleteButton
+                                    id={project.id}
+                                    action={deleteProject}
+                                    confirmText="Are you sure?"
+                                />
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+
+            <div className="hidden md:block rounded-md border bg-card">
                 <div className="relative w-full overflow-auto">
                     <table className="w-full text-sm text-left min-w-[800px]">
                         <thead className="[&_tr]:border-b">
@@ -94,18 +158,27 @@ export default async function ProjectsPage() {
                                             </div>
                                         </td>
                                         <td className="p-4 align-middle">
-                                            <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider
-                                                ${project.status === 'COMPLETED' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' :
-                                                    project.status === 'IN_PROGRESS' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                                                        project.status === 'PAID' ? 'bg-primary/20 text-primary border border-primary/30' :
-                                                            project.status === 'INVOICED' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
-                                                                project.status === 'QUOTED' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                                                                    project.status === 'SOW_SUBMITTED' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
-                                                                        project.status === 'SCHEDULED' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
-                                                                            project.status === 'LEAD' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
-                                                                                'bg-white/5 text-muted-foreground border border-white/10'}`}>
-                                                {project.status === 'SOW_SUBMITTED' ? 'Scope Submitted' : project.status.replace('_', ' ')}
-                                            </span>
+                                            <div className="flex flex-col gap-2">
+                                                <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider
+                                                    ${project.status === 'COMPLETED' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' :
+                                                        project.status === 'IN_PROGRESS' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                                            project.status === 'PAID' ? 'bg-primary/20 text-primary border border-primary/30' :
+                                                                project.status === 'INVOICED' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                                                                    project.status === 'QUOTED' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                                                                        project.status === 'SOW_SUBMITTED' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
+                                                                            project.status === 'SCHEDULED' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
+                                                                                project.status === 'LEAD' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                                                                                    'bg-white/5 text-muted-foreground border border-white/10'}`}>
+                                                    {project.status === 'SOW_SUBMITTED' ? 'Scope Submitted' : project.status.replace('_', ' ')}
+                                                </span>
+                                                <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest
+                                                    ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50' :
+                                                        project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border border-primary/40' :
+                                                            'bg-amber-500/20 text-amber-500 border border-amber-500/30'}`}>
+                                                    {project.commercialStatus === 'EMERGENCY_WORK' ? '🚨 EMERGENCY' :
+                                                        project.commercialStatus === 'PO_RECEIVED' ? '✅ PO RECEIVED' : '⏳ AWAITING PO'}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="p-4 align-middle text-right font-black text-white text-base">
                                             {formatCurrency(totalWorth)}
