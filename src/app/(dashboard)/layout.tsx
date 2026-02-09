@@ -9,6 +9,11 @@ export default async function DashboardLayout({
     children: React.ReactNode
 }) {
     const supabase = createClient()
+    if (!supabase) {
+        console.warn("DashboardLayout: Supabase client is null")
+        redirect("/login")
+    }
+
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
