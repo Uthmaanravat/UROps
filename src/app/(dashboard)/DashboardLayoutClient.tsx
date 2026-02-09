@@ -201,7 +201,7 @@ export default function DashboardLayoutClient({
                         <span>{isLoggingOut ? "Ending Session..." : "Logout Session"}</span>
                     </button>
                     <p className="text-[8px] text-center font-bold text-muted-foreground/20 uppercase tracking-[0.2em] pb-1">
-                        Build v2.1.0-alpha • {new Date().toLocaleDateString()}
+                        Build v2.1.0-alpha
                     </p>
                 </div>
             </aside>

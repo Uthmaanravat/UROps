@@ -9,6 +9,11 @@ export default async function DashboardLayout({
     children: React.ReactNode
 }) {
     const supabase = createClient()
+    if (!supabase) {
+        console.error("DashboardLayout: Supabase client is null")
+        redirect("/login")
+    }
+
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -36,5 +41,9 @@ export default async function DashboardLayout({
 
     const settings = dbUser.company?.settings || null;
 
-    return <DashboardLayoutClient user={dbUser as any} settings={settings as any}>{children}</DashboardLayoutClient>
+    // CRITICAL: Must JSON-serialize to avoid Date object issues with Client Components
+    const serializedUser = JSON.parse(JSON.stringify(dbUser));
+    const serializedSettings = JSON.parse(JSON.stringify(settings));
+
+    return <DashboardLayoutClient user={serializedUser} settings={serializedSettings}>{children}</DashboardLayoutClient>
 }

@@ -96,7 +96,7 @@ function NavItem({
             )}
         >
             {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full shadow-[0_0_10px_hsl(var(--primary)/0.5)]" />
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full shadow-[0_0_10px_#8cff3380]" />
             )}
             <div className="flex items-center min-w-0 flex-1">
                 <Icon className={cn("mr-3 h-4 w-4 shrink-0 transition-colors", isActive ? "text-primary" : "group-hover:text-primary")} />
