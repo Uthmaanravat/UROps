@@ -7,8 +7,11 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function transcribeAudio(formData: FormData) {
     if (!process.env.GEMINI_API_KEY) {
-        console.warn("Using mock transcription due to missing Gemini API key");
-        return { success: false, error: "Server configuration error: Missing Gemini API Key" }
+        console.warn("Gemini API key missing");
+        return {
+            success: false,
+            error: "AI Configuration Missing: Please add GEMINI_API_KEY to your Vercel Environment Variables."
+        }
     }
 
     const file = formData.get("file") as File
@@ -101,8 +104,11 @@ export async function getPricingSuggestions(items: { description: string }[]) {
 
 export async function parseScopeOfWork(text: string) {
     if (!process.env.GEMINI_API_KEY) {
-        console.warn("Using mock parsing due to missing Gemini API key");
-        return { success: false, error: "Server configuration error: Missing Gemini API Key" }
+        console.warn("Gemini API key missing");
+        return {
+            success: false,
+            error: "AI Configuration Missing: Please add GEMINI_API_KEY to environment variables."
+        }
     }
 
     try {
