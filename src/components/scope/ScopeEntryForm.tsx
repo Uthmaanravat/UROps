@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Trash2, ArrowLeft, Sparkles } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, Sparkles, Save, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { createMobileSOWAction } from "@/app/(dashboard)/scope/actions"
-import { VoiceInput } from "@/components/ui/VoiceInput"
+import { createMobileSOWAction, saveScopeDraftAction } from "@/app/(dashboard)/scope/actions"
+import { VoiceFieldInput } from "@/components/ui/VoiceFieldInput"
 
 // Memoized individual row with stable handlers
 const ScopeItemRow = memo(({
@@ -65,7 +65,7 @@ const ScopeItemRow = memo(({
                         className="min-h-[70px] bg-background border-white/5 focus:border-primary/50 text-sm font-bold resize-none"
                     />
                     <div className="flex flex-col gap-2">
-                        <VoiceInput
+                        <VoiceFieldInput
                             onResult={handleVoice}
                             isRecording={isRecording}
                             onToggle={handleToggle}
@@ -107,6 +107,7 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
     const [items, setItems] = useState<{ id: string, description: string }[]>([{ id: Math.random().toString(36).substr(2, 9), description: "" }])
     const [loading, setLoading] = useState(false)
+    const [saving, setSaving] = useState(false)
     const [recordingIndex, setRecordingIndex] = useState<number | null>(null)
     const [submitted, setSubmitted] = useState(false)
     const [wbpId, setWbpId] = useState<string | null>(null)
@@ -220,6 +221,35 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
             console.error("Error saving scope:", error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleSaveDraft = async () => {
+        if (!clientId) {
+            alert("Please select a client to save.")
+            return
+        }
+
+        setSaving(true)
+        try {
+            const result = await saveScopeDraftAction({
+                clientId,
+                site,
+                date,
+                items: items.map(i => ({ description: i.description }))
+            })
+            // Optional: Notify user or just save silently?
+            // User requested "Save Progress button"
+            alert("Draft saved successfully!")
+            localStorage.removeItem(STORAGE_KEY) // Clear local storage as we have it in DB
+
+            // Maybe reset form? Or just leave it?
+            // "Save Progress" implies continue working.
+        } catch (error) {
+            console.error("Error saving draft:", error)
+            alert("Failed to save draft.")
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -365,11 +395,11 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                 </div>
             </div>
 
-            <div className="pt-8 pb-10">
+            <div className="pt-8 pb-10 flex gap-3 flex-col">
                 <Button
                     type="submit"
                     className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black h-16 rounded-xl text-lg shadow-2xl shadow-primary/20 transition-all active:scale-95 uppercase tracking-widest italic"
-                    disabled={loading}
+                    disabled={loading || saving}
                 >
                     {loading ? (
                         <div className="flex items-center gap-2">
@@ -377,6 +407,20 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                             Validating & Uploading...
                         </div>
                     ) : "Official Submission to Commercial"}
+                </Button>
+                <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSaveDraft}
+                    className="w-full bg-secondary/50 hover:bg-secondary/70 text-secondary-foreground font-bold h-12 rounded-xl transition-all"
+                    disabled={loading || saving}
+                >
+                    {saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                    )}
+                    Save Progress (Draft)
                 </Button>
                 <p className="text-center text-[9px] text-muted-foreground uppercase font-bold tracking-[0.4em] mt-4 opacity-50 underline decoration-primary/30">Build: MVP-FEBRUARY-V1</p>
             </div>

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Trash2, ArrowLeft, Sparkles, Save, Mic, Loader2, CheckCircle2, ExternalLink } from "lucide-react"
-import { VoiceInput } from "@/components/ui/VoiceInput"
+import { VoiceFieldInput } from "@/components/ui/VoiceFieldInput"
 import { submitScopeAction, saveSOWDraftAction } from "./actions"
 import Link from "next/link"
 import { useEffect } from "react"
@@ -198,7 +198,7 @@ export function ScopeEditor({ projectId, initialItems }: ScopeEditorProps) {
                                     <div className="flex justify-between items-center">
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Description & Details</Label>
                                         <div className="flex items-center gap-3">
-                                            <VoiceInput
+                                            <VoiceFieldInput
                                                 onResult={(text) => handleVoiceResult(index, text)}
                                                 isRecording={recordingIndex === index}
                                                 onToggle={(recording) => setRecordingIndex(recording ? index : null)}

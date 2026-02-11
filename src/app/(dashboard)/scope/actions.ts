@@ -37,3 +37,48 @@ export async function createMobileSOWAction(data: {
 
     return { projectId: project.id, sowId: (sow as any).sow.id, wbpId: (sow as any).wbp.id }
 }
+
+export async function saveScopeDraftAction(data: {
+    clientId: string
+    site: string
+    date: string
+    items: { description: string }[]
+}) {
+    const companyId = await ensureAuth()
+
+    // 1. Create Project with PLANNING/SOW status
+    const project = await prisma.project.create({
+        data: {
+            companyId,
+            name: `${data.site || "Draft Scope"} - ${new Date(data.date).toLocaleDateString()}`,
+            clientId: data.clientId,
+            status: 'SOW', // Visible in pending lists
+            workflowStage: 'SOW',
+            description: `Draft mobile entry on ${data.date}`,
+            commercialStatus: 'AWAITING_PO' // Default
+        }
+    })
+
+    // 2. Create SOW Record with DRAFT status
+    // We do NOT call submitScopeOfWork because that finalizes it
+    const sow = await prisma.scopeOfWork.create({
+        data: {
+            companyId,
+            projectId: project.id,
+            status: 'DRAFT',
+            version: 1,
+            site: data.site,
+            items: {
+                create: data.items.map(i => ({
+                    description: i.description,
+                    quantity: 1
+                }))
+            }
+        }
+    })
+
+    revalidatePath("/manager")
+    revalidatePath("/projects")
+
+    return { projectId: project.id, sowId: sow.id }
+}
