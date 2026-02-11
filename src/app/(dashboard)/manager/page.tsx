@@ -55,7 +55,7 @@ export default async function ManagerDashboard() {
                     Pending Scopes
                 </h2>
                 <div className="grid gap-3">
-                    {recentSOWs.map((sow: any) => (
+                    {(recentSOWs || []).map((sow: any) => (
                         <Link key={sow.id} href={`/projects/${sow.projectId}/sow`}>
                             <Card className="border-l-4 border-l-blue-500 shadow-sm hover:bg-muted/50 transition-colors">
                                 <CardContent className="p-4 flex flex-col gap-1">
@@ -68,7 +68,7 @@ export default async function ManagerDashboard() {
                             </Card>
                         </Link>
                     ))}
-                    {recentSOWs.length === 0 && (
+                    {(recentSOWs || []).length === 0 && (
                         <p className="text-xs text-center text-muted-foreground py-4 italic">
                             No recent scopes found.
                         </p>
