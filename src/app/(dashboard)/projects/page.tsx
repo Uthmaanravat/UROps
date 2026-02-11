@@ -11,32 +11,39 @@ export const dynamic = 'force-dynamic'
 
 export default async function ProjectsPage() {
     const companyId = await ensureAuth()
-    const projects = await prisma.project.findMany({
-        where: { companyId },
-        orderBy: { updatedAt: 'desc' },
-        include: {
-            client: true,
-            scopes: {
-                include: { items: true },
-                orderBy: { version: 'desc' },
-                take: 1
-            },
-            workBreakdowns: {
-                include: { items: true },
-                orderBy: { version: 'desc' },
-                take: 1
-            },
-            invoices: {
-                select: {
-                    total: true,
-                    type: true,
-                    status: true,
-                    site: true
+    let projects: any[] = []
+
+    try {
+        projects = await prisma.project.findMany({
+            where: { companyId },
+            orderBy: { updatedAt: 'desc' },
+            include: {
+                client: true,
+                scopes: {
+                    include: { items: true },
+                    orderBy: { version: 'desc' },
+                    take: 1
+                },
+                workBreakdowns: {
+                    include: { items: true },
+                    orderBy: { version: 'desc' },
+                    take: 1
+                },
+                invoices: {
+                    select: {
+                        total: true,
+                        type: true,
+                        status: true,
+                        site: true
+                    }
                 }
-            }
-        },
-        take: 50
-    })
+            },
+            take: 50
+        }) || []
+    } catch (error) {
+        console.error("Error fetching projects:", error)
+        projects = []
+    }
 
     return (
         <div className="space-y-6">

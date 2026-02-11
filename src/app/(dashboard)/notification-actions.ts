@@ -9,28 +9,48 @@ export async function getSidebarNotifications() {
         if (!companyId) return { wbp: 0, quotations: 0, invoices: 0, projects: 0 }
 
         // 1. WB&P: Count items in DRAFT status
-        const wbpCount = await (prisma as any).workBreakdownPricing?.count({
-            where: { status: 'DRAFT', companyId }
-        }) || 0
+        let wbpCount = 0;
+        try {
+            wbpCount = await (prisma as any).workBreakdownPricing?.count({
+                where: { status: 'DRAFT', companyId }
+            }) || 0
+        } catch (e) {
+            console.error("Sidebar count error (WBP):", e);
+        }
 
         // 2. Quotations: Count QUOTE type items that are DRAFT
-        const quoteCount = await (prisma as any).invoice?.count({
-            where: { type: 'QUOTE', status: 'DRAFT', companyId }
-        }) || 0
+        let quoteCount = 0;
+        try {
+            quoteCount = await (prisma as any).invoice?.count({
+                where: { type: 'QUOTE', status: 'DRAFT', companyId }
+            }) || 0
+        } catch (e) {
+            console.error("Sidebar count error (Quotes):", e);
+        }
 
         // 3. Invoices: Count INVOICE type items that are UNPAID
-        const invoiceCount = await (prisma as any).invoice?.count({
-            where: {
-                type: 'INVOICE',
-                status: { in: ['DRAFT', 'SENT'] },
-                companyId
-            }
-        }) || 0
+        let invoiceCount = 0;
+        try {
+            invoiceCount = await (prisma as any).invoice?.count({
+                where: {
+                    type: 'INVOICE',
+                    status: { in: ['DRAFT', 'SENT'] },
+                    companyId
+                }
+            }) || 0
+        } catch (e) {
+            console.error("Sidebar count error (Invoices):", e);
+        }
 
         // 4. Projects: Count projects in 'SOW' stage
-        const projectCount = await (prisma as any).project?.count({
-            where: { workflowStage: 'SOW', companyId }
-        }) || 0
+        let projectCount = 0;
+        try {
+            projectCount = await (prisma as any).project?.count({
+                where: { workflowStage: 'SOW', companyId }
+            }) || 0
+        } catch (e) {
+            console.error("Sidebar count error (Projects):", e);
+        }
 
         return {
             wbp: wbpCount,

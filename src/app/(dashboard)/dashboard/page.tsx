@@ -109,23 +109,23 @@ export default async function DashboardPage() {
                 // Fallback to empty arrays if serialization fails
             }
 
-            unpaidInvoices = serializedUnpaidInvs;
-            recentInvoices = serializedRecent;
-            upcomingMeetings = serializedMeetings;
-            recentInteractions = serializedInteractions;
-            activeProjects = serializedProjects;
-            pendingScopes = serializedScopes;
+            unpaidInvoices = Array.isArray(serializedUnpaidInvs) ? serializedUnpaidInvs : [];
+            recentInvoices = Array.isArray(serializedRecent) ? serializedRecent : [];
+            upcomingMeetings = Array.isArray(serializedMeetings) ? serializedMeetings : [];
+            recentInteractions = Array.isArray(serializedInteractions) ? serializedInteractions : [];
+            activeProjects = Array.isArray(serializedProjects) ? serializedProjects : [];
+            pendingScopes = Array.isArray(serializedScopes) ? serializedScopes : [];
 
-            allUnpaidInvoices.forEach(inv => {
-                const paid = (inv.payments || []).reduce((acc, p) => acc + p.amount, 0);
-                if (paid < inv.total) {
-                    unpaidTotal += (inv.total - paid);
+            (allUnpaidInvoices || []).forEach(inv => {
+                const paid = (inv.payments || []).reduce((acc, p) => acc + (p.amount || 0), 0);
+                if (paid < (inv.total || 0)) {
+                    unpaidTotal += ((inv.total || 0) - paid);
                 }
             });
 
-            unpaidCount = allUnpaidInvoices.filter(i => {
-                const p = (i.payments || []).reduce((a, b) => a + b.amount, 0);
-                return p < i.total - 0.01;
+            unpaidCount = (allUnpaidInvoices || []).filter(i => {
+                const p = (i.payments || []).reduce((a, b) => a + (b.amount || 0), 0);
+                return p < (i.total || 0) - 0.01;
             }).length;
 
             projectCount = await (prisma as any).project?.count({
@@ -138,10 +138,10 @@ export default async function DashboardPage() {
             }) || 0;
 
             trackingCounts = {
-                sow: sowCount,
-                quotation: quoteCount,
-                invoice: invoicedCount,
-                payment: paidCount
+                sow: sowCount || 0,
+                quotation: quoteCount || 0,
+                invoice: invoicedCount || 0,
+                payment: paidCount || 0
             };
         } catch (e) {
             console.error("Dashboard DB Error:", e);
@@ -174,10 +174,10 @@ export default async function DashboardPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-2 mt-2">
-                                {activeProjects.length === 0 ? (
+                                {(activeProjects || []).length === 0 ? (
                                     <p className="text-xs text-muted-foreground">No active projects.</p>
                                 ) : (
-                                    activeProjects.map((proj: any) => (
+                                    (activeProjects || []).map((proj: any) => (
                                         <Link key={proj.id} href={`/projects/${proj.id}`} className="block">
                                             <div className="flex items-center justify-between p-2 rounded-md border bg-muted/40 hover:bg-muted transition-colors">
                                                 <div>
@@ -211,7 +211,7 @@ export default async function DashboardPage() {
                 </div>
 
                 {/* Awaiting Pricing Scopes */}
-                {pendingScopes.length > 0 && (
+                {(pendingScopes || []).length > 0 && (
                     <Card className="border-yellow-500/50 bg-yellow-500/5">
                         <CardHeader className="py-3 flex flex-row items-center justify-between">
                             <div>
@@ -223,7 +223,7 @@ export default async function DashboardPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 py-3">
-                            {pendingScopes.map((scope: any) => (
+                            {(pendingScopes || []).map((scope: any) => (
                                 <Link key={scope.id} href={scope.type === 'QUOTE' ? `/invoices/${scope.id}` : `/projects/${scope.id}`}>
                                     <Card className="p-3 border-yellow-500/20 hover:border-yellow-500 transition-colors shadow-sm">
                                         <div className="flex justify-between items-start">
@@ -256,28 +256,31 @@ export default async function DashboardPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {upcomingMeetings.length === 0 ? (
+                                    {(upcomingMeetings || []).length === 0 ? (
                                         <p className="text-sm text-muted-foreground italic">No upcoming meetings.</p>
                                     ) : (
-                                        upcomingMeetings.map(m => (
-                                            <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border bg-blue-50/50">
-                                                <div className="flex gap-3 items-center">
-                                                    <div className="bg-white p-2 rounded shadow-sm text-center min-w-[50px]">
-                                                        <div className="text-[10px] uppercase text-muted-foreground font-bold">{new Date(m.date).toLocaleString('default', { month: 'short' })}</div>
-                                                        <div className="text-xl font-bold">{new Date(m.date).getDate()}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-semibold">{m.title}</div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {new Date(m.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {m.client?.name}
+                                        (upcomingMeetings || []).map(m => {
+                                            const meetDate = m.date ? new Date(m.date) : new Date();
+                                            return (
+                                                <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border bg-blue-50/50">
+                                                    <div className="flex gap-3 items-center">
+                                                        <div className="bg-white p-2 rounded shadow-sm text-center min-w-[50px]">
+                                                            <div className="text-[10px] uppercase text-muted-foreground font-bold">{meetDate.toLocaleString('default', { month: 'short' })}</div>
+                                                            <div className="text-xl font-bold">{meetDate.getDate()}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-semibold">{m.title}</div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {meetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {m.client?.name}
+                                                            </div>
                                                         </div>
                                                     </div>
+                                                    <Link href="/calendar">
+                                                        <Button variant="ghost" size="sm">View</Button>
+                                                    </Link>
                                                 </div>
-                                                <Link href="/calendar">
-                                                    <Button variant="ghost" size="sm">View</Button>
-                                                </Link>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     )}
                                 </div>
                             </CardContent>
@@ -330,14 +333,14 @@ export default async function DashboardPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {recentInteractions.length === 0 ? (
+                                    {(recentInteractions || []).length === 0 ? (
                                         <p className="text-sm text-muted-foreground italic">No recent interactions.</p>
                                     ) : (
-                                        recentInteractions.map(int => (
+                                        (recentInteractions || []).map(int => (
                                             <div key={int.id} className="border-l-2 border-primary/30 pl-3 py-1">
                                                 <div className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2">
                                                     {!int.read && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
-                                                    {int.type} • {new Date(int.date).toLocaleDateString()}
+                                                    {int.type} • {int.date ? new Date(int.date).toLocaleDateString() : 'No Date'}
                                                 </div>
                                                 <div className="text-sm line-clamp-2">{int.content}</div>
                                                 <div className="text-[10px] text-primary">{int.client?.name}</div>
@@ -361,7 +364,7 @@ export default async function DashboardPage() {
                                                     <div className="font-medium">#{inv.number} - {inv.client?.name}</div>
                                                     <div className="text-muted-foreground">{inv.type} • {inv.status}</div>
                                                 </div>
-                                                <div className="font-bold">{formatCurrency(inv.total)}</div>
+                                                <div className="font-bold">{formatCurrency(inv.total || 0)}</div>
                                             </div>
                                         </Link>
                                     ))}

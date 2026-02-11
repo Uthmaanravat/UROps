@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { PlusCircle, Mic, ListTodo } from "lucide-react"
 
+export const dynamic = 'force-dynamic'
+
 export default async function ManagerDashboard() {
     const activeProjects = await (prisma as any).project.findMany({
         where: { status: 'IN_PROGRESS' },

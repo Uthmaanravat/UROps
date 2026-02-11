@@ -15,53 +15,66 @@ export async function updateSession(request: NextRequest) {
         return response
     }
 
-    const supabase = createServerClient(
-        supabaseUrl,
-        supabaseAnonKey,
-        {
-            cookies: {
-                get(name: string) {
-                    return request.cookies.get(name)?.value
+    try {
+        const supabase = createServerClient(
+            supabaseUrl,
+            supabaseAnonKey,
+            {
+                cookies: {
+                    get(name: string) {
+                        return request.cookies.get(name)?.value
+                    },
+                    set(name: string, value: string, options: CookieOptions) {
+                        try {
+                            request.cookies.set({
+                                name,
+                                value,
+                                ...options,
+                            })
+                            response = NextResponse.next({
+                                request: {
+                                    headers: request.headers,
+                                },
+                            })
+                            response.cookies.set({
+                                name,
+                                value,
+                                ...options,
+                            })
+                        } catch (cookieErr) {
+                            // Ignore cookie set errors in middleware
+                        }
+                    },
+                    remove(name: string, options: CookieOptions) {
+                        try {
+                            request.cookies.set({
+                                name,
+                                value: '',
+                                ...options,
+                            })
+                            response = NextResponse.next({
+                                request: {
+                                    headers: request.headers,
+                                },
+                            })
+                            response.cookies.set({
+                                name,
+                                value: '',
+                                ...options,
+                            })
+                        } catch (cookieErr) {
+                            // Ignore cookie remove errors in middleware
+                        }
+                    },
                 },
-                set(name: string, value: string, options: CookieOptions) {
-                    request.cookies.set({
-                        name,
-                        value,
-                        ...options,
-                    })
-                    response = NextResponse.next({
-                        request: {
-                            headers: request.headers,
-                        },
-                    })
-                    response.cookies.set({
-                        name,
-                        value,
-                        ...options,
-                    })
-                },
-                remove(name: string, options: CookieOptions) {
-                    request.cookies.set({
-                        name,
-                        value: '',
-                        ...options,
-                    })
-                    response = NextResponse.next({
-                        request: {
-                            headers: request.headers,
-                        },
-                    })
-                    response.cookies.set({
-                        name,
-                        value: '',
-                        ...options,
-                    })
-                },
-            },
-        }
-    )
+            }
+        )
 
-    await supabase.auth.getUser()
+        await supabase.auth.getUser()
 
-    return response
+        return response
+    } catch (e) {
+        console.error("updateSession error:", e)
+        return response
+    }
 }
