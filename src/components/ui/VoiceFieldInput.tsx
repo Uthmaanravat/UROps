@@ -76,6 +76,7 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 onResult(result.text)
             } else {
                 console.error("Transcription failed:", result.error)
+                alert(result.error || "Failed to transcribe audio. Please try again.")
             }
         } catch (error) {
             console.error("Processing error:", error)
