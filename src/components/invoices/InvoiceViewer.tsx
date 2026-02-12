@@ -70,6 +70,7 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
         email: companySettings?.email || "Loedvi@lrbuilders.co.za",
         phone: companySettings?.phone || "082 448 7490",
         logoUrl: companySettings?.logoUrl || "",
+        vatNumber: companySettings?.taxId || "",
         paymentTerms: companySettings?.paymentTerms || "",
         bankDetails: companySettings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510"
     };
@@ -105,7 +106,9 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
         const currencySymbol = companySettings?.currency || "R";
 
         // 1. Header Bar (Shared)
-        const numberLabel = invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(4, '0')}`;
+        const numberLabel = invoice.quoteNumber && (invoice.quoteNumber.startsWith('Q-') || invoice.quoteNumber.startsWith('INV-'))
+            ? invoice.quoteNumber
+            : (invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(4, '0')}`);
         await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel);
 
         // 2. Metadata Section (Black text)
@@ -162,8 +165,11 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
         // Company Contact on Right
         doc.text(company.phone, 196, metaY, { align: 'right' });
         doc.text(company.email, 196, metaY + 5, { align: 'right' });
+        if (company.vatNumber) {
+            doc.text(`VAT: ${company.vatNumber}`, 196, metaY + 10, { align: 'right' });
+        }
         const compAddr = doc.splitTextToSize(company.address, 70);
-        doc.text(compAddr, 196, metaY + 12, { align: 'right' });
+        doc.text(compAddr, 196, company.vatNumber ? metaY + 17 : metaY + 12, { align: 'right' });
 
         // 3. Table with Area Grouping
         const tableBody: any[] = [];
@@ -357,13 +363,21 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
                                 <p className="text-gray-400 text-sm font-medium">{company.phone}</p>
                                 <span className="text-gray-600">•</span>
                                 <p className="text-gray-400 text-sm font-medium">{company.email}</p>
+                                {company.vatNumber && (
+                                    <>
+                                        <span className="text-gray-600">•</span>
+                                        <p className="text-gray-400 text-sm font-medium uppercase tracking-tighter">VAT: {company.vatNumber}</p>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
                     <div className="text-right">
                         <h2 className="text-4xl font-black uppercase tracking-[0.2em] text-primary">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
                         <p className="text-gray-500 font-mono mt-2 text-lg">
-                            {invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(4, '0')}`}
+                            {invoice.quoteNumber && (invoice.quoteNumber.startsWith('Q-') || invoice.quoteNumber.startsWith('INV-'))
+                                ? invoice.quoteNumber
+                                : (invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(4, '0')}`)}
                         </p>
                     </div>
                 </div>

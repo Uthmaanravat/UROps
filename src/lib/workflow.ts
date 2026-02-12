@@ -3,17 +3,17 @@ import { revalidatePath } from "next/cache"
 import { logSubmission } from "@/lib/submission-logger"
 
 export async function submitScopeOfWork(projectId: string, items: { description: string, quantity: number, unit?: string, notes?: string, area?: string }[], site?: string) {
-    // 1. Calculate next Quote Number (Q-001 format)
-    const quoteCount = await prisma.invoice.count({
-        where: { type: 'QUOTE' }
-    })
-    const suggestedQuoteNumber = `Q-${(quoteCount + 1).toString().padStart(3, '0')}`
-
     // Get project details for logging
     const project = await prisma.project.findUnique({
         where: { id: projectId },
         include: { client: true }
     })
+
+    // 1. Calculate next Quote Number (Q-001 format)
+    const quoteCount = await prisma.invoice.count({
+        where: { type: 'QUOTE', companyId: project!.companyId }
+    })
+    const suggestedQuoteNumber = `Q-${(quoteCount + 1).toString().padStart(3, '0')}`
 
     // 2. Create SOW Record (Frozen snapshot)
     const sow = await prisma.scopeOfWork.create({
@@ -231,6 +231,11 @@ export async function approveQuote(quoteId: string) {
     })
 
     // 2. Create Draft Invoice from Quote
+    const invoiceCount = await prisma.invoice.count({
+        where: { type: 'INVOICE', companyId: quote.companyId }
+    })
+    const invoiceNumberLabel = `INV-${(invoiceCount + 1).toString().padStart(3, '0')}`
+
     await prisma.invoice.create({
         data: {
             companyId: quote.companyId,
@@ -239,6 +244,7 @@ export async function approveQuote(quoteId: string) {
             type: 'INVOICE',
             status: 'DRAFT',
             wbpId: quote.wbpId,
+            quoteNumber: invoiceNumberLabel, // Using this field for the independent invoice sequence label
             items: {
                 createMany: {
                     data: (await prisma.invoiceItem.findMany({ where: { invoiceId: quoteId } })).map(item => ({
@@ -253,7 +259,6 @@ export async function approveQuote(quoteId: string) {
             taxAmount: quote.taxAmount,
             total: quote.total,
             site: quote.site,
-            quoteNumber: quote.quoteNumber,
             reference: quote.reference,
             notes: quote.notes
         }
