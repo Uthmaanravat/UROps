@@ -4,10 +4,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import { prisma } from "@/lib/prisma"
 import OpenAI from "openai"
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const openai = new OpenAI({
+const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
-});
+}) : null;
 
 export async function transcribeAudio(formData: FormData) {
     if (!process.env.OPENAI_API_KEY) {
@@ -34,6 +34,11 @@ export async function transcribeAudio(formData: FormData) {
 
             const arrayBuffer = await file.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
+
+            if (!openai) {
+                return { success: false, error: "OpenAI client not initialized." }
+            }
+
             const fileForOpenAI = await OpenAI.toFile(buffer, file.name, { type: file.type });
 
             const transcription = await openai.audio.transcriptions.create({
@@ -123,9 +128,11 @@ export async function getPricingSuggestions(items: { description: string }[]) {
 }
 
 export async function parseScopeOfWork(text: string) {
-    throw new Error("Missing Gemini API Key. AI parsing unavailable.")
-
     try {
+        if (!genAI) {
+            return { success: false, error: "Gemini API Key is missing. AI parsing unavailable." }
+        }
+
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", generationConfig: { responseMimeType: "application/json" } });
         const prompt = `You are an expert project manager for a maintenance and construction company. 
         Your task is to take a transcribed voice note and parse it into a structured Scope of Work (SOW).
@@ -155,7 +162,7 @@ export async function parseScopeOfWork(text: string) {
 }
 
 export async function extractPricingFromText(text: string) {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!genAI) {
         throw new Error("Missing Gemini API Key")
     }
 
