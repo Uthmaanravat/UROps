@@ -112,7 +112,7 @@ export default function DashboardLayoutClient({
                         <span>{isLoggingOut ? "Ending..." : "End Session"}</span>
                     </button>
                     <div className="px-2 pt-2 border-t border-white/5 flex flex-col items-center">
-                        <p className="text-[7px] text-muted-foreground/30 uppercase tracking-[0.3em] font-black">Build v2.1.0-alpha</p>
+                        <p className="text-[7px] text-muted-foreground/30 uppercase tracking-[0.3em] font-black">Build MVP-FEBRUARY-V6.2</p>
                     </div>
                 </div>
             </aside>
