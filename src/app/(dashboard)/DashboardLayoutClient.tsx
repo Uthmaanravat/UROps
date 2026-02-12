@@ -118,25 +118,25 @@ export default function DashboardLayoutClient({
             </aside>
 
             {/* Mobile Header */}
-            <header className="flex h-16 items-center border-b px-4 md:hidden bg-card/80 backdrop-blur-md justify-between sticky top-0 z-50">
-                <div className="font-bold flex items-center gap-3">
+            <header className="flex h-14 items-center border-b px-4 md:hidden bg-card/80 backdrop-blur-md justify-between sticky top-0 z-50">
+                <div className="font-bold flex items-center gap-2.5">
                     {settings?.logoUrl ? (
                         <img
                             src={settings.logoUrl}
                             alt="Logo"
-                            width={40}
-                            height={40}
-                            style={{ width: '40px', height: '40px', objectFit: 'contain' }}
-                            className="h-10 w-10 rounded-lg object-contain"
+                            width={32}
+                            height={32}
+                            style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+                            className="h-8 w-8 rounded-lg object-contain"
                         />
                     ) : (
-                        <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
-                            <Rocket className="h-5 w-5" />
+                        <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
+                            <Rocket className="h-4 w-4" />
                         </div>
                     )}
                     <div className="flex flex-col -gap-1">
                         <span className="text-xs font-black uppercase tracking-widest text-primary drop-shadow-sm">UROps</span>
-                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest truncate max-w-[100px]">{settings?.name || "Suite"}</span>
+                        <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest truncate max-w-[80px]">{settings?.name || "Suite"}</span>
                     </div>
                 </div>
                 <Button
@@ -159,34 +159,34 @@ export default function DashboardLayoutClient({
 
             {/* Mobile Sidebar */}
             <aside className={cn(
-                "fixed inset-y-0 left-0 z-50 w-72 bg-[#0F0F1A] p-0 border-r border-white/5 shadow-2xl transition-transform duration-300 ease-out md:hidden flex flex-col overflow-x-hidden",
+                "fixed inset-y-0 left-0 z-50 w-64 bg-[#0F0F1A] p-0 border-r border-white/5 shadow-2xl transition-transform duration-300 ease-out md:hidden flex flex-col overflow-x-hidden",
                 isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
             )}>
-                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                <div className="p-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
                     <div className="flex items-center gap-3">
                         <div className="shrink-0 relative">
                             {settings?.logoUrl ? (
                                 <img
                                     src={settings.logoUrl}
                                     alt="Logo"
-                                    width={40}
-                                    height={40}
-                                    style={{ width: '40px', height: '40px', objectFit: 'contain' }}
-                                    className="h-10 w-10 rounded-xl object-contain bg-white/5 p-1 border border-white/5 shadow-xl"
+                                    width={36}
+                                    height={36}
+                                    style={{ width: '36px', height: '36px', objectFit: 'contain' }}
+                                    className="h-9 w-9 rounded-xl object-contain bg-white/5 p-1 border border-white/5 shadow-xl"
                                 />
                             ) : (
-                                <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
-                                    <Rocket className="h-5 w-5" />
+                                <div className="h-9 w-9 rounded-xl bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
+                                    <Rocket className="h-4.5 w-4.5" />
                                 </div>
                             )}
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80 truncate">Network Dashboard</span>
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/80 truncate">Network Dashboard</span>
                             <span className="text-xs font-bold text-white truncate">{settings?.name || "UROps"}</span>
                         </div>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(false)} className="text-muted-foreground hover:bg-white/5">
-                        <X className="h-5 w-5" />
+                    <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(false)} className="text-muted-foreground hover:bg-white/5 h-8 w-8">
+                        <X className="h-4 w-4" />
                     </Button>
                 </div>
                 <div className="flex-1 overflow-hidden py-2">

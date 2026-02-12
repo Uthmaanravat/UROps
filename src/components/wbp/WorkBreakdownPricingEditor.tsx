@@ -68,8 +68,8 @@ const WbpItemRow = memo(({
     }, [index, onRemove])
 
     return (
-        <tr className="hover:bg-white/[0.02] transition-colors group">
-            <td className="px-8 py-6 space-y-3">
+        <tr className="hover:bg-white/[0.02] transition-colors group border-b border-white/5 md:border-none">
+            <td className="px-4 md:px-8 py-4 md:py-6 space-y-3 block md:table-cell">
                 <div className="flex gap-4">
                     <div className="flex-1 relative">
                         <Textarea
@@ -107,7 +107,8 @@ const WbpItemRow = memo(({
                     placeholder="Commercial or technical notes..."
                 />
             </td>
-            <td className="px-4 py-6 text-center align-top">
+            <td className="px-2 md:px-4 py-3 md:py-6 text-center align-top inline-block md:table-cell w-1/3 md:w-28">
+                <Label className="text-[9px] font-black uppercase text-muted-foreground/40 mb-1 block md:hidden">Qty</Label>
                 <Input
                     type="number"
                     value={item.quantity}
@@ -115,7 +116,8 @@ const WbpItemRow = memo(({
                     className="h-10 text-center font-black bg-[#14141E] border-white/10 text-white"
                 />
             </td>
-            <td className="px-4 py-6 text-center align-top">
+            <td className="px-2 md:px-4 py-3 md:py-6 text-center align-top inline-block md:table-cell w-1/3 md:w-28">
+                <Label className="text-[9px] font-black uppercase text-muted-foreground/40 mb-1 block md:hidden">Unit</Label>
                 <Input
                     value={item.unit}
                     onChange={handleUnitChange}
@@ -123,7 +125,8 @@ const WbpItemRow = memo(({
                     placeholder="ea"
                 />
             </td>
-            <td className="px-4 py-6 text-right align-top">
+            <td className="px-2 md:px-4 py-3 md:py-6 text-right align-top inline-block md:table-cell w-1/3 md:w-44">
+                <Label className="text-[9px] font-black uppercase text-muted-foreground/40 mb-1 block md:hidden">Price</Label>
                 <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 font-black">R</span>
                     <Input
@@ -140,10 +143,11 @@ const WbpItemRow = memo(({
                     </div>
                 )}
             </td>
-            <td className="px-8 py-6 text-right align-top font-black text-white text-lg pt-8">
+            <td className="px-4 md:px-8 py-3 md:py-6 text-right align-top font-black text-white text-base md:text-lg pt-4 md:pt-8 block md:table-cell">
+                <Label className="text-[9px] font-black uppercase text-primary italic mb-1 block md:hidden">Total</Label>
                 {formatCurrency(item.quantity * item.unitPrice)}
             </td>
-            <td className="px-4 py-6 align-top pt-8">
+            <td className="px-4 py-3 md:py-6 align-top pt-4 md:pt-8 block md:table-cell text-right md:text-left">
                 <Button
                     variant="ghost"
                     size="icon"
@@ -513,12 +517,12 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                 <CardHeader className="bg-white/5 p-6 border-b border-white/5">
                     <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle className="flex items-center gap-3 text-2xl font-black text-white">
-                                <FileText className="h-6 w-6 text-primary" />
-                                Work Breakdown & Pricing (WB&P)
+                            <CardTitle className="flex items-center gap-2 md:gap-3 text-lg md:text-2xl font-black text-white uppercase italic">
+                                <FileText className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                                Pricing Breakdown
                             </CardTitle>
-                            <p className="text-xs text-muted-foreground font-medium mt-2 uppercase tracking-widest">
-                                Finalize engineering breakdowns and commercial metrics.
+                            <p className="text-[9px] md:text-xs text-muted-foreground font-black mt-1 md:mt-2 uppercase tracking-[0.2em]">
+                                Engineering metrics & commercial validation.
                             </p>
                         </div>
                         <Button variant="outline" size="sm" onClick={addItem} className="border-primary/20 hover:bg-primary/10 text-primary font-black px-6 transition-all">
@@ -678,11 +682,11 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                         <table className="w-full text-sm text-left">
                             <thead className="bg-[#14141E] border-b border-white/5 text-muted-foreground font-black text-[10px] uppercase tracking-[0.2em]">
                                 <tr>
-                                    <th className="px-8 py-5 min-w-[350px]">Technical Description & Commercial Notes</th>
-                                    <th className="px-4 py-5 text-center w-28">Quantity</th>
-                                    <th className="px-4 py-5 text-center w-28">Unit</th>
-                                    <th className="px-4 py-5 text-right w-44">Unit Price (R)</th>
-                                    <th className="px-8 py-5 text-right w-40 text-primary">Total</th>
+                                    <th className="px-4 md:px-8 py-4 md:py-5 min-w-[200px] md:min-w-[350px]">Description & Areas</th>
+                                    <th className="hidden md:table-cell px-4 py-5 text-center w-28">Quantity</th>
+                                    <th className="hidden md:table-cell px-4 py-5 text-center w-28">Unit</th>
+                                    <th className="hidden md:table-cell px-4 py-5 text-right w-44">Unit Price (R)</th>
+                                    <th className="px-4 md:px-8 py-4 md:py-5 text-right w-32 md:w-40 text-primary">Total</th>
                                     <th className="px-4 py-5 w-12"></th>
                                 </tr>
                             </thead>
@@ -727,7 +731,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                         </table>
                     </div>
 
-                    <div className="bg-white/5 border-t border-white/5 p-10 flex flex-col md:flex-row justify-between items-start gap-10">
+                    <div className="bg-white/5 border-t border-white/5 p-6 md:p-10 flex flex-col lg:flex-row justify-between items-start gap-8 md:gap-10">
                         <div className="space-y-6 flex-1 min-w-[300px]">
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Quotation Notes & Specific Requirements</Label>
@@ -750,10 +754,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                             </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row items-center gap-6 w-full md:w-auto">
-                            <div className="text-right flex-1 sm:flex-none">
-                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] block mb-1 md:mb-3 opacity-50">Grand Commercial Total</span>
-                                <span className="text-3xl md:text-5xl font-black text-white shadow-primary/20 drop-shadow-2xl">{formatCurrency(total)}</span>
+                        <div className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 w-full lg:w-auto">
+                            <div className="text-center sm:text-right flex-1 sm:flex-none">
+                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] block mb-1 md:mb-3 opacity-50 italic">Commercial Total</span>
+                                <span className="text-4xl md:text-5xl font-black text-white shadow-primary/20 drop-shadow-2xl">{formatCurrency(total)}</span>
                             </div>
                             <div className="flex gap-3 w-full sm:w-auto">
                                 <Button
@@ -770,7 +774,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                     size="lg"
                                     onClick={handleGenerate}
                                     disabled={isGenerating || isSavingDraft}
-                                    className="flex-[2] sm:flex-none bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-2xl shadow-primary/20 px-4 md:px-12 h-16 rounded-xl transition-all active:scale-95 text-xs md:text-sm"
+                                    className="flex-[2] sm:flex-none bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-2xl shadow-primary/20 px-6 md:px-12 h-14 md:h-16 rounded-xl transition-all active:scale-95 text-xs md:text-sm uppercase tracking-widest italic"
                                 >
                                     {isGenerating ? (
                                         <Loader2 className="h-6 w-6 animate-spin" />

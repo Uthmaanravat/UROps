@@ -89,7 +89,7 @@ function NavItem({
             href={item.href}
             onClick={handleItemClick}
             className={cn(
-                "group flex items-center justify-between rounded-xl px-4 py-2 text-[13px] font-bold transition-all duration-300 relative overflow-hidden",
+                "group flex items-center justify-between rounded-xl px-4 py-2 md:py-2.5 text-[12px] md:text-[13px] font-bold transition-all duration-300 relative overflow-hidden",
                 isActive
                     ? "bg-primary/10 text-primary border border-primary/20"
                     : "text-muted-foreground/70 hover:bg-white/[0.03] hover:text-white"
@@ -99,11 +99,11 @@ function NavItem({
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full shadow-[0_0_10px_#8cff3380]" />
             )}
             <div className="flex items-center min-w-0 flex-1">
-                <Icon className={cn("mr-3 h-4 w-4 shrink-0 transition-colors", isActive ? "text-primary" : "group-hover:text-primary")} />
+                <Icon className={cn("mr-3 h-3.5 w-3.5 md:h-4 md:w-4 shrink-0 transition-colors", isActive ? "text-primary" : "group-hover:text-primary")} />
                 <span className="truncate">{displayTitle}</span>
             </div>
             {showDot && (
-                <div className="flex items-center justify-center min-w-[20px] h-[20px] rounded-full bg-red-500 text-[10px] font-black text-white px-1 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse border border-white/10 shrink-0 ml-2">
+                <div className="flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-[9px] font-black text-white px-1 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse border border-white/10 shrink-0 ml-2">
                     {notificationCount}
                 </div>
             )}
