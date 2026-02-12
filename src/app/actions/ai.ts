@@ -123,16 +123,7 @@ export async function getPricingSuggestions(items: { description: string }[]) {
 }
 
 export async function parseScopeOfWork(text: string) {
-    if (!process.env.GEMINI_API_KEY) {
-        console.warn("Using mock parsing due to missing Gemini API key");
-        return {
-            success: true,
-            items: [
-                { description: "Roof repair and flashing fix", quantity: 1, unit: "Lot", unitPrice: 5000 },
-                { description: "Install new AC units", quantity: 3, unit: "Unit", unitPrice: 12000 }
-            ]
-        }
-    }
+    throw new Error("Missing Gemini API Key. AI parsing unavailable.")
 
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", generationConfig: { responseMimeType: "application/json" } });
@@ -152,13 +143,10 @@ export async function parseScopeOfWork(text: string) {
         console.error("Parsing error:", error)
 
         if (error?.status === 429 || error?.message?.includes('quota') || error?.message?.includes('429')) {
-            console.warn("Gemini Quota Exceeded. Using mock parsing.");
+            console.warn("Gemini Quota Exceeded.");
             return {
-                success: true,
-                items: [
-                    { description: "Roof repair and flashing fix (Mock)", quantity: 1, unit: "Lot", unitPrice: 5000 },
-                    { description: "Install new AC units (Mock)", quantity: 3, unit: "Unit", unitPrice: 12000 }
-                ]
+                success: false,
+                error: "AI limit reached. Please try manually splitting items."
             }
         }
 
@@ -197,12 +185,8 @@ export async function extractPricingFromText(text: string) {
         console.error("Error status:", error.status)
 
         if (error?.status === 429 || error?.message?.includes('quota') || error?.message?.includes('429')) {
-            console.warn("GEMINI FALLBACK TRIGGERED - Using mock extraction.");
-            return [
-                { description: "Test Item (Gemini Quota Exceeded)", typicalPrice: 1500, unit: "Item" },
-                { description: "Another Test Item", typicalPrice: 450, unit: "m2" },
-                { description: "Labor/Service Charge", typicalPrice: 850, unit: "hr" }
-            ];
+            console.warn("GEMINI FALLBACK TRIGGERED - No mock available.");
+            throw new Error("AI extraction limit reached. Please try again later.")
         }
 
         throw error

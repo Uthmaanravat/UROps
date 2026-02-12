@@ -584,7 +584,7 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                         Clear Form
                     </Button>
                 </div>
-                <p className="text-center text-[9px] text-muted-foreground uppercase font-bold tracking-[0.4em] mt-4 opacity-50 underline decoration-primary/30">Build: MVP-FEBRUARY-V5 (Immutable-State-Table-Fix)</p>
+                <p className="text-center text-[9px] text-muted-foreground uppercase font-bold tracking-[0.4em] mt-4 opacity-50 underline decoration-primary/30">Build: MVP-FEBRUARY-V6 (Mock-Cleanup-Fix)</p>
             </div>
         </form>
     )

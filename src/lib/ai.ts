@@ -4,14 +4,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function parseScopeToItems(scopeText: string) {
     // Mock mode if no valid API key
-    if (!process.env.GEMINI_API_KEY) {
-        console.log("Using Mock AI (No API Key provided)");
-        return [
-            { description: "Labor and installation (Est.)", quantity: 1, unitPrice: 850.00 },
-            { description: "Materials and consumables", quantity: 1, unitPrice: 450.00 },
-            { description: "Safety compliance check", quantity: 1, unitPrice: 150.00 }
-        ];
-    }
+    throw new Error("Missing Gemini API Key. AI parsing unavailable.")
 
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", generationConfig: { responseMimeType: "application/json" } });
@@ -59,11 +52,8 @@ ${scopeText}`;
 
         // Handle Quota/429 for Gemini
         if (error?.status === 429 || error?.message?.includes('quota') || error?.message?.includes('429')) {
-            console.warn("Gemini Quota Exceeded. Using mock items.");
-            return [
-                { description: "Labor and installation (Est. - Quota Exceeded)", quantity: 1, unitPrice: 850.00 },
-                { description: "Materials and consumables (Mock)", quantity: 1, unitPrice: 450.00 }
-            ];
+            console.warn("Gemini Quota Exceeded.");
+            throw new Error("AI limit reached. Please try manual entry.")
         }
 
         // Return a single item with the scope text so user can manually price it
