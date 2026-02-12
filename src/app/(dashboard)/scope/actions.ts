@@ -9,7 +9,7 @@ export async function createMobileSOWAction(data: {
     clientId: string
     site: string
     date: string
-    items: { description: string }[]
+    items: { description: string, area?: string }[]
 }) {
     const companyId = await ensureAuth()
     // 1. Create a placeholder project for this scope
@@ -28,6 +28,7 @@ export async function createMobileSOWAction(data: {
     // This will create the SOW record and update the project status accordingly
     const sow = await submitScopeOfWork(project.id, data.items.map(i => ({
         description: i.description,
+        area: i.area,
         quantity: 1
     })), data.site)
 
@@ -42,7 +43,7 @@ export async function saveScopeDraftAction(data: {
     clientId: string
     site: string
     date: string
-    items: { description: string }[]
+    items: { description: string, area?: string }[]
 }) {
     const companyId = await ensureAuth()
 
@@ -71,6 +72,7 @@ export async function saveScopeDraftAction(data: {
             items: {
                 create: data.items.map(i => ({
                     description: i.description,
+                    area: i.area,
                     quantity: 1
                 }))
             }

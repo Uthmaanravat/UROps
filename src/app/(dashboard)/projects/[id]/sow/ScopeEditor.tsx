@@ -223,7 +223,16 @@ export function ScopeEditor({ projectId, initialItems }: ScopeEditorProps) {
                                         className="min-h-[100px] bg-[#14141E] border-white/10 focus:border-primary/50 transition-all text-white font-medium resize-none"
                                     />
                                 </div>
-                                <div className="grid grid-cols-3 gap-6">
+                                <div className="grid grid-cols-4 gap-6">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Area</Label>
+                                        <Input
+                                            value={item.area || ""}
+                                            onChange={e => updateItem(index, 'area', e.target.value)}
+                                            placeholder="e.g. Basement"
+                                            className="bg-[#14141E] border-primary/20 focus:border-primary text-white font-bold"
+                                        />
+                                    </div>
                                     <div className="space-y-2">
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Qty</Label>
                                         <Input

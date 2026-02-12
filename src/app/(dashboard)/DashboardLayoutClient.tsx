@@ -48,7 +48,14 @@ export default function DashboardLayoutClient({
                 <div className="flex items-center gap-3 px-2">
                     <div className="shrink-0 relative">
                         {settings?.logoUrl ? (
-                            <img src={settings.logoUrl} alt="Logo" className="h-12 w-12 rounded-xl object-contain bg-white/5 p-1.5 border border-white/5 shadow-2xl" />
+                            <img
+                                src={settings.logoUrl}
+                                alt="Logo"
+                                width={48}
+                                height={48}
+                                style={{ width: '48px', height: '48px', objectFit: 'contain' }}
+                                className="h-12 w-12 rounded-xl object-contain bg-white/5 p-1.5 border border-white/5 shadow-2xl"
+                            />
                         ) : (
                             <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary border border-primary/20 shadow-lg shadow-primary/10">
                                 <Rocket className="h-6 w-6" />
@@ -114,7 +121,14 @@ export default function DashboardLayoutClient({
             <header className="flex h-16 items-center border-b px-4 md:hidden bg-card/80 backdrop-blur-md justify-between sticky top-0 z-50">
                 <div className="font-bold flex items-center gap-3">
                     {settings?.logoUrl ? (
-                        <img src={settings.logoUrl} alt="Logo" className="h-10 w-10 rounded-lg object-contain" />
+                        <img
+                            src={settings.logoUrl}
+                            alt="Logo"
+                            width={40}
+                            height={40}
+                            style={{ width: '40px', height: '40px', objectFit: 'contain' }}
+                            className="h-10 w-10 rounded-lg object-contain"
+                        />
                     ) : (
                         <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
                             <Rocket className="h-5 w-5" />
@@ -152,7 +166,14 @@ export default function DashboardLayoutClient({
                     <div className="flex items-center gap-3">
                         <div className="shrink-0 relative">
                             {settings?.logoUrl ? (
-                                <img src={settings.logoUrl} alt="Logo" className="h-10 w-10 rounded-xl object-contain bg-white/5 p-1 border border-white/5 shadow-xl" />
+                                <img
+                                    src={settings.logoUrl}
+                                    alt="Logo"
+                                    width={40}
+                                    height={40}
+                                    style={{ width: '40px', height: '40px', objectFit: 'contain' }}
+                                    className="h-10 w-10 rounded-xl object-contain bg-white/5 p-1 border border-white/5 shadow-xl"
+                                />
                             ) : (
                                 <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
                                     <Rocket className="h-5 w-5" />

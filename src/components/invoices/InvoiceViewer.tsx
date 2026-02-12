@@ -165,19 +165,35 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
         const compAddr = doc.splitTextToSize(company.address, 70);
         doc.text(compAddr, 196, metaY + 12, { align: 'right' });
 
-        // 3. Table
-        autoTable(doc, {
-            head: [['Description', 'Qty', 'Unit', 'Price', 'Total']],
-            body: invoice.items.map((item: any) => {
+        // 3. Table with Area Grouping
+        const tableBody: any[] = [];
+        const grouped = invoice.items.reduce((acc: any, item: any) => {
+            const area = item.area?.trim() || "GENERAL / UNGROUPED";
+            if (!acc[area]) acc[area] = [];
+            acc[area].push(item);
+            return acc;
+        }, {});
+
+        Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
+            // Add Header Row for Area
+            tableBody.push([{ content: `AREA: ${area}`, colSpan: 5, styles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' } }]);
+
+            // Add Items for this Area
+            areaItems.forEach((item: any) => {
                 const desc = item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description;
-                return [
+                tableBody.push([
                     desc,
                     item.quantity,
                     item.unit || '',
                     formatCurrency(item.unitPrice, currencySymbol),
                     formatCurrency(item.total, currencySymbol)
-                ];
-            }),
+                ]);
+            });
+        });
+
+        autoTable(doc, {
+            head: [['Description', 'Qty', 'Unit', 'Price', 'Total']],
+            body: tableBody,
             startY: metaY + 45,
             theme: 'striped',
             headStyles: { fillColor: [30, 41, 59], textColor: [163, 230, 53], fontStyle: 'bold' },
@@ -418,33 +434,55 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                            {invoice.items.map((item: any) => (
-                                <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
-                                    <td className="py-8 pr-12">
-                                        <div className="text-lg font-bold text-white tracking-tight">{item.description}</div>
-                                        {item.notes && <div className="text-sm text-primary font-medium mt-2 italic leading-relaxed opacity-80">{item.notes}</div>}
-                                    </td>
-                                    <td className="py-8 text-center text-base font-black text-gray-400">{item.quantity} <span className="text-[10px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></td>
-                                    <td className="py-8 text-right">
-                                        {isPricingMode ? (
-                                            <div className="inline-flex items-center gap-1 bg-white/5 p-2 rounded-lg border border-white/10">
-                                                <span className="text-gray-500 font-bold text-sm">{currencySymbol}</span>
-                                                <input
-                                                    type="number"
-                                                    className="w-24 bg-transparent text-right text-white font-bold outline-none no-spinner"
-                                                    defaultValue={item.unitPrice}
-                                                    onChange={(e) => handlePriceChange(item.id, parseFloat(e.target.value))}
-                                                />
-                                            </div>
-                                        ) : (
-                                            <span className="text-base font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
-                                        )}
-                                    </td>
-                                    <td className="py-8 text-right font-black text-lg text-white">
-                                        {formatCurrency(item.total, currencySymbol)}
-                                    </td>
-                                </tr>
-                            ))}
+                            {(() => {
+                                const grouped = invoice.items.reduce((acc: any, item: any) => {
+                                    const area = item.area?.trim() || "GENERAL / UNGROUPED"
+                                    if (!acc[area]) acc[area] = []
+                                    acc[area].push(item)
+                                    return acc
+                                }, {})
+
+                                return Object.entries(grouped).map(([area, areaItems]: [string, any]) => (
+                                    <>
+                                        <tr key={`header-${area}`} className="bg-white/5 border-y border-white/5">
+                                            <td colSpan={4} className="py-4 px-6">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-2 w-2 rounded-full bg-primary" />
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">Area: {area}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {areaItems.map((item: any) => (
+                                            <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
+                                                <td className="py-8 pr-12">
+                                                    <div className="text-lg font-bold text-white tracking-tight">{item.description}</div>
+                                                    {item.notes && <div className="text-sm text-primary font-medium mt-2 italic leading-relaxed opacity-80">{item.notes}</div>}
+                                                </td>
+                                                <td className="py-8 text-center text-base font-black text-gray-400">{item.quantity} <span className="text-[10px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></td>
+                                                <td className="py-8 text-right">
+                                                    {isPricingMode ? (
+                                                        <div className="inline-flex items-center gap-1 bg-white/5 p-2 rounded-lg border border-white/10">
+                                                            <span className="text-gray-500 font-bold text-sm">{currencySymbol}</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-24 bg-transparent text-right text-white font-bold outline-none no-spinner"
+                                                                defaultValue={item.unitPrice}
+                                                                onChange={(e) => handlePriceChange(item.id, parseFloat(e.target.value))}
+                                                                onBlur={(e) => handlePriceChange(item.id, parseFloat(e.target.value))}
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-base font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-8 text-right font-black text-lg text-white">
+                                                    {formatCurrency(item.total, currencySymbol)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </>
+                                ))
+                            })()}
                         </tbody>
                     </table>
                 </div>

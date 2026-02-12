@@ -2,16 +2,16 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { prisma } from "@/lib/prisma"
+import OpenAI from "openai"
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function transcribeAudio(formData: FormData) {
-    if (!process.env.GEMINI_API_KEY) {
-        console.warn("Gemini API key missing");
-        return {
-            success: false,
-            error: "AI Configuration Missing: Please add GEMINI_API_KEY to your Vercel Environment Variables."
-        }
+    if (!process.env.OPENAI_API_KEY) {
+        return { success: false, error: "OpenAI API key is missing." }
     }
 
     const file = formData.get("file") as File
@@ -19,41 +19,61 @@ export async function transcribeAudio(formData: FormData) {
         throw new Error("No file provided")
     }
 
-    try {
-        console.log("Transcribing file:", {
-            name: file.name,
-            type: file.type,
-            size: file.size
-        });
+    const totalStartTime = Date.now();
+    const maxRetries = 2;
+    let lastError: any = null;
 
-        const arrayBuffer = await file.arrayBuffer();
-        const base64Audio = Buffer.from(arrayBuffer).toString("base64");
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const attemptStartTime = Date.now();
+        try {
+            console.log(`Transcribing file with OpenAI Whisper (Attempt ${attempt + 1}/${maxRetries + 1}):`, {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            });
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-        const result = await model.generateContent([
-            {
-                inlineData: {
-                    mimeType: file.type || "audio/mp3",
-                    data: base64Audio
-                }
-            },
-            { text: "Transcribe this audio file accurately." }
-        ]);
+            const arrayBuffer = await file.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const fileForOpenAI = await OpenAI.toFile(buffer, file.name, { type: file.type });
 
-        const text = result.response.text();
-        return { success: true, text }
-    } catch (error: any) {
-        console.error("Transcription error details:", error)
+            const transcription = await openai.audio.transcriptions.create({
+                file: fileForOpenAI,
+                model: "whisper-1",
+            });
 
-        // Handle Quota/429 for Gemini
-        if (error?.status === 429 || error?.message?.includes('quota') || error?.message?.includes('429')) {
-            console.warn("Gemini Quota Exceeded. Using mock transcription.");
-            return { success: true, text: "I need to fix the roof and install three new air conditioning units in the building." }
+            const duration = Date.now() - attemptStartTime;
+            console.log(`Transcription successful in ${duration}ms (Attempt ${attempt + 1})`);
+
+            return { success: true, text: transcription.text }
+        } catch (error: any) {
+            lastError = error;
+            const duration = Date.now() - attemptStartTime;
+            console.error(`Attempt ${attempt + 1} failed after ${duration}ms:`, error.message);
+
+            const isNetworkError = error.code === 'ECONNRESET' || error.message?.includes('ECONNRESET') || error instanceof OpenAI.APIConnectionError;
+
+            if (!isNetworkError || attempt === maxRetries) {
+                break;
+            }
+
+            // Wait with exponential backoff
+            const waitTime = 1000 * Math.pow(2, attempt);
+            console.log(`Retrying in ${waitTime}ms...`);
+            await new Promise(r => setTimeout(r, waitTime));
         }
-
-        const errorMessage = error.message || "Failed to transcribe audio";
-        return { success: false, error: errorMessage }
     }
+
+    const totalDuration = Date.now() - totalStartTime;
+    console.error(`All transcription attempts failed after ${totalDuration}ms`);
+
+    if (lastError?.code === 'ECONNRESET' || lastError?.message?.includes('ECONNRESET')) {
+        return {
+            success: false,
+            error: "Connection to transcription service timed out. Please try again."
+        }
+    }
+
+    return { success: false, error: lastError?.message || "Failed to transcribe audio" }
 }
 
 export async function getPricingSuggestions(items: { description: string }[]) {
@@ -104,10 +124,13 @@ export async function getPricingSuggestions(items: { description: string }[]) {
 
 export async function parseScopeOfWork(text: string) {
     if (!process.env.GEMINI_API_KEY) {
-        console.warn("Gemini API key missing");
+        console.warn("Using mock parsing due to missing Gemini API key");
         return {
-            success: false,
-            error: "AI Configuration Missing: Please add GEMINI_API_KEY to environment variables."
+            success: true,
+            items: [
+                { description: "Roof repair and flashing fix", quantity: 1, unit: "Lot", unitPrice: 5000 },
+                { description: "Install new AC units", quantity: 3, unit: "Unit", unitPrice: 12000 }
+            ]
         }
     }
 

@@ -22,6 +22,7 @@ export async function saveWBPDraftAction(wbpId: string, items: any[], options?: 
             await prisma.workBreakdownPricingItem.update({
                 where: { id: item.id },
                 data: {
+                    area: item.area,
                     description: item.description,
                     quantity: item.quantity,
                     unit: item.unit,
@@ -34,6 +35,7 @@ export async function saveWBPDraftAction(wbpId: string, items: any[], options?: 
             await prisma.workBreakdownPricingItem.create({
                 data: {
                     wbpId,
+                    area: item.area,
                     description: item.description,
                     quantity: item.quantity,
                     unit: item.unit,
@@ -95,6 +97,7 @@ export async function saveSOWDraftAction(projectId: string, items: any[], site?:
                 items: {
                     deleteMany: {}, // Clear old items
                     create: items.map(i => ({
+                        area: i.area,
                         description: i.description,
                         quantity: i.quantity,
                         unit: i.unit,
@@ -113,6 +116,7 @@ export async function saveSOWDraftAction(projectId: string, items: any[], site?:
                 site,
                 items: {
                     create: items.map(i => ({
+                        area: i.area,
                         description: i.description,
                         quantity: i.quantity,
                         unit: i.unit,

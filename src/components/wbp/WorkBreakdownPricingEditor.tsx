@@ -55,6 +55,10 @@ const WbpItemRow = memo(({
         onUpdate(index, 'unitPrice', parseFloat(e.target.value) || 0)
     }, [index, onUpdate])
 
+    const handleAreaChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onUpdate(index, 'area', e.target.value)
+    }, [index, onUpdate])
+
     const handleSplit = useCallback(() => {
         onSplit(index)
     }, [index, onSplit])
@@ -66,24 +70,35 @@ const WbpItemRow = memo(({
     return (
         <tr className="hover:bg-white/[0.02] transition-colors group">
             <td className="px-8 py-6 space-y-3">
-                <div className="relative">
-                    <Textarea
-                        value={item.description}
-                        onChange={handleDescriptionChange}
-                        className="min-h-[70px] bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black text-base resize-none"
-                        placeholder="Item specification..."
-                    />
-                    {item.description.includes('\n') && (
-                        <Button
-                            size="icon"
-                            variant="ghost"
-                            className="absolute bottom-2 right-2 h-7 w-7 text-primary hover:bg-primary/20"
-                            onClick={handleSplit}
-                            title="Split into multiple lines"
-                        >
-                            <Scissors className="h-4 w-4" />
-                        </Button>
-                    )}
+                <div className="flex gap-4">
+                    <div className="flex-1 relative">
+                        <Textarea
+                            value={item.description}
+                            onChange={handleDescriptionChange}
+                            className="min-h-[70px] bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black text-base resize-none"
+                            placeholder="Item specification..."
+                        />
+                        {item.description.includes('\n') && (
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                className="absolute bottom-2 right-2 h-7 w-7 text-primary hover:bg-primary/20"
+                                onClick={handleSplit}
+                                title="Split into multiple lines"
+                            >
+                                <Scissors className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
+                    <div className="w-1/4">
+                        <Label className="text-[10px] font-black uppercase text-primary italic mb-1 block">Area</Label>
+                        <Input
+                            value={item.area || ""}
+                            onChange={handleAreaChange}
+                            className="h-10 text-[11px] font-bold text-white bg-[#14141E] border-white/10 hover:border-primary/50 transition-all"
+                            placeholder="e.g. Roof"
+                        />
+                    </div>
                 </div>
                 <Input
                     value={item.notes}
@@ -155,6 +170,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const router = useRouter()
     const [items, setItems] = useState<any[]>(initialItems.map((i: any) => ({
         id: i.id || Math.random().toString(36).substr(2, 9),
+        area: i.area || "",
         description: i.description,
         quantity: i.quantity,
         unit: i.unit || "",
@@ -329,6 +345,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const addItem = useCallback(() => {
         setItems((prev: any[]) => [...prev, {
             id: Math.random().toString(36).substr(2, 9),
+            area: prev[prev.length - 1]?.area || "",
             description: "",
             quantity: 1,
             unit: "",
@@ -373,6 +390,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
         setItems((prev: any[]) => {
             const newItem = {
                 id: Math.random().toString(36).substr(2, 9),
+                area: prev[prev.length - 1]?.area || "",
                 description: catalogItem.description,
                 quantity: 1,
                 unit: catalogItem.unit || "",
@@ -669,21 +687,42 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {items.map((item: any, index: number) => {
-                                    const suggestion = suggestions[item.description]
-                                    return (
-                                        <WbpItemRow
-                                            key={item.id}
-                                            item={item}
-                                            index={index}
-                                            suggestion={suggestion}
-                                            aiEnabled={aiEnabled}
-                                            onUpdate={updateItem}
-                                            onRemove={removeItem}
-                                            onSplit={splitItem}
-                                        />
-                                    )
-                                })}
+                                {(() => {
+                                    const grouped = items.reduce((acc: any, item, originalIndex) => {
+                                        const area = item.area?.trim() || "GENERAL / UNGROUPED"
+                                        if (!acc[area]) acc[area] = []
+                                        acc[area].push({ ...item, originalIndex })
+                                        return acc
+                                    }, {})
+
+                                    return Object.entries(grouped).map(([area, areaItems]: [string, any]) => (
+                                        <>
+                                            <tr key={`header-${area}`} className="bg-primary/5 border-y border-white/5">
+                                                <td colSpan={6} className="px-8 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">Area: {area}</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {areaItems.map((item: any) => {
+                                                const suggestion = suggestions[item.description]
+                                                return (
+                                                    <WbpItemRow
+                                                        key={item.id}
+                                                        item={item}
+                                                        index={item.originalIndex}
+                                                        suggestion={suggestion}
+                                                        aiEnabled={aiEnabled}
+                                                        onUpdate={updateItem}
+                                                        onRemove={removeItem}
+                                                        onSplit={splitItem}
+                                                    />
+                                                )
+                                            })}
+                                        </>
+                                    ))
+                                })()}
                             </tbody>
                         </table>
                     </div>

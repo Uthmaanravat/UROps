@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { logSubmission } from "@/lib/submission-logger"
 
-export async function submitScopeOfWork(projectId: string, items: { description: string, quantity: number, unit?: string, notes?: string }[], site?: string) {
+export async function submitScopeOfWork(projectId: string, items: { description: string, quantity: number, unit?: string, notes?: string, area?: string }[], site?: string) {
     // 1. Calculate next Quote Number (Q-001 format)
     const quoteCount = await prisma.invoice.count({
         where: { type: 'QUOTE' }
@@ -25,6 +25,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
             site,
             items: {
                 create: items.map(i => ({
+                    area: i.area,
                     description: i.description,
                     quantity: i.quantity,
                     unit: i.unit,
@@ -45,6 +46,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
             quoteNumber: suggestedQuoteNumber,
             items: {
                 create: items.map(i => ({
+                    area: i.area,
                     description: i.description,
                     quantity: i.quantity,
                     unit: i.unit,
@@ -90,7 +92,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
 
 export async function generateQuotationFromWBP(
     wbpId: string,
-    items: { id?: string, description: string, quantity: number, unit?: string, unitPrice: number, notes?: string }[],
+    items: { id?: string, description: string, quantity: number, unit?: string, unitPrice: number, notes?: string, area?: string }[],
     options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string }
 ) {
     const wbp = await prisma.workBreakdownPricing.findUniqueOrThrow({
@@ -119,6 +121,7 @@ export async function generateQuotationFromWBP(
             await prisma.workBreakdownPricingItem.update({
                 where: { id: item.id },
                 data: {
+                    area: item.area,
                     description: item.description,
                     quantity: item.quantity,
                     unit: item.unit,
@@ -132,6 +135,7 @@ export async function generateQuotationFromWBP(
             await prisma.workBreakdownPricingItem.create({
                 data: {
                     wbpId,
+                    area: item.area,
                     description: item.description,
                     quantity: item.quantity,
                     unit: item.unit,
@@ -171,6 +175,7 @@ export async function generateQuotationFromWBP(
             notes: options?.notes,
             items: {
                 create: items.map(i => ({
+                    area: i.area,
                     description: i.description,
                     quantity: i.quantity,
                     unit: i.unit,

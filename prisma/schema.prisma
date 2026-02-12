@@ -125,6 +125,7 @@ model ScopeOfWork {
 model ScopeItem {
   id          String      @id @default(uuid())
   scopeId     String
+  area        String?
   description String
   quantity    Float       @default(1)
   unit        String?
@@ -152,6 +153,7 @@ model WorkBreakdownPricing {
 model WorkBreakdownPricingItem {
   id          String               @id @default(uuid())
   wbpId       String
+  area        String?
   description String
   quantity    Float                @default(1)
   unit        String?
@@ -225,6 +227,7 @@ model Invoice {
 model InvoiceItem {
   id          String  @id @default(uuid())
   invoiceId   String
+  area        String?
   description String
   quantity    Float   @default(1)
   unit        String?
