@@ -41,7 +41,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [projectId, setProjectId] = useState(initialProjectId || "")
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
 
-    const [items, setItems] = useState(initialScope ? [] : [{ description: "", quantity: 1, unit: "", unitPrice: 0 }])
+    const [items, setItems] = useState(initialScope ? [] : [{ description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
     const [site, setSite] = useState("")
     const [quoteNumber, setQuoteNumber] = useState("")
     const [reference, setReference] = useState("")
@@ -77,7 +77,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
             description: catalogItem.description,
             quantity: 1,
             unit: catalogItem.unit || "",
-            unitPrice: catalogItem.unitPrice
+            unitPrice: catalogItem.unitPrice,
+            area: ""
         }
 
         if (items.length === 1 && !items[0].description && items[0].unitPrice === 0) {
@@ -90,7 +91,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     }
 
     const addItem = () => {
-        setItems([...items, { description: "", quantity: 1, unit: "", unitPrice: 0 }])
+        setItems([...items, { description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
     }
 
     const removeItem = (index: number) => {
@@ -162,7 +163,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 variant="ghost"
                                 onClick={() => {
                                     setSubmitted(false)
-                                    setItems([{ description: "", quantity: 1, unit: "", unitPrice: 0 }])
+                                    setItems([{ description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
                                 }}
                                 className="text-muted-foreground hover:text-white font-bold"
                             >
@@ -171,7 +172,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         </div>
                     </CardContent>
                 </Card>
-            </div>
+            </div >
         )
     }
 
@@ -256,7 +257,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             description: i.description,
                             quantity: i.quantity || 1,
                             unit: i.unit || "",
-                            unitPrice: i.unitPrice || 0
+                            unitPrice: i.unitPrice || 0,
+                            area: ""
                         }));
                         setItems(formattedItems);
                     }
@@ -303,7 +305,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                         description: i.description,
                                                         quantity: i.quantity || 1,
                                                         unit: "",
-                                                        unitPrice: i.unitPrice || 0
+                                                        unitPrice: i.unitPrice || 0,
+                                                        area: ""
                                                     }));
 
                                                     if (confirm(`AI found ${formattedItems.length} items. Replace current items?`)) {
@@ -404,15 +407,27 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         <div className="space-y-4">
                             {items.map((item, index) => (
                                 <div key={index} className="flex flex-col md:flex-row gap-4 md:gap-3 items-start p-4 md:p-0 rounded-2xl border md:border-none bg-white/[0.02] md:bg-transparent shadow-sm md:shadow-none border-white/5 md:border-transparent group/row">
-                                    <div className="flex-1 w-full space-y-2 md:space-y-0">
-                                        <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Description & Details</Label>
-                                        <Input
-                                            placeholder="Item description..."
-                                            value={item.description}
-                                            onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                            className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium"
-                                            required
-                                        />
+                                    <div className="flex-1 w-full space-y-2 md:space-y-0 flex gap-2">
+                                        <div className="flex-1">
+                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Description & Details</Label>
+                                            <Input
+                                                placeholder="Item description..."
+                                                value={item.description}
+                                                onChange={(e) => updateItem(index, 'description', e.target.value)}
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="w-1/3 max-w-[120px]">
+                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Area</Label>
+                                            <Input
+                                                placeholder="AREA"
+                                                // @ts-ignore
+                                                value={item.area || ""}
+                                                onChange={(e) => updateItem(index, 'area', e.target.value)}
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-[10px] font-bold text-primary uppercase tracking-widest"
+                                            />
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-3 gap-3 w-full md:w-auto">
                                         <div className="space-y-2 md:space-y-0 md:w-20">
