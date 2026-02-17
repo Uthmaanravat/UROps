@@ -20,21 +20,54 @@ import { Textarea } from "@/components/ui/textarea"
 export function InvoiceViewer({ invoice, companySettings }: { invoice: any, companySettings?: any }) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
-    const [prices, setPrices] = useState<Record<string, number>>({});
+    // Use local state for items to allow instant UI updates for grouping/calculations
+    const [items, setItems] = useState<any[]>(invoice.items);
     const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+
+    // Add new Item Handler
+    const handleAddItem = () => {
+        const newItem = {
+            id: `new-${Date.now()}`,
+            description: "New Item",
+            quantity: 1,
+            unitPrice: 0,
+            unit: "ea",
+            area: "GENERAL / UNGROUPED",
+            total: 0
+        };
+        setItems([...items, newItem]);
+    };
     const [recipientEmails, setRecipientEmails] = useState(invoice.client.email || "");
 
-    const isPricingMode = invoice.type === 'QUOTE' && invoice.status === 'DRAFT';
+    const isPricingMode = (invoice.type === 'QUOTE' || invoice.type === 'INVOICE') && invoice.status === 'DRAFT';
 
-    const handlePriceChange = (id: string, price: number) => {
-        setPrices(prev => ({ ...prev, [id]: price }));
-    }
+    const handleItemUpdate = (id: string, field: string, value: any) => {
+        setItems(prev => prev.map(item => {
+            if (item.id === id) {
+                const updated = { ...item, [field]: value };
+                // Recalculate line total if price/qty changes
+                if (field === 'unitPrice' || field === 'quantity') {
+                    updated.total = updated.quantity * updated.unitPrice;
+                }
+                return updated;
+            }
+            return item;
+        }));
+    };
 
     const [note, setNote] = useState(invoice.notes || "");
 
-    const savePrices = async () => {
+    const saveChanges = async () => {
         setLoading(true);
-        const updates = Object.entries(prices).map(([id, unitPrice]) => ({ id, unitPrice }));
+        // Map local items to the format expected by the server action
+        const updates = items.map(item => ({
+            id: item.id,
+            description: item.description,
+            area: item.area,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPrice: item.unitPrice
+        }));
 
         const promises = [];
         if (updates.length > 0) {
@@ -57,10 +90,13 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
     const handleApprove = async () => {
         if (!confirm("Approve this Quote? This will lock it and generate a Draft Invoice.")) return;
         setLoading(true);
-        await savePrices();
+        await saveChanges();
         await approveQuoteAction(invoice.id);
         setLoading(false);
-        router.push(`/work-breakdown-pricing`);
+        router.refresh(); // Refresh to show new status
+        // router.push(`/work-breakdown-pricing`); // Maybe stay on page or go to list?
+        // Actually, flow says "Move project to Invoice stage".
+        // The user might want to stay on the invoice page which is now an invoice.
     }
 
     // Default company details if not set
@@ -281,6 +317,11 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
     const balance = invoice.total - paidAmount;
     const isPaid = balance <= 0.01;
 
+    // Recalculate totals from local items
+    const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
+    const taxAmount = subtotal * 0.15;
+    const total = subtotal + taxAmount;
+
     return (
         <div className="max-w-5xl mx-auto space-y-6 px-4 md:px-0 pb-20">
             {/* Header Actions */}
@@ -449,7 +490,7 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {(() => {
-                                const grouped = invoice.items.reduce((acc: any, item: any) => {
+                                const grouped = items.reduce((acc: any, item: any) => {
                                     const area = item.area?.trim() || "GENERAL / UNGROUPED"
                                     if (!acc[area]) acc[area] = []
                                     acc[area].push(item)
@@ -462,35 +503,92 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
                                             <td colSpan={4} className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-2 w-2 rounded-full bg-primary" />
-                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">Area: {area}</span>
+                                                    {isPricingMode ? (
+                                                        <Input
+                                                            value={area === "GENERAL / UNGROUPED" ? "" : area}
+                                                            onChange={(e) => {
+                                                                // Update ALL items in this group
+                                                                const newArea = e.target.value;
+                                                                setItems(prev => prev.map(i => {
+                                                                    const iArea = i.area?.trim() || "GENERAL / UNGROUPED";
+                                                                    if (iArea === area) {
+                                                                        return { ...i, area: newArea };
+                                                                    }
+                                                                    return i;
+                                                                }));
+                                                            }}
+                                                            className="h-6 w-64 bg-transparent border-none text-[10px] font-black uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0"
+                                                            placeholder="ENTER AREA NAME"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">Area: {area}</span>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
                                         {areaItems.map((item: any) => (
                                             <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
                                                 <td className="py-8 pr-12">
-                                                    <div className="text-lg font-bold text-white tracking-tight">{item.description}</div>
-                                                    {item.notes && <div className="text-sm text-primary font-medium mt-2 italic leading-relaxed opacity-80">{item.notes}</div>}
+                                                    {isPricingMode ? (
+                                                        <div className="flex gap-4">
+                                                            <div className="flex-1">
+                                                                <Textarea
+                                                                    value={item.description}
+                                                                    onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
+                                                                    className="min-h-[60px] bg-transparent border-white/10 focus:border-primary text-lg font-bold text-white tracking-tight resize-none p-2"
+                                                                    placeholder="Item Description"
+                                                                />
+                                                            </div>
+                                                            <div className="w-1/3 max-w-[150px]">
+                                                                <Input
+                                                                    value={item.area || ""}
+                                                                    onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
+                                                                    className="h-full bg-transparent border-white/10 focus:border-primary text-xs font-bold text-primary uppercase tracking-widest"
+                                                                    placeholder="AREA"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-lg font-bold text-white tracking-tight">{item.description}</div>
+                                                    )}
                                                 </td>
-                                                <td className="py-8 text-center text-base font-black text-gray-400">{item.quantity} <span className="text-[10px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></td>
-                                                <td className="py-8 text-right">
+                                                <td className="py-8 text-center align-top">
+                                                    {isPricingMode ? (
+                                                        <div className="flex flex-col gap-2 items-center">
+                                                            <Input
+                                                                type="number"
+                                                                value={item.quantity}
+                                                                onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                                                className="w-16 h-8 text-center bg-transparent border-white/10 font-bold"
+                                                            />
+                                                            <Input
+                                                                value={item.unit || ""}
+                                                                onChange={(e) => handleItemUpdate(item.id, 'unit', e.target.value)}
+                                                                placeholder="Unit"
+                                                                className="w-16 h-6 text-center text-[10px] uppercase bg-transparent border-none opacity-50"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-base font-black text-gray-400">{item.quantity} <span className="text-[10px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></span>
+                                                    )}
+                                                </td>
+                                                <td className="py-8 text-right align-top">
                                                     {isPricingMode ? (
                                                         <div className="inline-flex items-center gap-1 bg-white/5 p-2 rounded-lg border border-white/10">
                                                             <span className="text-gray-500 font-bold text-sm">{currencySymbol}</span>
                                                             <input
                                                                 type="number"
                                                                 className="w-24 bg-transparent text-right text-white font-bold outline-none no-spinner"
-                                                                defaultValue={item.unitPrice}
-                                                                onChange={(e) => handlePriceChange(item.id, parseFloat(e.target.value))}
-                                                                onBlur={(e) => handlePriceChange(item.id, parseFloat(e.target.value))}
+                                                                value={item.unitPrice}
+                                                                onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                                                             />
                                                         </div>
                                                     ) : (
                                                         <span className="text-base font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
                                                     )}
                                                 </td>
-                                                <td className="py-8 text-right font-black text-lg text-white">
-                                                    {formatCurrency(item.total, currencySymbol)}
+                                                <td className="py-8 text-right font-black text-lg text-white align-top">
+                                                    {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
                                                 </td>
                                             </tr>
                                         ))}
@@ -535,29 +633,34 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
                         <div className="space-y-4 bg-white/[0.02] p-8 rounded-3xl border border-white/5">
                             <div className="flex justify-between items-center text-lg">
                                 <span className="text-gray-500 font-bold">Document Subtotal</span>
-                                <span className="font-bold text-white">{formatCurrency(invoice.subtotal, currencySymbol)}</span>
+                                <span className="font-bold text-white">{formatCurrency(subtotal, currencySymbol)}</span>
                             </div>
                             <div className="flex justify-between items-center text-lg">
                                 <span className="text-gray-500 font-bold">VAT (15%)</span>
-                                <span className="font-bold text-white">{formatCurrency(invoice.taxAmount, currencySymbol)}</span>
+                                <span className="font-bold text-white">{formatCurrency(taxAmount, currencySymbol)}</span>
                             </div>
                             <div className="h-px bg-white/10 my-4" />
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-black uppercase tracking-[0.2em] text-primary">Balance Due</span>
-                                <span className="text-5xl font-black text-white tracking-tighter">{formatCurrency(invoice.total, currencySymbol)}</span>
+                                <span className="text-5xl font-black text-white tracking-tighter">{formatCurrency(total, currencySymbol)}</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {isPricingMode && (
-                    <div className="mt-12 flex justify-end gap-3 print:hidden">
-                        <Button size="lg" variant="outline" onClick={savePrices} disabled={loading} className="h-14 px-8 border-2">
-                            {loading ? "Saving..." : "Save Draft Changes"}
+                    <div className="mt-12 flex justify-between gap-3 print:hidden">
+                        <Button variant="secondary" onClick={handleAddItem} disabled={loading} className="h-14 px-8 border-2 border-dashed border-white/20">
+                            + Add Line Item
                         </Button>
-                        <Button size="lg" onClick={handleApprove} disabled={loading} className="h-14 px-10 bg-blue-600 hover:bg-blue-700 font-bold shadow-xl">
-                            {loading ? "Processing..." : "Approve & Generate Invoice"}
-                        </Button>
+                        <div className="flex gap-3">
+                            <Button size="lg" variant="outline" onClick={saveChanges} disabled={loading} className="h-14 px-8 border-2">
+                                {loading ? "Saving..." : "Save Draft Changes"}
+                            </Button>
+                            <Button size="lg" onClick={handleApprove} disabled={loading} className="h-14 px-10 bg-blue-600 hover:bg-blue-700 font-bold shadow-xl">
+                                {loading ? "Processing..." : "Approve & Generate Invoice"}
+                            </Button>
+                        </div>
                     </div>
                 )}
             </div>

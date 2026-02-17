@@ -61,10 +61,10 @@ export async function saveWBPDraftAction(wbpId: string, items: any[], options?: 
 }
 
 export async function getSuggestedQuoteNumberAction() {
-    const count = await prisma.invoice.count({
-        where: { type: 'QUOTE' }
+    const lastInvoice = await prisma.invoice.findFirst({
+        orderBy: { number: 'desc' }
     })
-    return `Q-${(count + 1).toString().padStart(3, '0')}`
+    return `Q-${((lastInvoice?.number || 0) + 1).toString().padStart(3, '0')}`
 }
 
 export async function generateQuotationAction(wbpId: string, items: any[], options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string }) {

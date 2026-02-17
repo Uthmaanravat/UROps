@@ -9,11 +9,25 @@ export async function submitScopeOfWork(projectId: string, items: { description:
         include: { client: true }
     })
 
-    // 1. Calculate next Quote Number (Q-001 format)
-    const quoteCount = await prisma.invoice.count({
-        where: { type: 'QUOTE', companyId: project!.companyId }
+    // 1. Create DRAFT Invoice Record to reserve the Number immediately
+    // All documents (Quotes, Invoices) share the same sequential ID from the Invoice table
+    const invoice = await prisma.invoice.create({
+        data: {
+            companyId: project!.companyId,
+            projectId,
+            clientId: project?.clientId || "", // Fallback to empty string if undefined, though schema usually requires it for invoices
+            type: 'QUOTE',
+            status: 'DRAFT',
+            subtotal: 0,
+            taxAmount: 0,
+            total: 0,
+            items: {
+                create: [] // Empty initially
+            }
+        }
     })
-    const suggestedQuoteNumber = `Q-${(quoteCount + 1).toString().padStart(3, '0')}`
+
+    const suggestedQuoteNumber = `Q-${invoice.number}`
 
     // 2. Create SOW Record (Frozen snapshot)
     const sow = await prisma.scopeOfWork.create({
@@ -43,7 +57,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
             status: 'DRAFT',
             version: 1,
             site,
-            quoteNumber: suggestedQuoteNumber,
+            quoteNumber: suggestedQuoteNumber, // Stores "Q-100" but backed by Invoice #100
             items: {
                 create: items.map(i => ({
                     area: i.area,
@@ -56,6 +70,12 @@ export async function submitScopeOfWork(projectId: string, items: { description:
                 }))
             }
         }
+    })
+
+    // 3a. Link the Invoice to this WBP (Critical for Unified Numbering)
+    await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: { wbpId: wbp.id }
     })
 
     // 4. Update Project Stage
@@ -156,36 +176,93 @@ export async function generateQuotationFromWBP(
         }
     })
 
-    // 3. Create Official Quote
-    const quote = await prisma.invoice.create({
-        data: {
-            companyId: wbp.project.companyId,
-            projectId: wbp.projectId,
-            clientId: wbp.project.clientId,
-            type: 'QUOTE',
-            status: 'SENT',
-            wbpId: wbp.id,
-            subtotal,
-            taxRate,
-            taxAmount,
-            total,
-            site: options?.site || wbp.site,
-            quoteNumber: options?.quoteNumber,
-            reference: options?.reference,
-            notes: options?.notes,
-            items: {
-                create: items.map(i => ({
-                    area: i.area,
-                    description: i.description,
-                    quantity: i.quantity,
-                    unit: i.unit,
-                    unitPrice: i.unitPrice,
-                    total: i.quantity * i.unitPrice,
-                    notes: i.notes
-                }))
-            }
-        }
+    // 3. Update Existing Draft Invoice to Official Quote (SENT)
+    // We find the invoice by matching the quoteNumber string or we should probably store wbpId on invoice earlier.
+    // However, since we stored "Q-123" in wbp.quoteNumber, we can extract the ID 123.
+    // A better way is to find the Invoice where quoteNumber matches or just search by logic.
+    // For now, let's find the DRAFT quote for this project/client or parse the number.
+
+    // Robustness: Try to find the existing PROVISIONAL invoice created at SOW stage
+    // Method A: Direct link via wbpId (Most robust if Step 3a in submitScopeOfWork succeeded)
+    let quote = await prisma.invoice.findFirst({
+        where: { wbpId: wbpId }
     })
+
+    const provisionalNumber = wbp.quoteNumber; // e.g. Q-123
+
+    // Method B: Fallback to Number parsing if link missing
+    if (!quote && provisionalNumber) {
+        // Try to find by the auto-increment number hidden in the string
+        const numberMatch = provisionalNumber.match(/\d+/)
+        if (numberMatch) {
+            const invoiceId = parseInt(numberMatch[0])
+            quote = await prisma.invoice.findFirst({
+                where: { number: invoiceId, companyId: wbp.project.companyId }
+            })
+        }
+    }
+
+    if (quote) {
+        // Update the existing reservation
+        quote = await prisma.invoice.update({
+            where: { id: quote.id },
+            data: {
+                status: 'DRAFT',
+                wbpId: wbp.id,
+                subtotal,
+                taxRate,
+                taxAmount,
+                total,
+                site: options?.site || wbp.site,
+                quoteNumber: options?.quoteNumber || provisionalNumber, // Keep consistent
+                reference: options?.reference,
+                notes: options?.notes,
+                items: {
+                    deleteMany: {}, // Clear placeholder/old items
+                    create: items.map(i => ({
+                        area: i.area,
+                        description: i.description,
+                        quantity: i.quantity,
+                        unit: i.unit,
+                        unitPrice: i.unitPrice,
+                        total: i.quantity * i.unitPrice,
+                        notes: i.notes
+                    }))
+                }
+            }
+        })
+    } else {
+        // Fallback (Should rarely happen if flow is followed): Create new
+        quote = await prisma.invoice.create({
+            data: {
+                companyId: wbp.project.companyId,
+                projectId: wbp.projectId,
+                clientId: wbp.project.clientId,
+                type: 'QUOTE',
+                status: 'DRAFT',
+                wbpId: wbp.id,
+                subtotal,
+                taxRate,
+                taxAmount,
+                total,
+                site: options?.site || wbp.site,
+                quoteNumber: options?.quoteNumber,
+                reference: options?.reference,
+                notes: options?.notes,
+                items: {
+                    create: items.map(i => ({
+                        area: i.area,
+                        description: i.description,
+                        quantity: i.quantity,
+                        unit: i.unit,
+                        unitPrice: i.unitPrice,
+                        total: i.quantity * i.unitPrice,
+                        notes: i.notes
+                    }))
+                }
+            }
+        })
+    }
 
     // 4. Update Project Stage
     await prisma.project.update({
@@ -230,37 +307,13 @@ export async function approveQuote(quoteId: string) {
         data: { status: 'ACCEPTED' }
     })
 
-    // 2. Create Draft Invoice from Quote
-    const invoiceCount = await prisma.invoice.count({
-        where: { type: 'INVOICE', companyId: quote.companyId }
-    })
-    const invoiceNumberLabel = `INV-${(invoiceCount + 1).toString().padStart(3, '0')}`
-
-    await prisma.invoice.create({
+    // 2. Convert Quote to Invoice (Preserve ID)
+    await prisma.invoice.update({
+        where: { id: quoteId },
         data: {
-            companyId: quote.companyId,
-            projectId: quote.projectId,
-            clientId: quote.clientId,
             type: 'INVOICE',
-            status: 'DRAFT',
-            wbpId: quote.wbpId,
-            quoteNumber: invoiceNumberLabel, // Using this field for the independent invoice sequence label
-            items: {
-                createMany: {
-                    data: (await prisma.invoiceItem.findMany({ where: { invoiceId: quoteId } })).map(item => ({
-                        description: item.description,
-                        quantity: item.quantity,
-                        unitPrice: item.unitPrice,
-                        total: item.total
-                    }))
-                }
-            },
-            subtotal: quote.subtotal,
-            taxAmount: quote.taxAmount,
-            total: quote.total,
-            site: quote.site,
-            reference: quote.reference,
-            notes: quote.notes
+            status: 'DRAFT', // Or SENT if preferred immediately
+            quoteNumber: `INV-${quote.number.toString().padStart(4, '0')}`, // Update label to INV-XXX
         }
     })
 

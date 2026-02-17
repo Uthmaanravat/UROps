@@ -54,6 +54,12 @@ The UROps Team`
                     content: `Sent ${invoice.type}: ${subject} \n\nTo: ${toEmails.join(', ')} `
                 }
             });
+            // Update status to SENT
+            await prisma.invoice.update({
+                where: { id: invoiceId },
+                data: { status: 'SENT' }
+            });
+
             console.log(`[EMAIL ACTION] Email sent successfully for ${invoiceId}`);
             return { success: true }
         } else {
