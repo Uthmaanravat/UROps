@@ -10,19 +10,27 @@ import autoTable from "jspdf-autotable"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction } from "@/app/(dashboard)/invoices/pricing-actions"
-import { useState } from "react"
+import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction } from "@/app/(dashboard)/invoices/project-actions"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
-export function InvoiceViewer({ invoice, companySettings }: { invoice: any, companySettings?: any }) {
+export function InvoiceViewer({ invoice, companySettings, availableProjects = [] }: { invoice: any, companySettings?: any, availableProjects?: any[] }) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     // Use local state for items to allow instant UI updates for grouping/calculations
     const [items, setItems] = useState<any[]>(invoice.items);
     const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+
+    // Header edit state
+    const [site, setSite] = useState(invoice.site || "");
+    const [reference, setReference] = useState(invoice.reference || "");
+    const [date, setDate] = useState(new Date(invoice.date).toISOString().split('T')[0]);
+    const [projectId, setProjectId] = useState(invoice.projectId || "");
+    const [commercialStatus, setCommercialStatus] = useState(invoice.project?.commercialStatus || "AWAITING_PO");
 
     // Add new Item Handler
     const handleAddItem = () => {
@@ -32,7 +40,7 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
             quantity: 1,
             unitPrice: 0,
             unit: "ea",
-            area: "GENERAL / UNGROUPED",
+            area: "",
             total: 0
         };
         setItems([...items, newItem]);
@@ -79,10 +87,35 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
             promises.push(updateInvoiceNoteAction(invoice.id, note));
         }
 
+        // Handle Project/Site/Ref updates
+        if (site !== invoice.site || reference !== invoice.reference || date !== new Date(invoice.date).toISOString().split('T')[0]) {
+            promises.push(updateInvoiceDetailsAction(invoice.id, { site, reference, date }));
+        }
+
         if (promises.length > 0) {
             await Promise.all(promises);
         }
 
+        setLoading(false);
+        router.refresh();
+    }
+
+    const handleProjectChange = async (newProjectId: string) => {
+        setLoading(true);
+        setProjectId(newProjectId);
+        await updateInvoiceProjectAction(invoice.id, newProjectId === "" ? null : newProjectId);
+        setLoading(false);
+        router.refresh();
+    }
+
+    const handleCommercialStatusChange = async (status: any) => {
+        if (!invoice.projectId) {
+            alert("No project linked to this document.");
+            return;
+        }
+        setLoading(true);
+        setCommercialStatus(status);
+        await updateProjectCommercialStatusAction(invoice.projectId, status);
         setLoading(false);
         router.refresh();
     }
@@ -209,7 +242,7 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
 
         // 3. Table with Area Grouping
         const tableBody: any[] = [];
-        const grouped = invoice.items.reduce((acc: any, item: any) => {
+        const grouped = items.reduce((acc: any, item: any) => {
             const area = item.area?.trim() || "GENERAL / UNGROUPED";
             if (!acc[area]) acc[area] = [];
             acc[area].push(item);
@@ -218,7 +251,9 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
 
         Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
             // Add Header Row for Area
-            tableBody.push([{ content: `AREA: ${area}`, colSpan: 5, styles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' } }]);
+            if (area !== "GENERAL / UNGROUPED") {
+                tableBody.push([{ content: `HEADING: ${area}`, colSpan: 5, styles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' } }]);
+            }
 
             // Add Items for this Area
             areaItems.forEach((item: any) => {
@@ -453,26 +488,85 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
                         <div className="bg-[#1E293B] p-6 rounded-2xl w-full max-w-sm border border-white/5 space-y-3">
                             <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
                                 <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Date Issued</span>
-                                <span className="font-bold text-white">{new Date(invoice.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                                {isPricingMode ? (
+                                    <input
+                                        type="date"
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
+                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0"
+                                    />
+                                ) : (
+                                    <span className="font-bold text-white">{new Date(invoice.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                                )}
                             </div>
-                            {invoice.project?.name && (
+                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
+                                <span className="text-primary font-bold uppercase tracking-widest text-[10px]">Project</span>
+                                {isPricingMode ? (
+                                    <select
+                                        value={projectId}
+                                        onChange={(e) => handleProjectChange(e.target.value)}
+                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[200px]"
+                                    >
+                                        <option value="" className="bg-[#1E293B]">None / Link to Project</option>
+                                        {availableProjects.map((p: any) => (
+                                            <option key={p.id} value={p.id} className="bg-[#1E293B]">{p.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <span className="font-bold text-white">{invoice.project?.name || "Standalone"}</span>
+                                )}
+                            </div>
+                            {invoice.projectId && (
                                 <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                    <span className="text-primary font-bold uppercase tracking-widest text-[10px]">Project</span>
-                                    <span className="font-bold text-white">{invoice.project.name}</span>
+                                    <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Commercial Status</span>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => handleCommercialStatusChange('AWAITING_PO')}
+                                            className={`px-2 py-0.5 rounded text-[9px] font-black transition-all ${commercialStatus === 'AWAITING_PO' ? 'bg-gray-500 text-white shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
+                                        >
+                                            PO
+                                        </button>
+                                        <button
+                                            onClick={() => handleCommercialStatusChange('EMERGENCY_WORK')}
+                                            className={`px-2 py-0.5 rounded text-[9px] font-black transition-all ${commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
+                                        >
+                                            EMERGENCY
+                                        </button>
+                                        <button
+                                            onClick={() => handleCommercialStatusChange('PO_RECEIVED')}
+                                            className={`px-2 py-0.5 rounded text-[9px] font-black transition-all ${commercialStatus === 'PO_RECEIVED' ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
+                                        >
+                                            RECEIVED
+                                        </button>
+                                    </div>
                                 </div>
                             )}
-                            {invoice.site && (
-                                <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                    <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Site Location</span>
+                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
+                                <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Site Location</span>
+                                {isPricingMode ? (
+                                    <input
+                                        placeholder="Site Location"
+                                        value={site}
+                                        onChange={(e) => setSite(e.target.value)}
+                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 italic"
+                                    />
+                                ) : (
                                     <span className="font-bold text-white italic">{invoice.site}</span>
-                                </div>
-                            )}
-                            {invoice.reference && (
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Reference</span>
+                                )}
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Reference</span>
+                                {isPricingMode ? (
+                                    <input
+                                        placeholder="Reference"
+                                        value={reference}
+                                        onChange={(e) => setReference(e.target.value)}
+                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0"
+                                    />
+                                ) : (
                                     <span className="font-bold text-white">{invoice.reference}</span>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -518,10 +612,10 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
                                                                 }));
                                                             }}
                                                             className="h-6 w-64 bg-transparent border-none text-[10px] font-black uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0"
-                                                            placeholder="ENTER AREA NAME"
+                                                            placeholder="HEADING (OPTIONAL)"
                                                         />
                                                     ) : (
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">Area: {area}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{area === "GENERAL / UNGROUPED" ? "" : `Heading: ${area}`}</span>
                                                     )}
                                                 </div>
                                             </td>
@@ -544,7 +638,7 @@ export function InvoiceViewer({ invoice, companySettings }: { invoice: any, comp
                                                                     value={item.area || ""}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
                                                                     className="h-full bg-transparent border-white/10 focus:border-primary text-xs font-bold text-primary uppercase tracking-widest"
-                                                                    placeholder="AREA"
+                                                                    placeholder="HEADING"
                                                                 />
                                                             </div>
                                                         </div>

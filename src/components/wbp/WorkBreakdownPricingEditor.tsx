@@ -91,12 +91,12 @@ const WbpItemRow = memo(({
                         )}
                     </div>
                     <div className="w-1/4">
-                        <Label className="text-[10px] font-black uppercase text-primary italic mb-1 block">Area</Label>
+                        <Label className="text-[10px] font-black uppercase text-primary italic mb-1 block">Heading</Label>
                         <Input
                             value={item.area || ""}
                             onChange={handleAreaChange}
                             className="h-10 text-[11px] font-bold text-white bg-[#14141E] border-white/10 hover:border-primary/50 transition-all"
-                            placeholder="e.g. Roof"
+                            placeholder="HEADING (OPTIONAL)"
                         />
                     </div>
                 </div>
@@ -682,7 +682,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                         <table className="w-full text-sm text-left">
                             <thead className="bg-[#14141E] border-b border-white/5 text-muted-foreground font-black text-[10px] uppercase tracking-[0.2em]">
                                 <tr>
-                                    <th className="px-4 md:px-8 py-4 md:py-5 min-w-[200px] md:min-w-[350px]">Description & Areas</th>
+                                    <th className="px-4 md:px-8 py-4 md:py-5 min-w-[200px] md:min-w-[350px]">Description & Headings</th>
                                     <th className="hidden md:table-cell px-4 py-5 text-center w-28">Quantity</th>
                                     <th className="hidden md:table-cell px-4 py-5 text-center w-28">Unit</th>
                                     <th className="hidden md:table-cell px-4 py-5 text-right w-44">Unit Price (R)</th>
@@ -705,7 +705,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                 <td colSpan={6} className="px-8 py-3">
                                                     <div className="flex items-center gap-2">
                                                         <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">Area: {area}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{area === "GENERAL / UNGROUPED" ? "" : `Heading: ${area}`}</span>
                                                     </div>
                                                 </td>
                                             </tr>

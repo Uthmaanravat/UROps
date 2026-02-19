@@ -18,6 +18,34 @@ export async function createInvoiceAction(data: {
     paymentNotes?: string
 }) {
     const companyId = await ensureAuth()
+
+    // Find next sequence number for this company
+    const lastInvoice = await prisma.invoice.findFirst({
+        where: { companyId, type: 'QUOTE' },
+        orderBy: { number: 'desc' }
+    });
+
+    const nextNumber = (lastInvoice?.number || 0) + 1;
+    const formattedQuoteNumber = data.quoteNumber || `Q-${new Date().getFullYear()}-${nextNumber.toString().padStart(3, '0')}`;
+
+    let effectiveProjectId = data.projectId;
+
+    // If no project ID is provided, create a new project automatically
+    if (!effectiveProjectId) {
+        const projectName = data.site || `Project - ${new Date().toLocaleDateString('en-GB')}`;
+        const project = await prisma.project.create({
+            data: {
+                companyId,
+                clientId: data.clientId,
+                name: projectName,
+                description: `Created automatically from Quotation ${formattedQuoteNumber}`,
+                status: 'QUOTED',
+                workflowStage: 'QUOTATION'
+            }
+        });
+        effectiveProjectId = project.id;
+    }
+
     const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
     const taxRate = 0.15
     const taxAmount = subtotal * taxRate
@@ -27,16 +55,17 @@ export async function createInvoiceAction(data: {
         data: {
             companyId,
             clientId: data.clientId,
-            projectId: data.projectId,
+            projectId: effectiveProjectId,
             date: new Date(data.date),
             type: 'QUOTE', // Always start as Quote
             status: 'DRAFT',
+            number: nextNumber,
             subtotal,
             taxRate,
             taxAmount,
             total,
             site: data.site,
-            quoteNumber: data.quoteNumber,
+            quoteNumber: formattedQuoteNumber,
             reference: data.reference,
             paymentNotes: data.paymentNotes,
             items: {
@@ -44,22 +73,23 @@ export async function createInvoiceAction(data: {
                     description: item.description,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
-                    area: item.area || "GENERAL / UNGROUPED",
+                    area: item.area || "",
                     total: item.quantity * item.unitPrice
                 }))
             }
         }
     })
 
-    if (data.projectId) {
+    if (effectiveProjectId) {
         if (invoice.status === 'PENDING_SCOPE') {
-            await updateProjectStatus(data.projectId, 'SOW')
+            await updateProjectStatus(effectiveProjectId, 'SOW')
         } else {
-            await updateProjectStatus(data.projectId, 'QUOTATION')
+            await updateProjectStatus(effectiveProjectId, 'QUOTATION')
         }
     }
 
     revalidatePath("/invoices");
+    revalidatePath("/projects");
     return invoice.id;
 }
 
@@ -74,6 +104,15 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
 
 export async function convertToInvoiceAction(id: string, clientPoNumber?: string) {
     const companyId = await ensureAuth()
+
+    // Find next invoice sequence number for this company
+    const lastInvoice = await prisma.invoice.findFirst({
+        where: { companyId, type: 'INVOICE' },
+        orderBy: { number: 'desc' }
+    });
+    const nextInvoiceNumber = (lastInvoice?.number || 0) + 1;
+    const formattedInvoiceNumber = `INV-${nextInvoiceNumber.toString().padStart(4, '0')}`;
+
     // First, get the current invoice with its items
     const currentInvoice = await prisma.invoice.findUnique({
         where: { id, companyId },
@@ -84,8 +123,7 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
         throw new Error("Invoice not found");
     }
 
-    // Delete all existing line items - we still only need id here as it's a join table without companyId
-    // but we confirmed the parent belongs to the company above
+    // Delete all existing line items
     await prisma.invoiceItem.deleteMany({
         where: { invoiceId: id }
     });
@@ -106,15 +144,17 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
         }
     });
 
-    // Update the invoice type and status, and clear notes for a fresh invoice
+    // Update the invoice type and status, and its numbers
     const invoice = await prisma.invoice.update({
         where: { id, companyId },
         data: {
             type: 'INVOICE',
             status: 'INVOICED',
+            number: nextInvoiceNumber,
+            quoteNumber: formattedInvoiceNumber, // Rename field conceptually or use it as document number
             clientPoNumber: clientPoNumber || null,
             notes: "", // Independent notes for invoice
-            paymentNotes: "", // Clear deposit notes for official invoice as requested
+            paymentNotes: "",
         }
     })
 

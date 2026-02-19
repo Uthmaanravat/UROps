@@ -24,7 +24,7 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                     quantity: item.quantity || 1,
                     unitPrice: item.unitPrice || 0,
                     unit: item.unit || "ea",
-                    area: item.area || "GENERAL / UNGROUPED",
+                    area: item.area || "",
                     total: (item.quantity || 1) * (item.unitPrice || 0)
                 }
             })

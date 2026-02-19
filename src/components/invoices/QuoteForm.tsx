@@ -419,9 +419,9 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                             />
                                         </div>
                                         <div className="w-1/3 max-w-[120px]">
-                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Area</Label>
+                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Heading</Label>
                                             <Input
-                                                placeholder="AREA"
+                                                placeholder="HEADING (OPTIONAL)"
                                                 // @ts-ignore
                                                 value={item.area || ""}
                                                 onChange={(e) => updateItem(index, 'area', e.target.value)}
