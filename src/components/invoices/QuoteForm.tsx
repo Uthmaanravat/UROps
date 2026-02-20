@@ -199,22 +199,6 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 ))}
                             </select>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Link to Project (Optional)</Label>
-                            <select
-                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                value={projectId}
-                                onChange={(e) => setProjectId(e.target.value)}
-                            >
-                                <option value="">None / Standalone</option>
-                                {projects
-                                    .filter(p => !clientId || p.clientId === clientId)
-                                    .map(p => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                    ))
-                                }
-                            </select>
-                        </div>
                     </div>
                     <div className="space-y-4">
                         <div className="space-y-2">

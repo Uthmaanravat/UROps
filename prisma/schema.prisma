@@ -59,6 +59,8 @@ model CompanySettings {
   aiEnabled         Boolean  @default(true)
   companyId         String   @unique
   company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lastQuoteNumber   Int      @default(0)
+  lastInvoiceNumber Int      @default(0)
 }
 
 model Client {

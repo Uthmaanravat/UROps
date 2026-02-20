@@ -693,7 +693,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                             <tbody className="divide-y divide-white/5">
                                 {(() => {
                                     const grouped = items.reduce((acc: any, item, originalIndex) => {
-                                        const area = item.area?.trim() || "GENERAL / UNGROUPED"
+                                        const area = item.area?.trim() || ""
                                         if (!acc[area]) acc[area] = []
                                         acc[area].push({ ...item, originalIndex })
                                         return acc
@@ -705,7 +705,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                 <td colSpan={6} className="px-8 py-3">
                                                     <div className="flex items-center gap-2">
                                                         <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{area === "GENERAL / UNGROUPED" ? "" : `Heading: ${area}`}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{area ? `Heading: ${area}` : ""}</span>
                                                     </div>
                                                 </td>
                                             </tr>

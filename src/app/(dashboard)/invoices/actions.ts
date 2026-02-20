@@ -19,28 +19,27 @@ export async function createInvoiceAction(data: {
 }) {
     const companyId = await ensureAuth()
 
-    // Find next sequence number for this company
-    const lastInvoice = await prisma.invoice.findFirst({
-        where: { companyId, type: 'QUOTE' },
-        orderBy: { number: 'desc' }
+    // Get company settings to manage sequence numbers
+    const settings = await prisma.companySettings.update({
+        where: { companyId },
+        data: { lastQuoteNumber: { increment: 1 } }
     });
 
-    const nextNumber = (lastInvoice?.number || 0) + 1;
+    const nextNumber = settings.lastQuoteNumber;
     const formattedQuoteNumber = data.quoteNumber || `Q-${new Date().getFullYear()}-${nextNumber.toString().padStart(3, '0')}`;
 
     let effectiveProjectId = data.projectId;
 
-    // If no project ID is provided, create a new project automatically
+    // Always create a project for new quotes if not already linked (which it won't be from the new UI)
     if (!effectiveProjectId) {
-        const projectName = data.site || `Project - ${new Date().toLocaleDateString('en-GB')}`;
         const project = await prisma.project.create({
             data: {
                 companyId,
+                name: `${data.site || "New Quotation Project"} - ${new Date(data.date).toLocaleDateString()}`,
                 clientId: data.clientId,
-                name: projectName,
-                description: `Created automatically from Quotation ${formattedQuoteNumber}`,
-                status: 'QUOTED',
-                workflowStage: 'QUOTATION'
+                status: 'SOW',
+                workflowStage: 'SOW',
+                description: `Created from Quotation ${formattedQuoteNumber} on ${data.date}`
             }
         });
         effectiveProjectId = project.id;
@@ -105,12 +104,13 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
 export async function convertToInvoiceAction(id: string, clientPoNumber?: string) {
     const companyId = await ensureAuth()
 
-    // Find next invoice sequence number for this company
-    const lastInvoice = await prisma.invoice.findFirst({
-        where: { companyId, type: 'INVOICE' },
-        orderBy: { number: 'desc' }
+    // Get company settings to manage sequence numbers
+    const settings = await prisma.companySettings.update({
+        where: { companyId },
+        data: { lastInvoiceNumber: { increment: 1 } }
     });
-    const nextInvoiceNumber = (lastInvoice?.number || 0) + 1;
+
+    const nextInvoiceNumber = settings.lastInvoiceNumber;
     const formattedInvoiceNumber = `INV-${nextInvoiceNumber.toString().padStart(4, '0')}`;
 
     // First, get the current invoice with its items

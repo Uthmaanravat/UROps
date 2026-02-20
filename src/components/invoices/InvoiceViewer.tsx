@@ -243,7 +243,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         // 3. Table with Area Grouping
         const tableBody: any[] = [];
         const grouped = items.reduce((acc: any, item: any) => {
-            const area = item.area?.trim() || "GENERAL / UNGROUPED";
+            const area = item.area?.trim() || "";
             if (!acc[area]) acc[area] = [];
             acc[area].push(item);
             return acc;
@@ -251,7 +251,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
         Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
             // Add Header Row for Area
-            if (area !== "GENERAL / UNGROUPED") {
+            if (area) {
                 tableBody.push([{ content: `HEADING: ${area}`, colSpan: 5, styles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' } }]);
             }
 
@@ -585,7 +585,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         <tbody className="divide-y divide-white/5">
                             {(() => {
                                 const grouped = items.reduce((acc: any, item: any) => {
-                                    const area = item.area?.trim() || "GENERAL / UNGROUPED"
+                                    const area = item.area?.trim() || ""
                                     if (!acc[area]) acc[area] = []
                                     acc[area].push(item)
                                     return acc
@@ -599,12 +599,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                     <div className="h-2 w-2 rounded-full bg-primary" />
                                                     {isPricingMode ? (
                                                         <Input
-                                                            value={area === "GENERAL / UNGROUPED" ? "" : area}
+                                                            value={area}
                                                             onChange={(e) => {
                                                                 // Update ALL items in this group
                                                                 const newArea = e.target.value;
                                                                 setItems(prev => prev.map(i => {
-                                                                    const iArea = i.area?.trim() || "GENERAL / UNGROUPED";
+                                                                    const iArea = i.area?.trim() || "";
                                                                     if (iArea === area) {
                                                                         return { ...i, area: newArea };
                                                                     }
@@ -615,7 +615,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             placeholder="HEADING (OPTIONAL)"
                                                         />
                                                     ) : (
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{area === "GENERAL / UNGROUPED" ? "" : `Heading: ${area}`}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{area ? `Heading: ${area}` : ""}</span>
                                                     )}
                                                 </div>
                                             </td>
