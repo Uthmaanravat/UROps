@@ -36,10 +36,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const handleAddItem = () => {
         const newItem = {
             id: `new-${Date.now()}`,
-            description: "New Item",
+            description: "NEW ITEM",
             quantity: 1,
             unitPrice: 0,
-            unit: "ea",
+            unit: "EA",
             area: "",
             total: 0
         };
@@ -52,7 +52,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const handleItemUpdate = (id: string, field: string, value: any) => {
         setItems(prev => prev.map(item => {
             if (item.id === id) {
-                const updated = { ...item, [field]: value };
+                const uppercasedValue = typeof value === 'string' ? value.toUpperCase() : value;
+                const updated = { ...item, [field]: uppercasedValue };
                 // Recalculate line total if price/qty changes
                 if (field === 'unitPrice' || field === 'quantity') {
                     updated.total = updated.quantity * updated.unitPrice;
@@ -545,9 +546,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Site Location</span>
                                 {isPricingMode ? (
                                     <input
-                                        placeholder="Site Location"
+                                        placeholder="SITE LOCATION"
                                         value={site}
-                                        onChange={(e) => setSite(e.target.value)}
+                                        onChange={(e) => setSite(e.target.value.toUpperCase())}
                                         className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 italic"
                                     />
                                 ) : (
@@ -558,9 +559,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Reference</span>
                                 {isPricingMode ? (
                                     <input
-                                        placeholder="Reference"
+                                        placeholder="REFERENCE"
                                         value={reference}
-                                        onChange={(e) => setReference(e.target.value)}
+                                        onChange={(e) => setReference(e.target.value.toUpperCase())}
                                         className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0"
                                     />
                                 ) : (
@@ -602,10 +603,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             value={area}
                                                             onChange={(e) => {
                                                                 // Update ALL items in this group
-                                                                const newArea = e.target.value;
+                                                                const newArea = e.target.value.toUpperCase();
                                                                 setItems(prev => prev.map(i => {
-                                                                    const iArea = i.area?.trim() || "";
-                                                                    if (iArea === area) {
+                                                                    const iArea = (i.area || "").trim().toUpperCase();
+                                                                    if (iArea === area.toUpperCase()) {
                                                                         return { ...i, area: newArea };
                                                                     }
                                                                     return i;
@@ -704,8 +705,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             {isPricingMode ? (
                                 <textarea
                                     value={note}
-                                    onChange={(e) => setNote(e.target.value)}
-                                    placeholder="Add specialized terms, site conditions, or project requirements..."
+                                    onChange={(e) => setNote(e.target.value.toUpperCase())}
+                                    placeholder="ADD SPECIALIZED TERMS, SITE CONDITIONS, OR PROJECT REQUIREMENTS..."
                                     className="w-full min-h-[160px] bg-transparent text-gray-300 text-base border-none focus:ring-0 resize-none font-medium leading-relaxed placeholder:opacity-20"
                                 />
                             ) : (

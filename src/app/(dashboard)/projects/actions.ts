@@ -18,9 +18,9 @@ export async function createProject(data: {
         const project = await prisma.project.create({
             data: {
                 companyId,
-                name: data.name,
+                name: data.name.toUpperCase(),
                 clientId: data.clientId,
-                description: data.description,
+                description: data.description?.toUpperCase(),
                 status: data.status || 'PLANNING' as any,
                 startDate: data.startDate,
                 endDate: data.endDate
@@ -39,9 +39,13 @@ export async function createProject(data: {
 export async function updateProject(id: string, data: any) {
     const companyId = await ensureAuth()
     try {
+        const updateData = { ...data };
+        if (updateData.name) updateData.name = updateData.name.toUpperCase();
+        if (updateData.description) updateData.description = updateData.description.toUpperCase();
+
         const project = await prisma.project.update({
             where: { id, companyId },
-            data
+            data: updateData
         })
         revalidatePath(`/projects/${id}`)
         return { success: true, data: project }

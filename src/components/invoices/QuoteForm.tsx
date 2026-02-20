@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, Trash, Wand2, Loader2, FileText } from "lucide-react"
-import { createInvoiceAction } from "@/app/(dashboard)/invoices/actions"
+import { createInvoiceAction, getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
 import { formatCurrency } from "@/lib/utils"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
@@ -54,6 +54,14 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
 
     useEffect(() => {
+        const loadSequence = async () => {
+            if (!quoteNumber) {
+                const docNumber = await getQuoteSequenceAction();
+                if (docNumber) setQuoteNumber(docNumber);
+            }
+        }
+        loadSequence();
+
         const loadCatalog = async () => {
             try {
                 const data = await getFixedPriceItemsAction()
@@ -74,9 +82,9 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         // If the last item is empty, replace it, otherwise add new
         const lastItem = items[items.length - 1]
         const newItem = {
-            description: catalogItem.description,
+            description: (catalogItem.description || "").toUpperCase(),
             quantity: 1,
-            unit: catalogItem.unit || "",
+            unit: (catalogItem.unit || "").toUpperCase(),
             unitPrice: catalogItem.unitPrice,
             area: ""
         }
@@ -103,7 +111,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const updateItem = (index: number, field: string, value: any) => {
         const newItems = [...items]
         // @ts-ignore
-        newItems[index][field] = value
+        newItems[index][field] = typeof value === 'string' ? value.toUpperCase() : value
         setItems(newItems)
     }
 
@@ -208,9 +216,9 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         <div className="space-y-2">
                             <Label>Site Name / Address</Label>
                             <Input
-                                placeholder="e.g. 123 Main St"
+                                placeholder="e.g. 123 MAIN ST"
                                 value={site}
-                                onChange={(e) => setSite(e.target.value)}
+                                onChange={(e) => setSite(e.target.value.toUpperCase())}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -227,7 +235,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 <Input
                                     placeholder="e.g. PO-789"
                                     value={reference}
-                                    onChange={(e) => setReference(e.target.value)}
+                                    onChange={(e) => setReference(e.target.value.toUpperCase())}
                                 />
                             </div>
                         </div>
@@ -238,9 +246,9 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 <VoiceRecorder onParsed={(newItems) => {
                     if (newItems && newItems.length > 0) {
                         const formattedItems = newItems.map(i => ({
-                            description: i.description,
+                            description: (i.description || "").toUpperCase(),
                             quantity: i.quantity || 1,
-                            unit: i.unit || "",
+                            unit: (i.unit || "").toUpperCase(),
                             unitPrice: i.unitPrice || 0,
                             area: ""
                         }));
@@ -286,7 +294,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                 if (newItems && newItems.length > 0) {
                                                     // @ts-ignore
                                                     const formattedItems = newItems.map(i => ({
-                                                        description: i.description,
+                                                        description: (i.description || "").toUpperCase(),
                                                         quantity: i.quantity || 1,
                                                         unit: "",
                                                         unitPrice: i.unitPrice || 0,
@@ -488,8 +496,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                     {showPaymentNotes && (
                         <Textarea
                             value={paymentNotes}
-                            onChange={(e) => setPaymentNotes(e.target.value)}
-                            placeholder="e.g. 50% deposit required..."
+                            onChange={(e) => setPaymentNotes(e.target.value.toUpperCase())}
+                            placeholder="e.g. 50% DEPOSIT REQUIRED..."
                             rows={2}
                         />
                     )}

@@ -20,11 +20,11 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
             await prisma.invoiceItem.create({
                 data: {
                     invoiceId,
-                    description: item.description || "New Item",
+                    description: (item.description || "NEW ITEM").toUpperCase(),
                     quantity: item.quantity || 1,
                     unitPrice: item.unitPrice || 0,
-                    unit: item.unit || "ea",
-                    area: item.area || "",
+                    unit: (item.unit || "EA").toUpperCase(),
+                    area: (item.area || "").toUpperCase(),
                     total: (item.quantity || 1) * (item.unitPrice || 0)
                 }
             })
@@ -35,12 +35,12 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                 data: {
                     unitPrice: item.unitPrice,
                     quantity: item.quantity,
-                    description: item.description,
-                    unit: item.unit,
-                    area: item.area,
+                    description: item.description?.toUpperCase(),
+                    unit: item.unit?.toUpperCase(),
+                    area: item.area?.toUpperCase(),
                     total: (item.quantity !== undefined && item.unitPrice !== undefined)
                         ? item.quantity * item.unitPrice
-                        : undefined // Let prisma keep old total if not updating both? prevent partial updates causing desync
+                        : undefined
                     // Actually we should calculate total if either changed.
                     // But we passed both if they are defined. 
                     // Better logic: get current if optional?
@@ -125,7 +125,7 @@ export async function updateInvoiceNoteAction(invoiceId: string, notes: string) 
     const companyId = await ensureAuth()
     await prisma.invoice.update({
         where: { id: invoiceId, companyId },
-        data: { notes }
+        data: { notes: notes.toUpperCase() }
     })
     revalidatePath(`/invoices/${invoiceId}`)
 }

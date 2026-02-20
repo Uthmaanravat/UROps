@@ -73,6 +73,9 @@ export default async function ProjectsPage() {
                                 <div>
                                     <h3 className="font-black text-white text-lg leading-tight mb-1">{project.name}</h3>
                                     <p className="text-muted-foreground text-xs uppercase font-bold tracking-widest">{project.client.name}</p>
+                                    {project.invoices?.[0]?.quoteNumber && (
+                                        <p className="text-[10px] font-mono text-primary font-black mt-1 uppercase tracking-widest">{project.invoices[0].quoteNumber}</p>
+                                    )}
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 opacity-50">Total Worth</p>
@@ -132,6 +135,7 @@ export default async function ProjectsPage() {
                                 <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Site / Place</th>
                                 <th className="h-12 px-4 align-middle font-medium text-muted-foreground">AI Summary</th>
                                 <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Status</th>
+                                <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Doc #</th>
                                 <th className="h-12 px-4 align-middle font-medium text-muted-foreground text-right">Worth</th>
                                 <th className="h-12 px-4 align-middle font-medium text-muted-foreground"></th>
                             </tr>
@@ -185,6 +189,11 @@ export default async function ProjectsPage() {
                                                     {project.commercialStatus === 'EMERGENCY_WORK' ? '🚨 EMERGENCY' :
                                                         project.commercialStatus === 'PO_RECEIVED' ? '✅ PO RECEIVED' : '⏳ AWAITING PO'}
                                                 </span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 align-middle">
+                                            <div className="text-[10px] font-mono text-primary font-bold">
+                                                {project.invoices?.[0]?.quoteNumber || '-'}
                                             </div>
                                         </td>
                                         <td className="p-4 align-middle text-right font-black text-white text-base">

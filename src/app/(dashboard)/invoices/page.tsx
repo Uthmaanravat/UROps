@@ -93,12 +93,9 @@ export default async function InvoicesPage({
 
                                 return (
                                     <tr key={invoice.id} className="border-b transition-colors hover:bg-muted/50">
-                                        <td className="p-4 align-middle font-medium">
+                                        <td className="p-4 align-middle font-black">
                                             <div className="flex flex-col">
-                                                <span>#{invoice.number}</span>
-                                                {invoice.quoteNumber && (
-                                                    <span className="text-[10px] text-muted-foreground font-mono">{invoice.quoteNumber}</span>
-                                                )}
+                                                <span>{invoice.quoteNumber || `#${invoice.number}`}</span>
                                             </div>
                                         </td>
                                         <td className="p-4 align-middle">{invoice.client?.name}</td>

@@ -11,7 +11,7 @@ export async function createInvoiceAction(data: {
     clientId: string
     projectId?: string
     date: string
-    items: { description: string; quantity: number; unitPrice: number; area?: string }[]
+    items: { description: string; quantity: number; unitPrice: number; area?: string; unit?: string }[]
     site?: string
     quoteNumber?: string
     reference?: string
@@ -19,14 +19,44 @@ export async function createInvoiceAction(data: {
 }) {
     const companyId = await ensureAuth()
 
-    // Get company settings to manage sequence numbers
-    const settings = await prisma.companySettings.update({
-        where: { companyId },
-        data: { lastQuoteNumber: { increment: 1 } }
-    });
+    const year = new Date().getFullYear();
+    let nextNumber: number;
+    let formattedQuoteNumber = data.quoteNumber;
 
-    const nextNumber = settings.lastQuoteNumber;
-    const formattedQuoteNumber = data.quoteNumber || `Q-${new Date().getFullYear()}-${nextNumber.toString().padStart(3, '0')}`;
+    if (data.quoteNumber) {
+        // Parse manual number to sync sequence if it matches Q-YYYY-NNN or just has digits
+        const match = data.quoteNumber.match(/(\d+)$/);
+        if (match) {
+            const manualSeq = parseInt(match[1]);
+            const currentSettings = await prisma.companySettings.findUnique({ where: { companyId } });
+
+            if (currentSettings && manualSeq > currentSettings.lastQuoteNumber) {
+                // Sync sequence to manual number if it's higher
+                const updatedSettings = await prisma.companySettings.update({
+                    where: { companyId },
+                    data: { lastQuoteNumber: manualSeq }
+                });
+                nextNumber = updatedSettings.lastQuoteNumber;
+            } else {
+                nextNumber = manualSeq;
+            }
+        } else {
+            // Fallback for non-matching manual numbers
+            const settings = await prisma.companySettings.update({
+                where: { companyId },
+                data: { lastQuoteNumber: { increment: 1 } }
+            });
+            nextNumber = settings.lastQuoteNumber;
+        }
+    } else {
+        // Standard increment for auto-generated numbers
+        const settings = await prisma.companySettings.update({
+            where: { companyId },
+            data: { lastQuoteNumber: { increment: 1 } }
+        });
+        nextNumber = settings.lastQuoteNumber;
+        formattedQuoteNumber = `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+    }
 
     let effectiveProjectId = data.projectId;
 
@@ -63,16 +93,17 @@ export async function createInvoiceAction(data: {
             taxRate,
             taxAmount,
             total,
-            site: data.site,
+            site: data.site?.toUpperCase(),
             quoteNumber: formattedQuoteNumber,
-            reference: data.reference,
-            paymentNotes: data.paymentNotes,
+            reference: data.reference?.toUpperCase(),
+            paymentNotes: data.paymentNotes?.toUpperCase(),
             items: {
                 create: data.items.map(item => ({
-                    description: item.description,
+                    description: item.description.toUpperCase(),
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
-                    area: item.area || "",
+                    area: (item.area || "").toUpperCase(),
+                    unit: (item.unit || "").toUpperCase(),
                     total: item.quantity * item.unitPrice
                 }))
             }
@@ -99,6 +130,19 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
         data: { status }
     })
     revalidatePath(`/invoices/${id}`)
+}
+
+export async function getQuoteSequenceAction() {
+    const companyId = await ensureAuth();
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId }
+    });
+
+    if (!settings) return null;
+
+    const nextNumber = (settings.lastQuoteNumber || 0) + 1;
+    const year = new Date().getFullYear();
+    return `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
 }
 
 export async function convertToInvoiceAction(id: string, clientPoNumber?: string) {
