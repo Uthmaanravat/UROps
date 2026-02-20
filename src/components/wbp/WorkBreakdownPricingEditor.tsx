@@ -183,7 +183,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     })))
     const [site, setSite] = useState(wbp.site || "")
     const [quoteNumber, setQuoteNumber] = useState(wbp.quoteNumber || "")
-    const [reference, setReference] = useState("")
+    const [reference, setReference] = useState(wbp.reference || project.name || "")
     const [commercialStatus, setCommercialStatus] = useState<any>(project.commercialStatus || "AWAITING_PO")
     const [quotationNotes, setQuotationNotes] = useState(wbp.notes || "")
     const [suggestions, setSuggestions] = useState<Record<string, { typicalPrice: number; source: string }>>({})
@@ -435,8 +435,13 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             setLastQuoteId(quote.id)
             // @ts-ignore
             setLastQuoteNumber(quote.quoteNumber || quote.number?.toString())
+            // Remove success card auto-show if user wants to stay in editor, or just keep it but ensure it's not locking
             setSubmitted(true)
             localStorage.removeItem(STORAGE_KEY)
+
+            // Rename project in UI locally if reference changed
+            project.name = reference;
+
             router.refresh()
             window.scrollTo({ top: 0, behavior: 'smooth' })
         } catch (error) {

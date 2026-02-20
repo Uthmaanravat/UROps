@@ -32,19 +32,29 @@ export async function updateInvoiceProjectAction(invoiceId: string, projectId: s
     revalidatePath("/projects")
 }
 
-export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, date?: string }) {
+export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string }) {
     const companyId = await ensureAuth()
 
-    await prisma.invoice.update({
+    const invoice = await prisma.invoice.update({
         where: { id: invoiceId, companyId },
         data: {
             site: data.site,
             reference: data.reference,
+            quoteNumber: data.quoteNumber,
             date: data.date ? new Date(data.date) : undefined
-        }
+        },
+        include: { project: true }
     })
 
+    if (invoice.project && data.reference) {
+        await prisma.project.update({
+            where: { id: invoice.projectId!, companyId },
+            data: { name: data.reference }
+        })
+    }
+
     revalidatePath(`/invoices/${invoiceId}`)
+    revalidatePath("/projects")
 }
 
 export async function updateProjectCommercialStatusAction(projectId: string, status: 'AWAITING_PO' | 'PO_RECEIVED' | 'EMERGENCY_WORK') {

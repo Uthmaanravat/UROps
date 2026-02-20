@@ -29,6 +29,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     // Header edit state
     const [site, setSite] = useState(invoice.site || "");
     const [reference, setReference] = useState(invoice.reference || "");
+    const [quoteNumber, setQuoteNumber] = useState(invoice.quoteNumber || "");
     const [date, setDate] = useState(new Date(invoice.date).toISOString().split('T')[0]);
     const [projectId, setProjectId] = useState(invoice.projectId || "");
     const [commercialStatus, setCommercialStatus] = useState(invoice.project?.commercialStatus || "AWAITING_PO");
@@ -48,7 +49,20 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     };
     const [recipientEmails, setRecipientEmails] = useState(invoice.client.email || "");
 
-    const isPricingMode = (invoice.type === 'QUOTE' || invoice.type === 'INVOICE') && invoice.status === 'DRAFT';
+    // Auto-fetch suggested quote number if missing
+    useEffect(() => {
+        if (invoice.type === 'QUOTE' && !invoice.quoteNumber && !quoteNumber) {
+            const fetchSuggested = async () => {
+                const { getQuoteSequenceAction } = await import("@/app/(dashboard)/invoices/actions");
+                const suggested = await getQuoteSequenceAction();
+                if (suggested) setQuoteNumber(suggested);
+            };
+            fetchSuggested();
+        }
+    }, [invoice.id, invoice.type, invoice.quoteNumber]);
+
+    // Allow editing if it's a DRAFT or if it's a SENT quotation (as per user request)
+    const isPricingMode = (invoice.status === 'DRAFT') || (invoice.type === 'QUOTE' && invoice.status === 'SENT');
 
     const handleItemUpdate = (id: string, field: string, value: any) => {
         setItems(prev => prev.map(item => {
@@ -88,9 +102,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             promises.push(updateInvoiceNoteAction(invoice.id, note));
         }
 
-        // Handle Project/Site/Ref updates
-        if (site !== invoice.site || reference !== invoice.reference || date !== new Date(invoice.date).toISOString().split('T')[0]) {
-            promises.push(updateInvoiceDetailsAction(invoice.id, { site, reference, date }));
+        // Handle Project/Site/Ref/QuoteNumber updates
+        if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0]) {
+            promises.push(updateInvoiceDetailsAction(invoice.id, { site, reference, quoteNumber, date }));
         }
 
         if (promises.length > 0) {
@@ -454,14 +468,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         <div className="flex items-center justify-center md:justify-end gap-2 mt-2">
                             <span className="text-gray-500 font-mono text-base md:text-lg">#</span>
                             <input
-                                value={invoice.quoteNumber || ""}
-                                onChange={(e) => {
-                                    // In a real app we'd need an action for this, for now we let it be editable in local state if we had one
-                                    // but we'll stick to the existing saveChanges pattern
-                                    setReference(e.target.value) // reusing reference or site as a proxy for quoteNumber if we don't have a specific setter
-                                }}
+                                value={quoteNumber}
+                                onChange={(e) => setQuoteNumber(e.target.value)}
                                 className="bg-transparent border-none text-gray-500 font-mono text-base md:text-lg w-32 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary rounded"
-                                disabled={invoice.type === 'INVOICE'} // Invoices are usually fixed, quotes can be edited
+                                disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
                             />
                         </div>
                     </div>
