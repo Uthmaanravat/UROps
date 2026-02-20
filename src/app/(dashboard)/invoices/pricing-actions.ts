@@ -20,11 +20,11 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
             await prisma.invoiceItem.create({
                 data: {
                     invoiceId,
-                    description: (item.description || "NEW ITEM").toUpperCase(),
+                    description: item.description || "New Item",
                     quantity: item.quantity || 1,
                     unitPrice: item.unitPrice || 0,
-                    unit: (item.unit || "EA").toUpperCase(),
-                    area: (item.area || "").toUpperCase(),
+                    unit: item.unit || "ea",
+                    area: item.area || "",
                     total: (item.quantity || 1) * (item.unitPrice || 0)
                 }
             })
@@ -35,9 +35,9 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                 data: {
                     unitPrice: item.unitPrice,
                     quantity: item.quantity,
-                    description: item.description?.toUpperCase(),
-                    unit: item.unit?.toUpperCase(),
-                    area: item.area?.toUpperCase(),
+                    description: item.description,
+                    unit: item.unit,
+                    area: item.area,
                     total: (item.quantity !== undefined && item.unitPrice !== undefined)
                         ? item.quantity * item.unitPrice
                         : undefined
@@ -125,7 +125,7 @@ export async function updateInvoiceNoteAction(invoiceId: string, notes: string) 
     const companyId = await ensureAuth()
     await prisma.invoice.update({
         where: { id: invoiceId, companyId },
-        data: { notes: notes.toUpperCase() }
+        data: { notes }
     })
     revalidatePath(`/invoices/${invoiceId}`)
 }

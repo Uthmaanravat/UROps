@@ -65,7 +65,7 @@ export async function createInvoiceAction(data: {
         const project = await prisma.project.create({
             data: {
                 companyId,
-                name: `${data.site || "New Quotation Project"} - ${new Date(data.date).toLocaleDateString()}`,
+                name: data.reference || `${data.site || "New Quotation Project"} - ${new Date(data.date).toLocaleDateString()}`,
                 clientId: data.clientId,
                 status: 'SOW',
                 workflowStage: 'SOW',
@@ -93,17 +93,17 @@ export async function createInvoiceAction(data: {
             taxRate,
             taxAmount,
             total,
-            site: data.site?.toUpperCase(),
+            site: data.site,
             quoteNumber: formattedQuoteNumber,
-            reference: data.reference?.toUpperCase(),
-            paymentNotes: data.paymentNotes?.toUpperCase(),
+            reference: data.reference,
+            paymentNotes: data.paymentNotes,
             items: {
                 create: data.items.map(item => ({
-                    description: item.description.toUpperCase(),
+                    description: item.description,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
-                    area: (item.area || "").toUpperCase(),
-                    unit: (item.unit || "").toUpperCase(),
+                    area: (item.area || ""),
+                    unit: (item.unit || ""),
                     total: item.quantity * item.unitPrice
                 }))
             }

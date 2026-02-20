@@ -111,7 +111,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const updateItem = (index: number, field: string, value: any) => {
         const newItems = [...items]
         // @ts-ignore
-        newItems[index][field] = typeof value === 'string' ? value.toUpperCase() : value
+        newItems[index][field] = value
         setItems(newItems)
     }
 
@@ -218,7 +218,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             <Input
                                 placeholder="e.g. 123 MAIN ST"
                                 value={site}
-                                onChange={(e) => setSite(e.target.value.toUpperCase())}
+                                onChange={(e) => setSite(e.target.value)}
+                                className="bg-transparent border-white/10 font-bold"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -235,7 +236,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 <Input
                                     placeholder="e.g. PO-789"
                                     value={reference}
-                                    onChange={(e) => setReference(e.target.value.toUpperCase())}
+                                    onChange={(e) => setReference(e.target.value)}
+                                    className="bg-transparent border-white/10 font-bold"
                                 />
                             </div>
                         </div>
@@ -496,9 +498,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                     {showPaymentNotes && (
                         <Textarea
                             value={paymentNotes}
-                            onChange={(e) => setPaymentNotes(e.target.value.toUpperCase())}
-                            placeholder="e.g. 50% DEPOSIT REQUIRED..."
+                            onChange={(e) => setPaymentNotes(e.target.value)}
+                            placeholder="e.g. 50% DEPOSIT REQUIRED BEFORE PROJECT COMMENCES."
                             rows={2}
+                            className="bg-transparent border-white/10 font-medium text-xs leading-relaxed"
                         />
                     )}
                 </div>

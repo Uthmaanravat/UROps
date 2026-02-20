@@ -38,8 +38,8 @@ export async function updateInvoiceDetailsAction(invoiceId: string, data: { site
     await prisma.invoice.update({
         where: { id: invoiceId, companyId },
         data: {
-            site: data.site?.toUpperCase(),
-            reference: data.reference?.toUpperCase(),
+            site: data.site,
+            reference: data.reference,
             date: data.date ? new Date(data.date) : undefined
         }
     })

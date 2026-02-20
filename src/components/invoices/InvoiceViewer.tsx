@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
 import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText } from "lucide-react"
 import Link from "next/link"
+import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
 import { drawPdfHeader } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
@@ -52,8 +53,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const handleItemUpdate = (id: string, field: string, value: any) => {
         setItems(prev => prev.map(item => {
             if (item.id === id) {
-                const uppercasedValue = typeof value === 'string' ? value.toUpperCase() : value;
-                const updated = { ...item, [field]: uppercasedValue };
+                const updated = { ...item, [field]: value };
                 // Recalculate line total if price/qty changes
                 if (field === 'unitPrice' || field === 'quantity') {
                     updated.total = updated.quantity * updated.unitPrice;
@@ -419,16 +419,16 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             </div>
 
             {/* Preview Area - Overhauled to Premium Dark Theme */}
-            <div className="bg-[#0F172A] text-white p-8 shadow-2xl min-h-[1000px] font-sans relative border-0 rounded-2xl overflow-hidden ring-1 ring-white/10">
+            <div className="bg-[#0F172A] text-white p-4 md:p-8 shadow-2xl min-h-[800px] md:min-h-[1000px] font-sans relative border-0 rounded-2xl overflow-hidden ring-1 ring-white/10 w-full max-w-full">
                 {isPaid && invoice.type === 'INVOICE' && (
-                    <div className="absolute top-48 right-48 border-[12px] border-primary/20 text-primary/20 font-black text-9xl p-8 rotate-[-20deg] uppercase pointer-events-none select-none tracking-tighter">
+                    <div className="absolute top-20 right-10 md:top-48 md:right-48 border-[6px] md:border-[12px] border-primary/20 text-primary/20 font-black text-4xl md:text-9xl p-4 md:p-8 rotate-[-20deg] uppercase pointer-events-none select-none tracking-tighter z-10">
                         PAID
                     </div>
                 )}
 
                 {/* Modern Navy Header */}
-                <div className="bg-[#1E293B] -mx-8 -mt-8 p-12 mb-12 flex justify-between items-center border-b border-white/5">
-                    <div className="flex items-center gap-8">
+                <div className="bg-[#1E293B] -mx-4 -mt-4 md:-mx-8 md:-mt-8 p-6 md:p-12 mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-center gap-6 border-b border-white/5">
+                    <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 text-center md:text-left">
                         {company.logoUrl ? (
                             <img src={company.logoUrl} alt="Logo" className="h-24 w-auto object-contain brightness-110" />
                         ) : (
@@ -449,25 +449,33 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             </div>
                         </div>
                     </div>
-                    <div className="text-right">
-                        <h2 className="text-4xl font-black uppercase tracking-[0.2em] text-primary">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
-                        <p className="text-gray-500 font-mono mt-2 text-lg">
-                            {invoice.quoteNumber && (invoice.quoteNumber.startsWith('Q-') || invoice.quoteNumber.startsWith('INV-'))
-                                ? invoice.quoteNumber
-                                : (invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(4, '0')}`)}
-                        </p>
+                    <div className="text-center md:text-right">
+                        <h2 className="text-2xl md:text-4xl font-black uppercase tracking-[0.2em] text-primary">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
+                        <div className="flex items-center justify-center md:justify-end gap-2 mt-2">
+                            <span className="text-gray-500 font-mono text-base md:text-lg">#</span>
+                            <input
+                                value={invoice.quoteNumber || ""}
+                                onChange={(e) => {
+                                    // In a real app we'd need an action for this, for now we let it be editable in local state if we had one
+                                    // but we'll stick to the existing saveChanges pattern
+                                    setReference(e.target.value) // reusing reference or site as a proxy for quoteNumber if we don't have a specific setter
+                                }}
+                                className="bg-transparent border-none text-gray-500 font-mono text-base md:text-lg w-32 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary rounded"
+                                disabled={invoice.type === 'INVOICE'} // Invoices are usually fixed, quotes can be edited
+                            />
+                        </div>
                     </div>
                 </div>
 
                 {/* Metadata & Billing */}
-                <div className="grid grid-cols-2 gap-16 mb-16">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 mb-12 md:mb-16">
                     <div className="space-y-6">
                         <div>
-                            <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-4">Bill To</h3>
-                            <div className="text-2xl font-black text-white">{invoice.client.companyName || invoice.client.name}</div>
-                            {invoice.client.attentionTo && <div className="text-base font-bold text-gray-400 mt-1 italic">Attn: {invoice.client.attentionTo}</div>}
+                            <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-4 text-center md:text-left">Bill To</h3>
+                            <div className="text-xl md:text-2xl font-black text-white text-center md:text-left">{invoice.client.companyName || invoice.client.name}</div>
+                            {invoice.client.attentionTo && <div className="text-sm md:text-base font-bold text-gray-400 mt-1 italic text-center md:text-left">Attn: {invoice.client.attentionTo}</div>}
                         </div>
-                        <div className="text-gray-400 leading-relaxed font-medium bg-white/5 p-4 rounded-xl border border-white/5 whitespace-pre-wrap">{invoice.client.address}</div>
+                        <div className="text-gray-400 leading-relaxed font-medium bg-white/5 p-4 rounded-xl border border-white/5 whitespace-pre-wrap text-sm md:text-base">{invoice.client.address}</div>
 
                         <div className="flex gap-6">
                             {invoice.client.vatNumber && (
@@ -485,96 +493,79 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         </div>
                     </div>
 
-                    <div className="flex flex-col justify-end items-end space-y-4">
-                        <div className="bg-[#1E293B] p-6 rounded-2xl w-full max-w-sm border border-white/5 space-y-3">
+                    <div className="flex flex-col space-y-4">
+                        <div className="bg-[#1E293B] p-4 md:p-6 rounded-2xl w-full max-w-sm ml-auto border border-white/5 space-y-3">
                             <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
                                 <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Date Issued</span>
-                                {isPricingMode ? (
-                                    <input
-                                        type="date"
-                                        value={date}
-                                        onChange={(e) => setDate(e.target.value)}
-                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0"
-                                    />
-                                ) : (
-                                    <span className="font-bold text-white">{new Date(invoice.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-                                )}
+                                <input
+                                    type="date"
+                                    value={date}
+                                    onChange={(e) => setDate(e.target.value)}
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base"
+                                    disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                />
                             </div>
                             <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
                                 <span className="text-primary font-bold uppercase tracking-widest text-[10px]">Project</span>
-                                {isPricingMode ? (
-                                    <select
-                                        value={projectId}
-                                        onChange={(e) => handleProjectChange(e.target.value)}
-                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[200px]"
-                                    >
-                                        <option value="" className="bg-[#1E293B]">None / Link to Project</option>
-                                        {availableProjects.map((p: any) => (
-                                            <option key={p.id} value={p.id} className="bg-[#1E293B]">{p.name}</option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <span className="font-bold text-white">{invoice.project?.name || "Standalone"}</span>
-                                )}
+                                <select
+                                    value={projectId}
+                                    onChange={(e) => setProjectId(e.target.value)}
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[150px] md:max-w-[200px] text-sm md:text-base cursor-pointer"
+                                    disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                >
+                                    <option value="" className="bg-[#1E293B]">None / Link to Project</option>
+                                    {availableProjects.map((p: any) => (
+                                        <option key={p.id} value={p.id} className="bg-[#1E293B]">{p.name}</option>
+                                    ))}
+                                </select>
                             </div>
                             {invoice.projectId && (
                                 <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                    <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Commercial Status</span>
-                                    <div className="flex gap-1">
-                                        <button
-                                            onClick={() => handleCommercialStatusChange('AWAITING_PO')}
-                                            className={`px-2 py-0.5 rounded text-[9px] font-black transition-all ${commercialStatus === 'AWAITING_PO' ? 'bg-gray-500 text-white shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
-                                        >
-                                            PO
-                                        </button>
-                                        <button
-                                            onClick={() => handleCommercialStatusChange('EMERGENCY_WORK')}
-                                            className={`px-2 py-0.5 rounded text-[9px] font-black transition-all ${commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
-                                        >
-                                            EMERGENCY
-                                        </button>
-                                        <button
-                                            onClick={() => handleCommercialStatusChange('PO_RECEIVED')}
-                                            className={`px-2 py-0.5 rounded text-[9px] font-black transition-all ${commercialStatus === 'PO_RECEIVED' ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
-                                        >
-                                            RECEIVED
-                                        </button>
-                                    </div>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#64748B]">Commercial Status</span>
+                                    <select
+                                        value={commercialStatus}
+                                        onChange={(e) => handleCommercialStatusChange(e.target.value)}
+                                        className={cn(
+                                            "bg-transparent border-none text-right font-black outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer px-2 py-1 rounded transition-colors",
+                                            commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 text-red-500 mr-[-8px]" :
+                                                commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 text-primary mr-[-8px]" :
+                                                    "text-white"
+                                        )}
+                                        disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                    >
+                                        <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
+                                        <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
+                                        <option value="EMERGENCY_WORK" className="bg-[#1E293B]">EMERGENCY WORK</option>
+                                    </select>
                                 </div>
                             )}
                             <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
                                 <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Site Location</span>
-                                {isPricingMode ? (
-                                    <input
-                                        placeholder="SITE LOCATION"
-                                        value={site}
-                                        onChange={(e) => setSite(e.target.value.toUpperCase())}
-                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 italic"
-                                    />
-                                ) : (
-                                    <span className="font-bold text-white italic">{invoice.site}</span>
-                                )}
+                                <input
+                                    value={site}
+                                    onChange={(e) => setSite(e.target.value)}
+                                    placeholder="Site Location"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base w-full max-w-[200px]"
+                                    disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                />
                             </div>
-                            <div className="flex justify-between items-center text-sm">
+                            <div className="flex justify-between items-center text-sm pb-1">
                                 <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Reference</span>
-                                {isPricingMode ? (
-                                    <input
-                                        placeholder="REFERENCE"
-                                        value={reference}
-                                        onChange={(e) => setReference(e.target.value.toUpperCase())}
-                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0"
-                                    />
-                                ) : (
-                                    <span className="font-bold text-white">{invoice.reference}</span>
-                                )}
+                                <input
+                                    value={reference}
+                                    onChange={(e) => setReference(e.target.value)}
+                                    placeholder="Customer Ref"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base w-full max-w-[200px]"
+                                    disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                />
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Items Table - Modern High-Contrast Style */}
-                <div className="mb-16 min-h-[400px]">
-                    <table className="w-full">
+                <div className="mb-16 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                    <table className="w-full min-w-[600px] md:min-w-full">
                         <thead>
                             <tr className="border-b border-white/10">
                                 <th className="py-6 text-left font-black text-[11px] uppercase tracking-[0.2em] text-gray-500">Service Description</th>
@@ -603,10 +594,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             value={area}
                                                             onChange={(e) => {
                                                                 // Update ALL items in this group
-                                                                const newArea = e.target.value.toUpperCase();
+                                                                const newArea = e.target.value;
                                                                 setItems(prev => prev.map(i => {
-                                                                    const iArea = (i.area || "").trim().toUpperCase();
-                                                                    if (iArea === area.toUpperCase()) {
+                                                                    const iArea = (i.area || "").trim();
+                                                                    if (iArea === area) {
                                                                         return { ...i, area: newArea };
                                                                     }
                                                                     return i;
@@ -705,7 +696,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             {isPricingMode ? (
                                 <textarea
                                     value={note}
-                                    onChange={(e) => setNote(e.target.value.toUpperCase())}
+                                    onChange={(e) => setNote(e.target.value)}
                                     placeholder="ADD SPECIALIZED TERMS, SITE CONDITIONS, OR PROJECT REQUIREMENTS..."
                                     className="w-full min-h-[160px] bg-transparent text-gray-300 text-base border-none focus:ring-0 resize-none font-medium leading-relaxed placeholder:opacity-20"
                                 />

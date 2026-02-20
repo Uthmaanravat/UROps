@@ -34,7 +34,9 @@ export default async function ProjectsPage() {
                         total: true,
                         type: true,
                         status: true,
-                        site: true
+                        site: true,
+                        reference: true,
+                        quoteNumber: true
                     }
                 }
             },
@@ -71,7 +73,14 @@ export default async function ProjectsPage() {
                         <div key={project.id} className="bg-card border border-white/5 rounded-2xl p-5 space-y-4 shadow-xl">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <h3 className="font-black text-white text-lg leading-tight mb-1">{project.name}</h3>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="font-black text-white text-lg leading-tight">{project.name}</h3>
+                                        {project.invoices.find((i: any) => i.reference)?.reference && project.invoices.find((i: any) => i.reference).reference !== project.name && (
+                                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-black border border-primary/20">
+                                                {project.invoices.find((i: any) => i.reference).reference}
+                                            </span>
+                                        )}
+                                    </div>
                                     <p className="text-muted-foreground text-xs uppercase font-bold tracking-widest">{project.client.name}</p>
                                     {project.invoices?.[0]?.quoteNumber && (
                                         <p className="text-[10px] font-mono text-primary font-black mt-1 uppercase tracking-widest">{project.invoices[0].quoteNumber}</p>
@@ -158,7 +167,16 @@ export default async function ProjectsPage() {
 
                                 return (
                                     <tr key={project.id} className="border-b border-white/5 transition-colors hover:bg-white/5">
-                                        <td className="p-4 align-middle font-black text-white">{project.name}</td>
+                                        <td className="p-4 align-middle">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="font-black text-white">{project.name}</span>
+                                                {project.invoices.find((i: any) => i.reference)?.reference && project.invoices.find((i: any) => i.reference).reference !== project.name && (
+                                                    <span className="text-[10px] font-black text-primary uppercase tracking-widest">
+                                                        REF: {project.invoices.find((i: any) => i.reference).reference}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="p-4 align-middle text-muted-foreground font-medium">{project.client.name}</td>
                                         <td className="p-4 align-middle text-muted-foreground italic font-medium">
                                             {project.invoices[0]?.site || '-'}

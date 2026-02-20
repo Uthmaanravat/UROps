@@ -69,7 +69,7 @@ export default async function DashboardPage() {
                             in: ['IN_PROGRESS', 'PLANNING', 'SCHEDULED', 'QUOTED', 'INVOICED', 'SOW_SUBMITTED']
                         }
                     },
-                    include: { client: true, invoices: { select: { quoteNumber: true, type: true }, take: 1, orderBy: { createdAt: 'desc' } } },
+                    include: { client: true, invoices: { select: { quoteNumber: true, reference: true, type: true }, take: 1, orderBy: { createdAt: 'desc' } } },
                     orderBy: { updatedAt: 'desc' },
                     take: 5
                 }) : Promise.resolve([]),
@@ -183,7 +183,12 @@ export default async function DashboardPage() {
                                                 <div>
                                                     <div className="font-semibold text-sm">{proj.name}</div>
                                                     {proj.invoices?.[0]?.quoteNumber && (
-                                                        <div className="text-[10px] font-mono text-muted-foreground uppercase">{proj.invoices[0].quoteNumber}</div>
+                                                        <div className="flex gap-2">
+                                                            <div className="text-[10px] font-mono text-muted-foreground uppercase">{proj.invoices[0].quoteNumber}</div>
+                                                            {proj.invoices[0].reference && (
+                                                                <div className="text-[10px] font-black text-primary uppercase">{proj.invoices[0].reference}</div>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                                 <div className="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
