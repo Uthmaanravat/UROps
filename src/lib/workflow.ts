@@ -27,7 +27,8 @@ export async function submitScopeOfWork(projectId: string, items: { description:
         }
     })
 
-    const suggestedQuoteNumber = `Q-${invoice.number}`
+    const year = new Date().getFullYear()
+    const suggestedQuoteNumber = `Q-${year}-${invoice.number.toString().padStart(3, '0')}`
 
     // 2. Create SOW Record (Frozen snapshot)
     const sow = await prisma.scopeOfWork.create({

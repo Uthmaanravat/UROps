@@ -359,10 +359,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     }, [])
 
     const removeItem = useCallback((index: number) => {
-        setItems((prev: any[]) => {
-            if (prev.length <= 1) return prev
-            return prev.filter((_: any, i: number) => i !== index)
-        })
+        setItems((prev: any[]) => prev.filter((_: any, i: number) => i !== index))
     }, [])
 
     const splitItem = useCallback((index: number) => {

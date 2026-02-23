@@ -64,7 +64,9 @@ export async function getSuggestedQuoteNumberAction() {
     const lastInvoice = await prisma.invoice.findFirst({
         orderBy: { number: 'desc' }
     })
-    return `Q-${((lastInvoice?.number || 0) + 1).toString().padStart(3, '0')}`
+    const year = new Date().getFullYear()
+    const nextNumber = (lastInvoice?.number || 0) + 1
+    return `Q-${year}-${nextNumber.toString().padStart(3, '0')}`
 }
 
 export async function generateQuotationAction(wbpId: string, items: any[], options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string }) {
