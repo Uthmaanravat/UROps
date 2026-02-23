@@ -47,6 +47,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         };
         setItems([...items, newItem]);
     };
+
+    const handleDeleteItem = (id: string) => {
+        setItems(prev => prev.filter(item => item.id !== id));
+    };
+
     const [recipientEmails, setRecipientEmails] = useState(invoice.client.email || "");
 
     // Auto-fetch suggested quote number if missing
@@ -643,6 +648,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                     placeholder="HEADING"
                                                                 />
                                                             </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-10 w-10 text-red-500 hover:bg-red-500/10 self-center"
+                                                                onClick={() => handleDeleteItem(item.id)}
+                                                            >
+                                                                <Trash2 className="h-5 w-5" />
+                                                            </Button>
                                                         </div>
                                                     ) : (
                                                         <div className="text-lg font-bold text-white tracking-tight">{item.description}</div>

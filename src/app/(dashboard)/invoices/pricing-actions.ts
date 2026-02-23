@@ -14,6 +14,9 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
     })
     if (!invoice) throw new Error("Invoice not found or unauthorized")
 
+    const updatedItemIds = items.filter(i => !i.id.startsWith('new-')).map(i => i.id)
+
+    // Process updates and creations
     for (const item of items) {
         if (item.id.startsWith('new-')) {
             // Create new item
@@ -41,18 +44,22 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                     total: (item.quantity !== undefined && item.unitPrice !== undefined)
                         ? item.quantity * item.unitPrice
                         : undefined
-                    // Actually we should calculate total if either changed.
-                    // But we passed both if they are defined. 
-                    // Better logic: get current if optional?
-                    // For now, let's assume UI sends current values for everything if unmodified.
                 }
             })
         }
     }
 
+    // Delete items not in updated list
+    await prisma.invoiceItem.deleteMany({
+        where: {
+            invoiceId,
+            id: { notIn: updatedItemIds }
+        }
+    })
+
     // Now update invoice totals
-    const updatedItems = await prisma.invoiceItem.findMany({ where: { invoiceId } })
-    const newSubtotal = updatedItems.reduce((acc, item) => acc + item.total, 0)
+    const finalItems = await prisma.invoiceItem.findMany({ where: { invoiceId } })
+    const newSubtotal = finalItems.reduce((acc, item) => acc + item.total, 0)
     const tax = newSubtotal * 0.15
     const total = newSubtotal + tax
 
