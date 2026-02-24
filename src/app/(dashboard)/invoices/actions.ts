@@ -154,8 +154,9 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
         data: { lastInvoiceNumber: { increment: 1 } }
     });
 
+    const year = new Date().getFullYear();
     const nextInvoiceNumber = settings.lastInvoiceNumber;
-    const formattedInvoiceNumber = `INV-${nextInvoiceNumber.toString().padStart(4, '0')}`;
+    const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
 
     // First, get the current invoice with its items
     const currentInvoice = await prisma.invoice.findUnique({
@@ -193,7 +194,7 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
         where: { id, companyId },
         data: {
             type: 'INVOICE',
-            status: 'INVOICED',
+            status: 'DRAFT',
             number: nextInvoiceNumber,
             quoteNumber: formattedInvoiceNumber, // Rename field conceptually or use it as document number
             clientPoNumber: clientPoNumber || null,

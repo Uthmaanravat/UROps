@@ -144,7 +144,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         if (!confirm("Approve this Quote? This will lock it and generate a Draft Invoice.")) return;
         setLoading(true);
         await saveChanges();
-        await approveQuoteAction(invoice.id);
+        await convertToInvoiceAction(invoice.id);
         setLoading(false);
         router.refresh(); // Refresh to show new status
         // router.push(`/work-breakdown-pricing`); // Maybe stay on page or go to list?
@@ -197,7 +197,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         // 1. Header Bar (Shared)
         const numberLabel = invoice.quoteNumber && (invoice.quoteNumber.startsWith('Q-') || invoice.quoteNumber.startsWith('INV-'))
             ? invoice.quoteNumber
-            : (invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(4, '0')}`);
+            : (invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(3, '0')}`);
         await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel);
 
         // 2. Metadata Section (Black text)
