@@ -66,8 +66,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
     }, [invoice.id, invoice.type, invoice.quoteNumber]);
 
-    // Allow editing if it's a DRAFT or if it's a SENT quotation (as per user request)
-    const isPricingMode = (invoice.status === 'DRAFT') || (invoice.type === 'QUOTE' && invoice.status === 'SENT');
+    // Allow editing if it's a DRAFT or if it's a SENT quotation (as per user request) or an INVOICED document
+    const isPricingMode = (invoice.status === 'DRAFT') || (invoice.type === 'QUOTE' && invoice.status === 'SENT') || (invoice.status === 'INVOICED');
 
     const handleItemUpdate = (id: string, field: string, value: any) => {
         setItems(prev => prev.map(item => {
@@ -766,9 +766,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             <Button size="lg" variant="outline" onClick={saveChanges} disabled={loading} className="h-14 px-8 border-2">
                                 {loading ? "Saving..." : "Save Draft Changes"}
                             </Button>
-                            <Button size="lg" onClick={handleApprove} disabled={loading} className="h-14 px-10 bg-blue-600 hover:bg-blue-700 font-bold shadow-xl">
-                                {loading ? "Processing..." : "Approve & Generate Invoice"}
-                            </Button>
+                            {invoice.type === 'QUOTE' && (
+                                <Button size="lg" onClick={handleApprove} disabled={loading} className="h-14 px-10 bg-blue-600 hover:bg-blue-700 font-bold shadow-xl">
+                                    {loading ? "Processing..." : "Approve & Generate Invoice"}
+                                </Button>
+                            )}
                         </div>
                     </div>
                 )}
