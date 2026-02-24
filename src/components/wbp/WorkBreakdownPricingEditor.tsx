@@ -547,7 +547,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                             <Input
                                 value={quoteNumber}
                                 onChange={(e) => setQuoteNumber(e.target.value)}
-                                placeholder="e.g. Q-2024-001"
+                                placeholder="e.g. Quotation-2024-001"
                                 className="bg-[#14141E] border-white/10 text-white font-bold h-12"
                             />
                         </div>

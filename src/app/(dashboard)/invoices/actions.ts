@@ -28,25 +28,16 @@ export async function createInvoiceAction(data: {
         const match = data.quoteNumber.match(/(\d+)$/);
         if (match) {
             const manualSeq = parseInt(match[1]);
-            const currentSettings = await prisma.companySettings.findUnique({ where: { companyId } });
-
-            if (currentSettings && manualSeq > currentSettings.lastQuoteNumber) {
-                // Sync sequence to manual number if it's higher
-                const updatedSettings = await prisma.companySettings.update({
-                    where: { companyId },
-                    data: { lastQuoteNumber: manualSeq }
-                });
-                nextNumber = updatedSettings.lastQuoteNumber;
-            } else {
-                nextNumber = manualSeq;
-            }
-        } else {
-            // Fallback for non-matching manual numbers
-            const settings = await prisma.companySettings.update({
+            // Sync sequence to manual number (allow resets/corrections)
+            await prisma.companySettings.update({
                 where: { companyId },
-                data: { lastQuoteNumber: { increment: 1 } }
+                data: { lastQuoteNumber: manualSeq }
             });
-            nextNumber = settings.lastQuoteNumber;
+            nextNumber = manualSeq;
+        } else {
+            // Fallback for non-matching manual numbers: Use next in sequence but don't increment DB
+            const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+            nextNumber = (settings?.lastQuoteNumber || 0) + 1;
         }
     } else {
         // Standard increment for auto-generated numbers
@@ -55,7 +46,7 @@ export async function createInvoiceAction(data: {
             data: { lastQuoteNumber: { increment: 1 } }
         });
         nextNumber = settings.lastQuoteNumber;
-        formattedQuoteNumber = `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+        formattedQuoteNumber = `Quotation-${year}-${nextNumber.toString().padStart(3, '0')}`;
     }
 
     let effectiveProjectId = data.projectId;
@@ -134,60 +125,65 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
 
 export async function getQuoteSequenceAction() {
     const companyId = await ensureAuth();
+
+    // Find the highest number used in existing quotes
+    const lastQuote = await prisma.invoice.findFirst({
+        where: { companyId, type: 'QUOTE' },
+        orderBy: { number: 'desc' }
+    });
+
     const settings = await prisma.companySettings.findUnique({
         where: { companyId }
     });
 
     if (!settings) return null;
 
-    const nextNumber = (settings.lastQuoteNumber || 0) + 1;
+    // Use whichever is higher: the DB counter or the highest actual number found
+    const nextNumber = Math.max(settings.lastQuoteNumber || 0, lastQuote?.number || 0) + 1;
     const year = new Date().getFullYear();
-    return `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+    return `Quotation-${year}-${nextNumber.toString().padStart(3, '0')}`;
+}
+
+export async function getInvoiceSequenceAction() {
+    const companyId = await ensureAuth();
+
+    // Find the highest number used in existing invoices
+    const lastInvoice = await prisma.invoice.findFirst({
+        where: { companyId, type: 'INVOICE' },
+        orderBy: { number: 'desc' }
+    });
+
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId }
+    });
+
+    if (!settings) return null;
+
+    const nextNumber = Math.max(settings.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+    const year = new Date().getFullYear();
+    return `INV-${year}-${nextNumber.toString().padStart(3, '0')}`;
 }
 
 export async function convertToInvoiceAction(id: string, clientPoNumber?: string) {
     const companyId = await ensureAuth()
 
-    // Get company settings to manage sequence numbers
-    const settings = await prisma.companySettings.update({
+    // Get the next invoice number based on actual data
+    const lastInvoice = await prisma.invoice.findFirst({
+        where: { companyId, type: 'INVOICE' },
+        orderBy: { number: 'desc' }
+    });
+
+    const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+    const nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+
+    // Update company settings to keep sequence in sync
+    await prisma.companySettings.update({
         where: { companyId },
-        data: { lastInvoiceNumber: { increment: 1 } }
+        data: { lastInvoiceNumber: nextInvoiceNumber }
     });
 
     const year = new Date().getFullYear();
-    const nextInvoiceNumber = settings.lastInvoiceNumber;
     const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
-
-    // First, get the current invoice with its items
-    const currentInvoice = await prisma.invoice.findUnique({
-        where: { id, companyId },
-        include: { items: true }
-    });
-
-    if (!currentInvoice) {
-        throw new Error("Invoice not found");
-    }
-
-    // Delete all existing line items
-    await prisma.invoiceItem.deleteMany({
-        where: { invoiceId: id }
-    });
-
-    // Create a single reference line item
-    const referenceText = currentInvoice.quoteNumber
-        ? `As Per Quotation ${currentInvoice.quoteNumber}`
-        : `As Per Quotation #${currentInvoice.number}`;
-
-    await prisma.invoiceItem.create({
-        data: {
-            invoiceId: id,
-            description: referenceText,
-            quantity: 1,
-            unit: "",
-            unitPrice: currentInvoice.subtotal,
-            total: currentInvoice.subtotal
-        }
-    });
 
     // Update the invoice type and status, and its numbers
     const invoice = await prisma.invoice.update({
@@ -196,15 +192,21 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             type: 'INVOICE',
             status: 'DRAFT',
             number: nextInvoiceNumber,
-            quoteNumber: formattedInvoiceNumber, // Rename field conceptually or use it as document number
+            quoteNumber: formattedInvoiceNumber,
             clientPoNumber: clientPoNumber || null,
-            notes: "", // Independent notes for invoice
+            notes: "",
             paymentNotes: "",
         }
     })
 
     if (invoice.projectId) {
-        await updateProjectStatus(invoice.projectId, 'INVOICED')
+        await prisma.project.update({
+            where: { id: invoice.projectId },
+            data: {
+                status: 'INVOICED',
+                workflowStage: 'INVOICE'
+            }
+        })
     }
 
     revalidatePath(`/invoices/${id}`)

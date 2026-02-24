@@ -1,10 +1,19 @@
 import jsPDF from "jspdf";
 
 export async function drawPdfHeader(doc: jsPDF, company: any, title: string, numberLabel: string) {
-    // 1. Header Bar (30% Opacity of Dark Navy)
-    // Dark Navy is (20, 20, 30). 30% Opacity on White = (185, 185, 188)
-    doc.setFillColor(185, 185, 188);
-    doc.rect(0, 0, 210, 40, 'F');
+    // 1. Branding Bars
+    // Top-most solid Navy bar (5mm)
+    doc.setFillColor(20, 20, 30);
+    doc.rect(0, 0, 210, 8, 'F');
+
+    // Lime accent line (1.5mm)
+    doc.setFillColor(163, 230, 53);
+    doc.rect(0, 8, 210, 1.5, 'F');
+
+    // 2. Main Header Background (Subtle Light Grey/Navy tint)
+    // 15% Opacity on White = (220, 220, 225)
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, 9.5, 210, 35, 'F');
 
     // Logo
     if (company.logoUrl) {
@@ -17,28 +26,28 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
                 img.onerror = reject;
             });
             const ext = company.logoUrl.split('.').pop()?.toUpperCase() || 'PNG';
-            doc.addImage(img, ext, 14, 5, 30, 30, undefined, 'FAST');
+            doc.addImage(img, ext, 14, 15, 25, 25, undefined, 'FAST');
         } catch (err) { console.warn(err); }
     }
 
-    // Company Name (Dark Navy for contrast on light background)
+    // Company Name (Dark Navy)
     doc.setTextColor(20, 20, 30);
-    doc.setFontSize(16);
+    doc.setFontSize(20);
     doc.setFont("helvetica", "bold");
-    const nameX = company.logoUrl ? 50 : 14;
-    doc.text(company.name, nameX, 22);
+    const nameX = company.logoUrl ? 44 : 14;
+    doc.text(company.name, nameX, 30);
 
-    // Document Title (Lime for branding pop, or Dark Navy if contrast is poor? Lime might be hard to read on light grey. Let's try Dark Navy for text, maybe keep Lime for Title if it stands out.)
-    // Lime (163, 230, 53) on (185, 185, 188) might be low contrast. 
-    // Let's stick to Dark Navy for the title but maybe larger/bolder.
-    // Or actually, the user wants "opacity 30%".
+    // Document Title (Right-aligned, Bold Navy)
+    doc.setFontSize(16);
+    doc.text(title, 196, 28, { align: 'right' });
 
-    doc.setFontSize(14);
-    doc.setTextColor(20, 20, 30); // Dark Navy
-    doc.text(title, 196, 20, { align: 'right' });
+    // Number (Right-aligned, Lime for pop)
+    doc.setFontSize(11);
+    doc.setTextColor(101, 163, 13); // A slightly darker lime for readability
+    doc.setFont("helvetica", "bold");
+    doc.text(numberLabel, 196, 36, { align: 'right' });
 
-    // Number
-    doc.setFontSize(10);
+    // Reset for next drawing operations
+    doc.setTextColor(20, 20, 30);
     doc.setFont("helvetica", "normal");
-    doc.text(numberLabel, 196, 30, { align: 'right' });
 }

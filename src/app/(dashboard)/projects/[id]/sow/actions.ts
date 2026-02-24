@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { submitScopeOfWork, generateQuotationFromWBP } from "@/lib/workflow"
 import { getPricingSuggestions } from "@/app/actions/ai"
 import { ensureAuth } from "@/lib/auth-actions"
+import { getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
 
 export async function submitScopeAction(projectId: string, items: any[], site?: string) {
     const result = await submitScopeOfWork(projectId, items, site)
@@ -61,12 +62,7 @@ export async function saveWBPDraftAction(wbpId: string, items: any[], options?: 
 }
 
 export async function getSuggestedQuoteNumberAction() {
-    const lastInvoice = await prisma.invoice.findFirst({
-        orderBy: { number: 'desc' }
-    })
-    const year = new Date().getFullYear()
-    const nextNumber = (lastInvoice?.number || 0) + 1
-    return `Q-${year}-${nextNumber.toString().padStart(3, '0')}`
+    return await getQuoteSequenceAction()
 }
 
 export async function generateQuotationAction(wbpId: string, items: any[], options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string }) {

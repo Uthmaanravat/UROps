@@ -169,9 +169,11 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             </Link>
                             <Button
                                 variant="ghost"
-                                onClick={() => {
+                                onClick={async () => {
                                     setSubmitted(false)
                                     setItems([{ description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
+                                    const docNumber = await getQuoteSequenceAction();
+                                    if (docNumber) setQuoteNumber(docNumber);
                                 }}
                                 className="text-muted-foreground hover:text-white font-bold"
                             >
@@ -226,7 +228,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             <div className="space-y-2">
                                 <Label>Quote # (Optional)</Label>
                                 <Input
-                                    placeholder="e.g. Q-2024-001"
+                                    placeholder="e.g. Quotation-2024-001"
                                     value={quoteNumber}
                                     onChange={(e) => setQuoteNumber(e.target.value)}
                                 />

@@ -43,7 +43,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
     const latestScope = project.scopes[0]
     const latestWbp = project.workBreakdowns[0]
-    const latestQuote = project.invoices.find((i: any) => i.type === 'QUOTE')
+    // Find the latest document for the project (regardless of type) to ensure navigation works
+    const latestDoc = project.invoices[0]
     const invoice = project.invoices.find((i: any) => i.type === 'INVOICE')
     const paidAmount = invoice?.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
 
@@ -171,14 +172,14 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                 </>
                             )}
                             {project.workflowStage === 'QUOTATION' && (
-                                <Link href={latestQuote ? `/invoices/${latestQuote.id}` : `/projects/${project.id}/sow`}>
+                                <Link href={latestDoc ? `/invoices/${latestDoc.id}` : `/projects/${project.id}/sow`}>
                                     <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-xl shadow-primary/20">
-                                        {latestQuote ? "Analyze Quotation" : "Generate Documentation"}
+                                        {latestDoc ? "Analyze Quotation" : "Generate Documentation"}
                                     </Button>
                                 </Link>
                             )}
-                            {(project.workflowStage === 'INVOICE' || project.workflowStage === 'PAYMENT') && invoice && (
-                                <Link href={`/invoices/${invoice.id}`}>
+                            {(project.workflowStage === 'INVOICE' || project.workflowStage === 'PAYMENT') && latestDoc && (
+                                <Link href={`/invoices/${latestDoc.id}`}>
                                     <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-xl shadow-primary/20">
                                         Manage Financials
                                     </Button>
@@ -221,14 +222,14 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                         <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                                             <td className="p-3">{new Date(inv.date).toLocaleDateString()}</td>
                                             <td className="p-3 font-mono font-bold text-primary">{inv.quoteNumber || `#${inv.number}`}</td>
-                                            <td className="p-3"><span className="font-semibold text-xs uppercase bg-gray-100 px-2 py-1 rounded">{inv.type}</span></td>
+                                            <td className="p-3"><span className="font-bold text-[10px] uppercase bg-primary/20 text-primary border border-primary/20 px-2 py-0.5 rounded-full">{inv.type}</span></td>
                                             <td className="p-3">{inv.status}</td>
                                             <td className="p-3 text-right">{formatCurrency(inv.total)}</td>
                                             <td className="p-3 text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    <Link href={`/invoices/${inv.id}`}>
-                                                        <Button variant="ghost" size="sm">View</Button>
-                                                    </Link>
+                                                    <Button asChild variant="ghost" size="sm" className="hover:bg-primary/10 hover:text-primary transition-all font-bold">
+                                                        <Link href={`/invoices/${inv.id}`}>View</Link>
+                                                    </Button>
                                                     <DeleteButton
                                                         id={inv.id}
                                                         action={deleteInvoiceAction}

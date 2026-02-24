@@ -10,25 +10,34 @@ export async function submitScopeOfWork(projectId: string, items: { description:
     })
 
     // 1. Create DRAFT Invoice Record to reserve the Number immediately
-    // All documents (Quotes, Invoices) share the same sequential ID from the Invoice table
+    // Get company settings to increment the sequence
+    const settings = await prisma.companySettings.update({
+        where: { companyId: project!.companyId },
+        data: { lastQuoteNumber: { increment: 1 } }
+    })
+
+    const year = new Date().getFullYear()
+    const nextNumber = settings.lastQuoteNumber
+    const suggestedQuoteNumber = `Quotation-${year}-${nextNumber.toString().padStart(3, '0')}`
+
     const invoice = await prisma.invoice.create({
         data: {
             companyId: project!.companyId,
             projectId,
-            clientId: project?.clientId || "", // Fallback to empty string if undefined, though schema usually requires it for invoices
+            clientId: project?.clientId || "",
             type: 'QUOTE',
             status: 'DRAFT',
+            number: nextNumber, // Save the sequential number
             subtotal: 0,
             taxAmount: 0,
+            taxRate: 0.15,
             total: 0,
+            quoteNumber: suggestedQuoteNumber,
             items: {
-                create: [] // Empty initially
+                create: []
             }
         }
     })
-
-    const year = new Date().getFullYear()
-    const suggestedQuoteNumber = `Q-${year}-${invoice.number.toString().padStart(3, '0')}`
 
     // 2. Create SOW Record (Frozen snapshot)
     const sow = await prisma.scopeOfWork.create({
@@ -58,7 +67,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
             status: 'DRAFT',
             version: 1,
             site,
-            quoteNumber: suggestedQuoteNumber, // Stores "Q-100" but backed by Invoice #100
+            quoteNumber: suggestedQuoteNumber, // Stores "Quotation-2026-100" but backed by Invoice #100
             items: {
                 create: items.map(i => ({
                     area: i.area,
@@ -193,8 +202,8 @@ export async function generateQuotationFromWBP(
 
     // Method B: Fallback to Number parsing if link missing
     if (!quote && provisionalNumber) {
-        // Try to find by the auto-increment number hidden in the string
-        const numberMatch = provisionalNumber.match(/\d+/)
+        // Try to find by the auto-increment number hidden in the string (handling both Q- and Quotation-)
+        const numberMatch = provisionalNumber.match(/\d+$/)
         if (numberMatch) {
             const invoiceId = parseInt(numberMatch[0])
             quote = await prisma.invoice.findFirst({
@@ -314,7 +323,7 @@ export async function approveQuote(quoteId: string) {
         data: {
             type: 'INVOICE',
             status: 'DRAFT', // Or SENT if preferred immediately
-            quoteNumber: `INV-${quote.number.toString().padStart(4, '0')}`, // Update label to INV-XXX
+            quoteNumber: `INV-${new Date().getFullYear()}-${quote.number.toString().padStart(3, '0')}`, // Update label to INV-YYYY-XXX
         }
     })
 

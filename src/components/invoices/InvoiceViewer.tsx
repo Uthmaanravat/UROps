@@ -1,4 +1,5 @@
 "use client"
+import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
@@ -25,6 +26,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     // Use local state for items to allow instant UI updates for grouping/calculations
     const [items, setItems] = useState<any[]>(invoice.items);
     const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+    const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(invoice.type === 'QUOTE');
 
     // Header edit state
     const [site, setSite] = useState(invoice.site || "");
@@ -195,70 +197,72 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         const currencySymbol = companySettings?.currency || "R";
 
         // 1. Header Bar (Shared)
-        const numberLabel = invoice.quoteNumber && (invoice.quoteNumber.startsWith('Q-') || invoice.quoteNumber.startsWith('INV-'))
+        const numberLabel = invoice.quoteNumber
             ? invoice.quoteNumber
-            : (invoice.type === 'QUOTE' ? `Q-${invoice.quoteNumber || invoice.number}` : `INV-${invoice.number.toString().padStart(3, '0')}`);
+            : (invoice.type === 'QUOTE' ? `Quotation-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
         await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel);
 
-        // 2. Metadata Section (Black text)
-        doc.setTextColor(20, 20, 30); // Dark Navy for contrast
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
+        // 2. Metadata Section (Columns & Dividers)
+        doc.setTextColor(20, 20, 30);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
 
+        // Add a thin separator line below the header
+        doc.setDrawColor(226, 232, 240); // Subtle slate-200
+        doc.line(14, 48, 196, 48);
+
+        // Column 1: Document Details
         let metaY = 55;
-        doc.text(`Date: ${new Date(invoice.date).toLocaleDateString('en-GB')}`, 14, metaY);
-
-        let detailY = metaY + 12;
+        doc.text("DOCUMENT DETAILS", 14, metaY);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(71, 85, 105); // slate-600
+        doc.text(`Date: ${new Date(invoice.date).toLocaleDateString('en-GB')}`, 14, metaY + 5);
         if (invoice.project?.name) {
-            doc.setFont("helvetica", "bold");
-            doc.text(`Project: ${invoice.project.name}`, 14, detailY);
-            doc.setFont("helvetica", "normal");
-            detailY += 5;
+            doc.text(`Project: ${invoice.project.name}`, 14, metaY + 10);
         }
         if (invoice.site) {
-            doc.setFont("helvetica", "bold");
-            doc.text(`Site: ${invoice.site}`, 14, detailY);
-            doc.setFont("helvetica", "normal");
-            detailY += 5;
+            const siteLines = doc.splitTextToSize(`Site: ${invoice.site}`, 60);
+            doc.text(siteLines, 14, metaY + 15);
+            metaY += (siteLines.length - 1) * 5;
         }
-        if (invoice.reference) {
-            doc.setFont("helvetica", "bold");
-            doc.text(`Ref: ${invoice.reference}`, 14, detailY);
-            doc.setFont("helvetica", "normal");
-            detailY += 5;
-        }
-        metaY = detailY - 12; // Adjust for next sections
 
-        // Bill To
-        doc.setFontSize(10);
-        doc.text(`Bill To:`, 14, metaY + 15);
+        // Column 2: Bill To
+        doc.setTextColor(20, 20, 30);
         doc.setFont("helvetica", "bold");
-        const billToName = invoice.client.companyName || invoice.client.name;
-        doc.text(billToName, 14, metaY + 20);
+        doc.text("BILL TO", 85, 55);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        const billToLines = doc.splitTextToSize(invoice.client.address || "", 80);
-        doc.text(billToLines, 14, metaY + 25);
+        doc.setTextColor(71, 85, 105);
+        const billToName = (invoice.client.companyName || invoice.client.name).toUpperCase();
+        doc.setFont("helvetica", "bold");
+        doc.text(billToName, 85, 60);
+        doc.setFont("helvetica", "normal");
+        const billToLines = doc.splitTextToSize(invoice.client.address || "", 55);
+        doc.text(billToLines, 85, 65);
 
-        // Client legal details
-        let legalY = metaY + 27 + (billToLines.length * 4);
+        let clientLegalY = 65 + (billToLines.length * 4);
         doc.setFontSize(8);
         if (invoice.client.vatNumber) {
-            doc.text(`VAT: ${invoice.client.vatNumber}`, 14, legalY);
-            legalY += 4;
+            doc.text(`VAT: ${invoice.client.vatNumber}`, 85, clientLegalY);
+            clientLegalY += 4;
         }
         if (invoice.client.registrationNumber) {
-            doc.text(`Reg: ${invoice.client.registrationNumber}`, 14, legalY);
+            doc.text(`Reg: ${invoice.client.registrationNumber}`, 85, clientLegalY);
         }
 
-        // Company Contact on Right
-        doc.text(company.phone, 196, metaY, { align: 'right' });
-        doc.text(company.email, 196, metaY + 5, { align: 'right' });
+        // Column 3: From (Company Contact)
+        doc.setFontSize(9);
+        doc.setTextColor(20, 20, 30);
+        doc.setFont("helvetica", "bold");
+        doc.text("FROM", 196, 55, { align: 'right' });
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(71, 85, 105);
+        doc.text(company.phone, 196, 60, { align: 'right' });
+        doc.text(company.email, 196, 65, { align: 'right' });
         if (company.vatNumber) {
-            doc.text(`VAT: ${company.vatNumber}`, 196, metaY + 10, { align: 'right' });
+            doc.text(`VAT: ${company.vatNumber}`, 196, 70, { align: 'right' });
         }
-        const compAddr = doc.splitTextToSize(company.address, 70);
-        doc.text(compAddr, 196, company.vatNumber ? metaY + 17 : metaY + 12, { align: 'right' });
+        const compAddr = doc.splitTextToSize(company.address, 55);
+        doc.text(compAddr, 196, company.vatNumber ? 75 : 70, { align: 'right' });
 
         // 3. Table with Area Grouping
         const tableBody: any[] = [];
@@ -269,69 +273,116 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             return acc;
         }, {});
 
-        Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
-            // Add Header Row for Area
-            if (area) {
-                tableBody.push([{ content: `HEADING: ${area}`, colSpan: 5, styles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' } }]);
-            }
+        if (invoice.type === 'INVOICE' && !showDetailedBreakdown) {
+            const referenceText = invoice.quoteNumber && invoice.quoteNumber.startsWith('INV-')
+                ? `As Per Quotation`
+                : `As Per Quotation ${invoice.quoteNumber || invoice.number}`;
 
-            // Add Items for this Area
-            areaItems.forEach((item: any) => {
-                const desc = item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description;
-                tableBody.push([
-                    desc,
-                    item.quantity,
-                    item.unit || '',
-                    formatCurrency(item.unitPrice, currencySymbol),
-                    formatCurrency(item.total, currencySymbol)
-                ]);
+            tableBody.push([
+                referenceText,
+                '1',
+                'EA',
+                formatCurrency(invoice.subtotal, currencySymbol),
+                formatCurrency(invoice.subtotal, currencySymbol)
+            ]);
+        } else {
+            Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
+                if (area) {
+                    tableBody.push([{ content: area.toUpperCase(), colSpan: 5, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 9, halign: 'center' } }]);
+                }
+                areaItems.forEach((item: any) => {
+                    const desc = item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description;
+                    tableBody.push([
+                        desc,
+                        item.quantity,
+                        item.unit || '',
+                        formatCurrency(item.unitPrice, currencySymbol),
+                        formatCurrency(item.total, currencySymbol)
+                    ]);
+                });
             });
-        });
+        }
 
         autoTable(doc, {
-            head: [['Description', 'Qty', 'Unit', 'Price', 'Total']],
+            head: [['DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL']],
             body: tableBody,
-            startY: metaY + 45,
+            startY: 95,
             theme: 'striped',
-            headStyles: { fillColor: [30, 41, 59], textColor: [163, 230, 53], fontStyle: 'bold' },
-            columnStyles: { 0: { cellWidth: 100 } }
+            headStyles: {
+                fillColor: [20, 20, 30],
+                textColor: [163, 230, 53],
+                fontStyle: 'bold',
+                fontSize: 9,
+                halign: 'left'
+            },
+            bodyStyles: {
+                fontSize: 9,
+                textColor: [20, 20, 30],
+                cellPadding: 5
+            },
+            columnStyles: {
+                0: { cellWidth: 95 },
+                1: { halign: 'center' },
+                2: { halign: 'center' },
+                3: { halign: 'right' },
+                4: { halign: 'right', fontStyle: 'bold' }
+            },
+            alternateRowStyles: {
+                fillColor: [252, 254, 255]
+            }
         });
 
-        const finalY = (doc as any).lastAutoTable.finalY + 10;
+        const finalY = (doc as any).lastAutoTable.finalY + 15;
 
-        // 4. Summary
+        // 4. Summary (Right Aligned)
+        doc.setDrawColor(226, 232, 240);
+        doc.line(130, finalY - 5, 196, finalY - 5);
+
         doc.setFontSize(9);
+        doc.setTextColor(71, 85, 105);
+        doc.setFont("helvetica", "normal");
         doc.text(`Subtotal:`, 140, finalY);
         doc.text(formatCurrency(invoice.subtotal, currencySymbol), 196, finalY, { align: 'right' });
 
-        doc.text(`VAT (15%):`, 140, finalY + 5);
-        doc.text(formatCurrency(invoice.taxAmount, currencySymbol), 196, finalY + 5, { align: 'right' });
+        doc.text(`VAT (15%):`, 140, finalY + 7);
+        doc.text(formatCurrency(invoice.taxAmount, currencySymbol), 196, finalY + 7, { align: 'right' });
 
-        doc.setFontSize(11);
+        doc.setFontSize(12);
+        doc.setTextColor(20, 20, 30);
         doc.setFont("helvetica", "bold");
-        doc.text(`Total Due:`, 140, finalY + 12);
-        doc.text(formatCurrency(invoice.total, currencySymbol), 196, finalY + 12, { align: 'right' });
+        doc.text(`TOTAL DUE:`, 140, finalY + 16);
+        doc.text(formatCurrency(invoice.total, currencySymbol), 196, finalY + 16, { align: 'right' });
 
-        // 5. Notes & Banking
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        let currentY = finalY + 25;
+        // 5. Notes & Banking (Professional Footer)
+        let currentY = finalY + 35;
 
         if (note) {
+            doc.setFontSize(9);
             doc.setFont("helvetica", "bold");
-            doc.text("Notes:", 14, currentY);
+            doc.text("TERMS & NOTES", 14, currentY);
+            doc.setDrawColor(163, 230, 53); // Lime separator
+            doc.line(14, currentY + 2, 40, currentY + 2);
+
             doc.setFont("helvetica", "normal");
+            doc.setTextColor(71, 85, 105);
             const noteLines = doc.splitTextToSize(note, 180);
-            doc.text(noteLines, 14, currentY + 5);
-            currentY += (noteLines.length * 5) + 10;
+            doc.text(noteLines, 14, currentY + 8);
+            currentY += (noteLines.length * 5) + 20;
         }
 
+        doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.text("Banking Details:", 14, currentY);
-        doc.setFont("helvetica", "normal");
-        doc.text(company.bankDetails, 14, currentY + 5);
+        doc.setTextColor(20, 20, 30);
+        doc.text("BANKING DETAILS", 14, currentY);
+        doc.setDrawColor(163, 230, 53);
+        doc.line(14, currentY + 2, 40, currentY + 2);
 
-        doc.save(`${invoice.type}_${invoice.number}.pdf`);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(71, 85, 105);
+        const bankLines = doc.splitTextToSize(company.bankDetails, 180);
+        doc.text(bankLines, 14, currentY + 8);
+
+        doc.save(`${numberLabel}.pdf`);
     }
 
     const handleConvert = async () => {
@@ -429,6 +480,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     {invoice.type === 'INVOICE' && !isPaid && (
                         <Button onClick={handlePayment} disabled={loading}>
                             <CreditCard className="mr-2 h-4 w-4" /> Record Payment
+                        </Button>
+                    )}
+                    {invoice.type === 'INVOICE' && (
+                        <Button variant="outline" onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)}>
+                            <FileText className="mr-2 h-4 w-4" /> {showDetailedBreakdown ? "Show Summarized View" : "Show Detailed Breakdown"}
                         </Button>
                     )}
                     <Button variant="destructive" onClick={handleDelete} disabled={loading}>
@@ -591,6 +647,27 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {(() => {
+                                if (invoice.type === 'INVOICE' && !showDetailedBreakdown && !isPricingMode) {
+                                    return (
+                                        <tr className="group hover:bg-white/[0.02] transition-colors">
+                                            <td className="py-12 pr-12">
+                                                <div className="text-2xl font-black text-white tracking-tight uppercase italic">
+                                                    As Per Quotation {invoice.quoteNumber}
+                                                </div>
+                                            </td>
+                                            <td className="py-12 text-center align-top">
+                                                <span className="text-xl font-black text-gray-400">1 <span className="text-[10px] uppercase ml-1 opacity-50">EA</span></span>
+                                            </td>
+                                            <td className="py-12 text-right align-top">
+                                                <span className="text-xl font-bold text-white">{formatCurrency(subtotal, currencySymbol)}</span>
+                                            </td>
+                                            <td className="py-12 text-right font-black text-2xl text-white align-top">
+                                                {formatCurrency(subtotal, currencySymbol)}
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+
                                 const grouped = items.reduce((acc: any, item: any) => {
                                     const area = item.area?.trim() || ""
                                     if (!acc[area]) acc[area] = []
@@ -599,7 +676,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 }, {})
 
                                 return Object.entries(grouped).map(([area, areaItems]: [string, any]) => (
-                                    <>
+                                    <React.Fragment key={`group-${area}`}>
                                         <tr key={`header-${area}`} className="bg-white/5 border-y border-white/5">
                                             <td colSpan={4} className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
@@ -701,8 +778,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 </td>
                                             </tr>
                                         ))}
-                                    </>
-                                ))
+                                    </React.Fragment>
+                                ));
                             })()}
                         </tbody>
                     </table>

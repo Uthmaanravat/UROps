@@ -35,7 +35,16 @@ export default async function InvoicesPage({
                         ]
                     } : {},
                     statusFilter ? { status: statusFilter as 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'INVOICED' | 'PAID' | 'PARTIAL' | 'CANCELLED' } : {},
-                    typeFilter ? { type: typeFilter as 'QUOTE' | 'INVOICE' } : {}
+                    typeFilter === 'QUOTE' ? {
+                        OR: [
+                            { type: 'QUOTE' as const },
+                            {
+                                type: 'INVOICE' as const,
+                                wbpId: { not: null },
+                                status: { notIn: ['PAID', 'CANCELLED'] as const }
+                            }
+                        ]
+                    } : typeFilter ? { type: typeFilter as 'INVOICE' | 'QUOTE' } : {}
                 ]
             },
             orderBy: { date: 'desc' },

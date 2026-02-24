@@ -35,12 +35,26 @@ export async function updateInvoiceProjectAction(invoiceId: string, projectId: s
 export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string }) {
     const companyId = await ensureAuth()
 
+    let nextNumber: number | undefined;
+    if (data.quoteNumber) {
+        const match = data.quoteNumber.match(/(\d+)$/);
+        if (match) {
+            nextNumber = parseInt(match[1]);
+            const isInvoice = data.quoteNumber.startsWith('INV-');
+            await prisma.companySettings.update({
+                where: { companyId },
+                data: isInvoice ? { lastInvoiceNumber: nextNumber } : { lastQuoteNumber: nextNumber }
+            });
+        }
+    }
+
     const invoice = await prisma.invoice.update({
         where: { id: invoiceId, companyId },
         data: {
             site: data.site,
             reference: data.reference,
             quoteNumber: data.quoteNumber,
+            number: nextNumber,
             date: data.date ? new Date(data.date) : undefined
         },
         include: { project: true }
