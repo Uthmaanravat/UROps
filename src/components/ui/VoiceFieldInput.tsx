@@ -21,20 +21,26 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
     const recognitionRef = useRef<any>(null)
     const nativeResultRef = useRef<string>("")
     const isRecordingRef = useRef(false)
+    const isMobileRef = useRef(false)
 
-    // Sync ref with state
-    useEffect(() => {
-        isRecordingRef.current = isRecording
-    }, [isRecording])
-
-    // Initialize Speech Recognition
+    // Detect mobile/iOS on mount
     useEffect(() => {
         if (typeof window !== 'undefined') {
+            const ua = navigator.userAgent
+            isMobileRef.current = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)
+            console.log("Device detection - Is Mobile:", isMobileRef.current);
+        }
+    }, [])
+
+    // Initialize Speech Recognition (Desktop/Non-Mobile only to avoid mic conflicts)
+    useEffect(() => {
+        if (typeof window !== 'undefined' && !isMobileRef.current) {
             // @ts-ignore
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
             if (SpeechRecognition) {
+                console.log("Initializing native SpeechRecognition for desktop");
                 const recognition = new SpeechRecognition()
-                recognition.continuous = true // Changed to true for better long-form capture
+                recognition.continuous = true
                 recognition.interimResults = true
                 recognition.lang = 'en-ZA'
 
@@ -54,7 +60,6 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                         nativeResultRef.current += (nativeResultRef.current ? " " : "") + finalTranscript
                     }
 
-                    // Show real-time feedback in the status
                     if (interimTranscript) {
                         setStatus(interimTranscript.length > 20 ? "..." + interimTranscript.slice(-20) : interimTranscript)
                     } else if (finalTranscript) {
@@ -65,44 +70,47 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                     }
                 }
 
-                recognition.onend = () => {
-                    console.log("Native recognition ended");
-                }
-
-                recognition.onerror = (event: any) => {
-                    console.error("Native Speech Recognition Error:", event.error)
-                    if (event.error === 'network') {
-                        setStatus("Network Error (Native)")
-                    }
-                }
-
+                recognition.onend = () => console.log("Native recognition ended");
+                recognition.onerror = (event: any) => console.error("Native Speech Recognition Error:", event.error);
                 recognitionRef.current = recognition
             }
+        } else if (isMobileRef.current) {
+            console.log("Skipping native recognition - Mobile Mode (Mic conflict avoidance)");
         }
     }, [])
 
     const startRecording = async () => {
-        console.log("startRecording called");
+        console.log("startRecording called. Mobile mode:", isMobileRef.current);
         nativeResultRef.current = ""
-        setStatus("Ready...")
+        setStatus("Starting...")
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
+            // Only start native recognition if it exists (Desktop)
             if (recognitionRef.current) {
                 try {
                     recognitionRef.current.start()
-                    setStatus("Listening...")
+                    console.log("Native recognition started");
                 } catch (e) {
                     console.warn("Recognition start failed", e)
                 }
             }
 
-            const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-                ? "audio/webm;codecs=opus"
-                : MediaRecorder.isTypeSupported("audio/mp4")
-                    ? "audio/mp4"
-                    : "audio/webm"
+            // iOS requires audio/mp4, Android/Chrome/Firefox prefer audio/webm
+            const preferredMime = isMobileRef.current && /iPhone|iPad|iPod/i.test(navigator.userAgent)
+                ? "audio/mp4"
+                : "audio/webm;codecs=opus"
+
+            const mimeType = MediaRecorder.isTypeSupported(preferredMime)
+                ? preferredMime
+                : MediaRecorder.isTypeSupported("audio/webm")
+                    ? "audio/webm"
+                    : MediaRecorder.isTypeSupported("audio/mp4")
+                        ? "audio/mp4"
+                        : ""
+
+            console.log("Using MIME Type for recording:", mimeType);
 
             const mediaRecorder = new MediaRecorder(stream, { mimeType })
             mediaRecorderRef.current = mediaRecorder
@@ -113,61 +121,73 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             }
 
             mediaRecorder.onstop = async () => {
+                console.log("MediaRecorder stopped, processing audio. Size:", chunksRef.current.length);
                 const audioBlob = new Blob(chunksRef.current, { type: mimeType })
                 stream.getTracks().forEach(track => track.stop())
 
-                // Small delay to allow recognition.onresult to finish if it's lagging
-                await new Promise(r => setTimeout(r, 300))
+                // Wait for any pending native results (desktop only)
+                if (recognitionRef.current) {
+                    await new Promise(r => setTimeout(r, 400))
+                }
 
                 if (!nativeResultRef.current || nativeResultRef.current.trim().length === 0) {
-                    console.log("No native result, using AI fallback");
+                    console.log("No native results (expected on mobile), using AI transcription");
                     await processAudioFallback(audioBlob)
                 } else {
-                    console.log("Using native result:", nativeResultRef.current);
+                    console.log("Using native results captured on desktop");
                     onResult(nativeResultRef.current.trim())
                     setIsProcessing(false)
                     setStatus("")
                 }
             }
 
+            // Use a 1s interval for data availability to be safe on mobile
             mediaRecorder.start(1000)
             setIsRecording(true)
             onToggle?.(true)
+            setStatus("Listening...")
         } catch (error) {
             console.error("Microphone access error:", error)
-            alert("Could not access microphone.")
+            alert("Could not access microphone. Please check permissions.")
             setStatus("Mic Error")
         }
     }
 
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            console.log("Stopping recording...");
             mediaRecorderRef.current.stop()
             if (recognitionRef.current) {
                 try { recognitionRef.current.stop() } catch (e) { }
             }
             setIsRecording(false)
             onToggle?.(false)
-            setIsProcessing(true) // Start the "processing" state until onstop finishes
+            setIsProcessing(true)
             setStatus("Finalizing...")
         }
     }, [onToggle])
 
     const processAudioFallback = async (blob: Blob) => {
-        setStatus("Using AI Fallback...")
+        setStatus("Processing AI...")
         try {
+            console.log("Sending to AI, blob size:", (blob.size / 1024).toFixed(2), "KB");
             const formData = new FormData()
+            // Map MIME to extension
             const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
             formData.append("file", blob, `recording.${extension}`)
 
             const result = await transcribeAudio(formData)
             if (result.success && result.text) {
+                console.log("Transcription result:", result.text);
                 onResult(result.text)
             } else {
                 console.error("Transcription failed:", result.error)
+                setStatus("Error: Try Again")
+                setTimeout(() => setStatus(""), 3000)
             }
         } catch (error) {
             console.error("Processing error:", error)
+            setStatus("Server Error")
         } finally {
             setIsProcessing(false)
             setStatus("")
@@ -180,13 +200,13 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 type="button"
                 variant={isRecording ? "destructive" : "outline"}
                 size="icon"
-                className={`${className} ${isRecording ? "animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]" : ""}`}
+                className={`${className} ${isRecording ? "animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)] border-2" : ""}`}
                 onClick={isRecording ? stopRecording : startRecording}
                 disabled={isProcessing}
                 title={isRecording ? "Stop Recording" : "Start Voice Input"}
             >
                 {isProcessing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 ) : isRecording ? (
                     <Square className="h-3 w-3 fill-current" />
                 ) : (
@@ -194,7 +214,7 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 )}
             </Button>
             {status && (
-                <span className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse whitespace-nowrap">
+                <span className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse whitespace-nowrap bg-primary/5 px-2 py-1 rounded">
                     {status}
                 </span>
             )}
