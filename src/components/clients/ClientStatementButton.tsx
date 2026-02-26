@@ -94,16 +94,12 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 }
             })
 
-            // Summary with Border
+            // Summary with Standard Underline
             const finalY = (doc as any).lastAutoTable.finalY + 15
-            const summaryWidth = 70;
-            const summaryHeight = 12;
-            const summaryX = 196 - summaryWidth;
 
-            // Draw border box for total
-            doc.setDrawColor(220, 38, 38); // Match the table header red
-            doc.setLineWidth(0.5);
-            doc.rect(summaryX, finalY - 8, summaryWidth, summaryHeight);
+            doc.setDrawColor(20, 20, 30);
+            doc.setLineWidth(0.2);
+            doc.line(130, finalY - 5, 196, finalY - 5);
 
             doc.setFontSize(12)
             doc.setFont("helvetica", "bold")

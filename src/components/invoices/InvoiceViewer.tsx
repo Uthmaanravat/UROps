@@ -334,30 +334,25 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
         const finalY = (doc as any).lastAutoTable.finalY + 15;
 
-        // 4. Summary with Premium Border
-        const summaryX = 135;
-        const summaryWidth = 61;
-        const summaryHeight = 28;
-
-        // Draw Summary Box
-        doc.setDrawColor(20, 20, 30);
+        // 4. Summary (Standard Style)
+        doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.2);
-        doc.rect(summaryX, finalY - 8, summaryWidth, summaryHeight);
+        doc.line(135, finalY - 5, 196, finalY - 5);
 
         doc.setFontSize(9);
         doc.setTextColor(71, 85, 105);
         doc.setFont("helvetica", "normal");
-        doc.text(`Subtotal:`, summaryX + 5, finalY);
-        doc.text(formatCurrency(invoice.subtotal, currencySymbol), 191, finalY, { align: 'right' });
+        doc.text(`Subtotal:`, 140, finalY);
+        doc.text(formatCurrency(invoice.subtotal, currencySymbol), 196, finalY, { align: 'right' });
 
-        doc.text(`VAT (15%):`, summaryX + 5, finalY + 7);
-        doc.text(formatCurrency(invoice.taxAmount, currencySymbol), 191, finalY + 7, { align: 'right' });
+        doc.text(`VAT (15%):`, 140, finalY + 7);
+        doc.text(formatCurrency(invoice.taxAmount, currencySymbol), 196, finalY + 7, { align: 'right' });
 
         doc.setFontSize(12);
         doc.setTextColor(20, 20, 30);
         doc.setFont("helvetica", "bold");
-        doc.text(`TOTAL DUE:`, summaryX + 5, finalY + 16);
-        doc.text(formatCurrency(invoice.total, currencySymbol), 191, finalY + 16, { align: 'right' });
+        doc.text(`TOTAL DUE:`, 140, finalY + 16);
+        doc.text(formatCurrency(invoice.total, currencySymbol), 196, finalY + 16, { align: 'right' });
 
         // 5. Notes & Banking (Professional Footer)
         let currentY = finalY + 35;
