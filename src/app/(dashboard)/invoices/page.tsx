@@ -99,7 +99,7 @@ export default async function InvoicesPage({
                                     <tr key={invoice.id} className="border-b transition-colors hover:bg-muted/50">
                                         <td className="p-4 align-middle font-black">
                                             <div className="flex flex-col">
-                                                <span>{invoice.quoteNumber || `#${invoice.number}`}</span>
+                                                <span>{invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Quotation-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`)}</span>
                                             </div>
                                         </td>
                                         <td className="p-4 align-middle">{invoice.client?.name}</td>

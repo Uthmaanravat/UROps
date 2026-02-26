@@ -211,7 +211,7 @@ export default async function DashboardPage() {
                             <div className={`text-2xl font-bold ${unpaidCount > 0 ? "text-yellow-500" : ""}`}>{unpaidCount} Unpaid Invoices</div>
                             {(unpaidInvoices || []).map(inv => (
                                 <Link key={inv.id} href={`/invoices/${inv.id}`} className="block text-xs font-bold text-primary hover:underline">
-                                    INV-{String(inv.number || 0).padStart(4, '0')}
+                                    {inv.quoteNumber || `INV-${new Date(inv.date).getFullYear()}-${String(inv.number).padStart(3, '0')}`}
                                 </Link>
                             ))}
                         </CardContent>
@@ -369,7 +369,7 @@ export default async function DashboardPage() {
                                         <Link key={inv.id} href={`/invoices/${inv.id}`} className="block">
                                             <div className="flex items-center justify-between p-2 rounded hover:bg-accent transition-colors text-xs">
                                                 <div>
-                                                    <div className="font-medium">#{inv.number} - {inv.client?.name}</div>
+                                                    <div className="font-medium">{inv.quoteNumber || (inv.type === 'QUOTE' ? `Quotation-${new Date(inv.date).getFullYear()}-${String(inv.number).padStart(3, '0')}` : `INV-${new Date(inv.date).getFullYear()}-${String(inv.number).padStart(3, '0')}`)} - {inv.client?.name}</div>
                                                     <div className="text-muted-foreground">{inv.type} • {inv.status}</div>
                                                 </div>
                                                 <div className="font-bold">{formatCurrency(inv.total || 0)}</div>

@@ -50,7 +50,7 @@ export default async function PaymentsPage() {
                                 <tr key={payment.id} className="border-b transition-colors hover:bg-muted/50">
                                     <td className="p-4 align-middle">{new Date(payment.date).toLocaleDateString()}</td>
                                     <td className="p-4 align-middle">{payment.invoice.client.name}</td>
-                                    <td className="p-4 align-middle">#{payment.invoice.number}</td>
+                                    <td className="p-4 align-middle">{payment.invoice.quoteNumber || `INV-${new Date(payment.invoice.date).getFullYear()}-${String(payment.invoice.number).padStart(3, '0')}`}</td>
                                     <td className="p-4 align-middle">{payment.method || 'Unknown'}</td>
                                     <td className="p-4 align-middle text-right font-medium">{formatCurrency(payment.amount)}</td>
                                 </tr>

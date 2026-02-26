@@ -221,7 +221,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                     {project.invoices.map((inv: any) => (
                                         <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                                             <td className="p-3">{new Date(inv.date).toLocaleDateString()}</td>
-                                            <td className="p-3 font-mono font-bold text-primary">{inv.quoteNumber || `#${inv.number}`}</td>
+                                            <td className="p-3 font-mono font-bold text-primary">{inv.quoteNumber || (inv.type === 'QUOTE' ? `Quotation-${new Date(inv.date).getFullYear()}-${String(inv.number).padStart(3, '0')}` : `INV-${new Date(inv.date).getFullYear()}-${String(inv.number).padStart(3, '0')}`)}</td>
                                             <td className="p-3"><span className="font-bold text-[10px] uppercase bg-primary/20 text-primary border border-primary/20 px-2 py-0.5 rounded-full">{inv.type}</span></td>
                                             <td className="p-3">{inv.status}</td>
                                             <td className="p-3 text-right">{formatCurrency(inv.total)}</td>

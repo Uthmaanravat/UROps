@@ -54,7 +54,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
             id: i.id,
             type: 'INVOICE',
             date: new Date(i.date),
-            title: `${i.type} #${i.number}`,
+            title: `${i.type} ${i.quoteNumber || (i.type === 'QUOTE' ? `Quotation-${new Date(i.date).getFullYear()}-${String(i.number).padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${String(i.number).padStart(3, '0')}`)}`,
             status: i.status,
             amount: i.total
         })),
@@ -75,7 +75,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
                 id: pay.id,
                 type: 'PAYMENT',
                 date: new Date(pay.date),
-                title: `Payment for #${inv.number}`,
+                title: `Payment for ${inv.quoteNumber || `INV-${new Date(inv.date).getFullYear()}-${String(inv.number).padStart(3, '0')}`}`,
                 amount: pay.amount,
                 description: pay.method,
                 read: true, // Auto-read for payments
@@ -153,7 +153,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
                                 {client.invoices.map((invoice: any) => (
                                     <tr key={invoice.id} className="border-b transition-colors hover:bg-muted/50">
                                         <td className="p-4 align-middle">{new Date(invoice.date).toLocaleDateString()}</td>
-                                        <td className="p-4 align-middle">#{invoice.number} <br /><span className="text-xs text-muted-foreground">{invoice.type}</span></td>
+                                        <td className="p-4 align-middle">{invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Quotation-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`)} <br /><span className="text-xs text-muted-foreground">{invoice.type}</span></td>
                                         <td className="p-4 align-middle font-medium">{formatCurrency(invoice.total)}</td>
                                         <td className="p-4 align-middle text-right">
                                             <Link href={`/invoices/${invoice.id}`}>

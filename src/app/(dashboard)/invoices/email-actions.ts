@@ -20,10 +20,11 @@ export async function sendInvoiceEmail(invoiceId: string, recipients?: string[])
             return { success: false, error: "No recipient emails provided" }
         }
 
-        const subject = `${invoice.type} #${invoice.number} from UROps`
+        const formattedNumber = invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Quotation-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
+        const subject = `${invoice.type} ${formattedNumber} from UROps`
         const body = `Hi ${invoice.client.name},
 
-Please find attached your ${invoice.type.toLowerCase()} #${invoice.number}.
+Please find attached your ${invoice.type.toLowerCase()} ${formattedNumber}.
 Total Amount: R${invoice.total.toFixed(2)}
 
 Best regards,

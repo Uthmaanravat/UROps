@@ -32,20 +32,22 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             doc.setTextColor(20, 20, 30); // Reset to dark for content
 
             // Client Info Block
-            const metaY = 50;
+            const clientInfoY = 50;
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
-            doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, metaY);
+            doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 14, clientInfoY);
 
             doc.setFont("helvetica", "bold");
-            doc.text(`Client: ${client.companyName || client.name}`, 14, metaY + 5);
+            doc.text(`Client: ${client.companyName || client.name}`, 14, clientInfoY + 5);
             doc.setFont("helvetica", "normal");
 
-            if (client.vatNumber) doc.text(`VAT No: ${client.vatNumber}`, 14, metaY + 10);
+            if (client.vatNumber) doc.text(`VAT No: ${client.vatNumber}`, 14, clientInfoY + 10);
 
-            // Statement of Outstanding Invoices
+            // Statement of Outstanding Invoices - Moved further down to avoid overlap
+            const headerY = clientInfoY + 25;
             doc.setFontSize(14)
-            doc.text("OUTSTANDING INVOICES", 14, 50)
+            doc.setFont("helvetica", "bold")
+            doc.text("OUTSTANDING INVOICES", 14, headerY)
 
             const rows: any[] = []
             let totalDue = 0
@@ -62,10 +64,12 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
                 if (outstanding > 0.01) {
                     totalDue += outstanding
+                    // Logic to ensure we show the correct formatted number
+                    const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Quotation-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
+
                     rows.push([
-                        new Date(i.date).toLocaleDateString(),
-                        `#${i.number}`,
-                        i.quoteNumber || i.reference || '-',
+                        new Date(i.date).toLocaleDateString('en-GB'),
+                        docNumber,
                         i.site || i.project?.name || '-',
                         formatCurrency(i.total),
                         formatCurrency(outstanding)
@@ -74,24 +78,37 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             })
 
             // Table
-            // Table
             autoTable(doc, {
-                startY: 65,
-                head: [['Date', 'Invoice #', 'Quote/Ref', 'Site / Project', 'Total', 'Outstanding']],
+                startY: headerY + 10,
+                head: [['Date', 'Document #', 'Site / Project', 'Total', 'Outstanding']],
                 body: rows,
                 theme: 'striped',
-                headStyles: { fillColor: [220, 38, 38] }, // Red for outstanding
+                headStyles: {
+                    fillColor: [220, 38, 38], // Red for outstanding
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold'
+                },
                 columnStyles: {
-                    4: { halign: 'right' },
-                    5: { halign: 'right', fontStyle: 'bold' }
+                    3: { halign: 'right' },
+                    4: { halign: 'right', fontStyle: 'bold' }
                 }
             })
 
-            // Summary
-            const finalY = (doc as any).lastAutoTable.finalY + 10
+            // Summary with Border
+            const finalY = (doc as any).lastAutoTable.finalY + 15
+            const summaryWidth = 70;
+            const summaryHeight = 12;
+            const summaryX = 196 - summaryWidth;
+
+            // Draw border box for total
+            doc.setDrawColor(220, 38, 38); // Match the table header red
+            doc.setLineWidth(0.5);
+            doc.rect(summaryX, finalY - 8, summaryWidth, summaryHeight);
+
             doc.setFontSize(12)
             doc.setFont("helvetica", "bold")
-            doc.text(`Total Amount Due: ${formatCurrency(totalDue)}`, 195, finalY, { align: 'right' })
+            doc.setTextColor(20, 20, 30)
+            doc.text(`Total Amount Due: ${formatCurrency(totalDue)}`, 192, finalY, { align: 'right' })
 
 
 
