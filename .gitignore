@@ -19,3 +19,4 @@ yarn-error.log*
 
 # misc
 lint_output.txt
+.vercel

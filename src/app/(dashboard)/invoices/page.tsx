@@ -23,6 +23,8 @@ export default async function InvoicesPage({
     let invoices: any[] = [];
 
     try {
+        const statusExcludedByDefault = !statusFilter;
+
         invoices = await prisma.invoice.findMany({
             where: {
                 companyId,
@@ -34,17 +36,10 @@ export default async function InvoicesPage({
                             { client: { name: { contains: query, mode: 'insensitive' as const } } }
                         ]
                     } : {},
-                    statusFilter ? { status: statusFilter as 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'INVOICED' | 'PAID' | 'PARTIAL' | 'CANCELLED' } : {},
-                    typeFilter === 'QUOTE' ? {
-                        OR: [
-                            { type: 'QUOTE' as const },
-                            {
-                                type: 'INVOICE' as const,
-                                wbpId: { not: null },
-                                status: { notIn: ['PAID', 'CANCELLED'] as const }
-                            }
-                        ]
-                    } : typeFilter ? { type: typeFilter as 'INVOICE' | 'QUOTE' } : {}
+                    statusFilter
+                        ? { status: statusFilter as 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'INVOICED' | 'PAID' | 'PARTIAL' | 'CANCELLED' }
+                        : { status: { notIn: ['PAID', 'CANCELLED'] as const } },
+                    typeFilter ? { type: typeFilter as 'INVOICE' | 'QUOTE' } : {}
                 ]
             },
             orderBy: { date: 'desc' },

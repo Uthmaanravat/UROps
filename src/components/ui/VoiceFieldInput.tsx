@@ -16,12 +16,14 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
     const [isRecording, setIsRecording] = useState(false)
     const [isProcessing, setIsProcessing] = useState(false)
     const [status, setStatus] = useState<string>("")
+    const [error, setError] = useState<string | null>(null)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null)
     const chunksRef = useRef<Blob[]>([])
     const recognitionRef = useRef<any>(null)
     const nativeResultRef = useRef<string>("")
     const isRecordingRef = useRef(false)
     const isMobileRef = useRef(false)
+    const startTimeRef = useRef<number>(0)
 
     // Detect mobile/iOS on mount
     useEffect(() => {
@@ -71,7 +73,10 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 }
 
                 recognition.onend = () => console.log("Native recognition ended");
-                recognition.onerror = (event: any) => console.error("Native Speech Recognition Error:", event.error);
+                recognition.onerror = (event: any) => {
+                    console.error("Native Speech Recognition Error:", event.error);
+                    if (event.error === 'network') setError("Network Error (Native)")
+                }
                 recognitionRef.current = recognition
             }
         } else if (isMobileRef.current) {
@@ -80,12 +85,31 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
     }, [])
 
     const startRecording = async () => {
+        // AGGRESSIVE DEBUGGING - Confirm tap
+        try { window.alert("DEBUG: Tap Registered") } catch (e) { }
+
         console.log("startRecording called. Mobile mode:", isMobileRef.current);
         nativeResultRef.current = ""
+        setError(null)
         setStatus("Starting...")
+        startTimeRef.current = Date.now()
+
+        // Feature detection alerts
+        if (!navigator.mediaDevices) {
+            setError("No mediaDevices support (Check HTTPS)")
+            try { window.alert("ERROR: navigator.mediaDevices is undefined. Are you on HTTPS?") } catch (e) { }
+            return
+        }
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            try { window.alert("DEBUG: Mic stream acquired") } catch (e) { }
+
+            if (typeof MediaRecorder === 'undefined') {
+                setError("MediaRecorder not supported")
+                try { window.alert("ERROR: MediaRecorder is undefined") } catch (e) { }
+                return
+            }
 
             // Only start native recognition if it exists (Desktop)
             if (recognitionRef.current) {
@@ -111,19 +135,39 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                         : ""
 
             console.log("Using MIME Type for recording:", mimeType);
+            try { window.alert(`DEBUG: MIME selected: ${mimeType || "none!"}`) } catch (e) { }
 
             const mediaRecorder = new MediaRecorder(stream, { mimeType })
             mediaRecorderRef.current = mediaRecorder
             chunksRef.current = []
 
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) chunksRef.current.push(e.data)
+                if (e.data.size > 0) {
+                    chunksRef.current.push(e.data)
+                    const totalSizeKB = (chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0) / 1024).toFixed(1)
+                    setStatus(`Listening (${totalSizeKB}KB)...`)
+                }
+            }
+
+            mediaRecorder.onstart = () => {
+                try { window.alert("DEBUG: MediaRecorder.onstart fired") } catch (e) { }
             }
 
             mediaRecorder.onstop = async () => {
-                console.log("MediaRecorder stopped, processing audio. Size:", chunksRef.current.length);
+                const totalSize = chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0)
+                console.log("MediaRecorder stopped, processing audio. Total Size:", totalSize);
+                try { window.alert(`DEBUG: Stopped. Size: ${totalSize} bytes`) } catch (e) { }
+
                 const audioBlob = new Blob(chunksRef.current, { type: mimeType })
                 stream.getTracks().forEach(track => track.stop())
+
+                if (totalSize < 500) {
+                    console.warn("Audio captured is too small, likely silent/empty.");
+                    setError("Empty audio (Too small)")
+                    setIsProcessing(false)
+                    setStatus("")
+                    return
+                }
 
                 // Wait for any pending native results (desktop only)
                 if (recognitionRef.current) {
@@ -145,11 +189,12 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             mediaRecorder.start(1000)
             setIsRecording(true)
             onToggle?.(true)
-            setStatus("Listening...")
-        } catch (error) {
+            setStatus("Listening (0KB)...")
+        } catch (error: any) {
             console.error("Microphone access error:", error)
-            alert("Could not access microphone. Please check permissions.")
+            setError(error.message || "Mic access denied")
             setStatus("Mic Error")
+            try { window.alert(`ERROR: Mic access failed: ${error.message}`) } catch (e) { }
         }
     }
 
@@ -164,6 +209,12 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             onToggle?.(false)
             setIsProcessing(true)
             setStatus("Finalizing...")
+        } else {
+            // Force reset if stuck
+            setIsRecording(false)
+            setIsProcessing(false)
+            onToggle?.(false)
+            setStatus("")
         }
     }, [onToggle])
 
@@ -180,17 +231,18 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             if (result.success && result.text) {
                 console.log("Transcription result:", result.text);
                 onResult(result.text)
+                setStatus("")
             } else {
                 console.error("Transcription failed:", result.error)
-                setStatus("Error: Try Again")
-                setTimeout(() => setStatus(""), 3000)
+                setError(result.error || "Transcription Failed")
+                setStatus("")
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Processing error:", error)
-            setStatus("Server Error")
+            setError(error.message || "Server Error")
+            setStatus("")
         } finally {
             setIsProcessing(false)
-            setStatus("")
         }
     }
 
@@ -198,9 +250,9 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
         <div className="flex items-center gap-2">
             <Button
                 type="button"
-                variant={isRecording ? "destructive" : "outline"}
+                variant={isRecording ? "destructive" : error ? "outline" : "outline"}
                 size="icon"
-                className={`${className} ${isRecording ? "animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)] border-2" : ""}`}
+                className={`${className} ${isRecording ? "animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)] border-2 scale-110" : ""} ${error ? "border-red-500/50" : ""} h-8 w-8 md:h-10 md:w-10 transition-all`}
                 onClick={isRecording ? stopRecording : startRecording}
                 disabled={isProcessing}
                 title={isRecording ? "Stop Recording" : "Start Voice Input"}
@@ -210,12 +262,12 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 ) : isRecording ? (
                     <Square className="h-3 w-3 fill-current" />
                 ) : (
-                    <Mic className="h-4 w-4" />
+                    <Mic className={`h-4 w-4 ${error ? "text-red-500" : ""}`} />
                 )}
             </Button>
-            {status && (
-                <span className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse whitespace-nowrap bg-primary/5 px-2 py-1 rounded">
-                    {status}
+            {(status || error) && (
+                <span className={`text-[9px] font-black uppercase tracking-tight ${error ? "text-red-500 bg-red-500/10" : "text-primary bg-primary/5"} px-2 py-1 rounded max-w-[120px] truncate`}>
+                    {error ? `Err: ${error}` : status}
                 </span>
             )}
         </div>

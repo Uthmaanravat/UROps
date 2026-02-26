@@ -308,26 +308,68 @@ export async function generateQuotationFromWBP(
 }
 
 export async function approveQuote(quoteId: string) {
-    const quote = await prisma.invoice.findUniqueOrThrow({ where: { id: quoteId } })
+    const quote = await prisma.invoice.findUniqueOrThrow({
+        where: { id: quoteId },
+        include: { items: true }
+    })
 
-    // 1. Mark Quote as ACCEPTED (Sent -> Accepted)
-    // Actually user said "Approving quotation... Move project to Invoice stage"
+    // 1. Get the next invoice number based on settings
+    const lastInvoice = await prisma.invoice.findFirst({
+        where: { companyId: quote.companyId, type: 'INVOICE' },
+        orderBy: { number: 'desc' }
+    });
+
+    const settings = await prisma.companySettings.findUnique({ where: { companyId: quote.companyId } });
+    const nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+
+    // 2. Update company settings to reserve the next number
+    await prisma.companySettings.update({
+        where: { companyId: quote.companyId },
+        data: { lastInvoiceNumber: nextInvoiceNumber }
+    });
+
+    const year = new Date().getFullYear();
+    const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+
+    // 3. Create NEW separate Invoice record
+    const invoice = await prisma.invoice.create({
+        data: {
+            companyId: quote.companyId,
+            clientId: quote.clientId,
+            projectId: quote.projectId,
+            wbpId: quote.wbpId,
+            type: 'INVOICE',
+            status: 'DRAFT',
+            number: nextInvoiceNumber,
+            subtotal: quote.subtotal,
+            taxRate: quote.taxRate,
+            taxAmount: quote.taxAmount,
+            total: quote.total,
+            site: quote.site,
+            quoteNumber: formattedInvoiceNumber,
+            reference: quote.reference,
+            date: new Date(),
+            items: {
+                create: quote.items.map(item => ({
+                    description: item.description,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    total: item.total,
+                    unit: item.unit,
+                    area: item.area,
+                    notes: item.notes
+                }))
+            }
+        }
+    })
+
+    // 4. Mark original Quote as ACCEPTED (Sent -> Accepted)
     await prisma.invoice.update({
         where: { id: quoteId },
         data: { status: 'ACCEPTED' }
     })
 
-    // 2. Convert Quote to Invoice (Preserve ID)
-    await prisma.invoice.update({
-        where: { id: quoteId },
-        data: {
-            type: 'INVOICE',
-            status: 'DRAFT', // Or SENT if preferred immediately
-            quoteNumber: `INV-${new Date().getFullYear()}-${quote.number.toString().padStart(3, '0')}`, // Update label to INV-YYYY-XXX
-        }
-    })
-
-    // 3. Update Project Stage
+    // 5. Update Project Stage
     if (quote.projectId) {
         await prisma.project.update({
             where: { id: quote.projectId },
@@ -336,6 +378,7 @@ export async function approveQuote(quoteId: string) {
     }
 
     revalidatePath(`/projects/${quote.projectId}`)
+    return invoice;
 }
 
 export async function checkProjectCompletion(projectId: string) {

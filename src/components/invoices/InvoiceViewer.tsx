@@ -496,42 +496,42 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             {/* Preview Area - Overhauled to Premium Dark Theme */}
             <div className="bg-[#0F172A] text-white p-4 md:p-8 shadow-2xl min-h-[800px] md:min-h-[1000px] font-sans relative border-0 rounded-2xl overflow-hidden ring-1 ring-white/10 w-full max-w-full">
                 {isPaid && invoice.type === 'INVOICE' && (
-                    <div className="absolute top-20 right-10 md:top-48 md:right-48 border-[6px] md:border-[12px] border-primary/20 text-primary/20 font-black text-4xl md:text-9xl p-4 md:p-8 rotate-[-20deg] uppercase pointer-events-none select-none tracking-tighter z-10">
+                    <div className="absolute top-10 right-4 md:top-48 md:right-48 border-[4px] md:border-[12px] border-primary/20 text-primary/20 font-black text-2xl md:text-9xl p-2 md:p-8 rotate-[-20deg] uppercase pointer-events-none select-none tracking-tighter z-10 opacity-50 md:opacity-100">
                         PAID
                     </div>
                 )}
 
                 {/* Modern Navy Header */}
-                <div className="bg-[#1E293B] -mx-4 -mt-4 md:-mx-8 md:-mt-8 p-6 md:p-12 mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-center gap-6 border-b border-white/5">
-                    <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 text-center md:text-left">
+                <div className="bg-[#1E293B] -mx-4 -mt-4 md:-mx-8 md:-mt-8 p-4 md:p-12 mb-6 md:mb-12 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6 border-b border-white/5">
+                    <div className="flex flex-col md:flex-row items-center gap-3 md:gap-8 text-center md:text-left">
                         {company.logoUrl ? (
-                            <img src={company.logoUrl} alt="Logo" className="h-24 w-auto object-contain brightness-110" />
+                            <img src={company.logoUrl} alt="Logo" className="h-16 md:h-24 w-auto object-contain brightness-110" />
                         ) : (
-                            <div className="h-20 w-20 bg-primary flex items-center justify-center font-black text-[#0F172A] text-3xl rounded-xl shadow-2xl rotate-3">LR</div>
+                            <div className="h-16 w-16 md:h-20 md:w-20 bg-primary flex items-center justify-center font-black text-[#0F172A] text-2xl md:text-3xl rounded-lg md:rounded-xl shadow-2xl rotate-3">LR</div>
                         )}
                         <div>
-                            <h1 className="text-4xl font-black tracking-tight text-white">{company.name}</h1>
-                            <div className="flex gap-4 mt-2">
-                                <p className="text-gray-400 text-sm font-medium">{company.phone}</p>
-                                <span className="text-gray-600">•</span>
-                                <p className="text-gray-400 text-sm font-medium">{company.email}</p>
+                            <h1 className="text-xl md:text-4xl font-black tracking-tight text-white">{company.name}</h1>
+                            <div className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-4 mt-2">
+                                <p className="text-gray-400 text-[10px] md:text-sm font-medium">{company.phone}</p>
+                                <span className="text-gray-600 hidden md:inline">•</span>
+                                <p className="text-gray-400 text-[10px] md:text-sm font-medium">{company.email}</p>
                                 {company.vatNumber && (
                                     <>
-                                        <span className="text-gray-600">•</span>
-                                        <p className="text-gray-400 text-sm font-medium uppercase tracking-tighter">VAT: {company.vatNumber}</p>
+                                        <span className="text-gray-600 hidden md:inline">•</span>
+                                        <p className="text-gray-400 text-[10px] md:text-sm font-medium uppercase tracking-tighter">VAT: {company.vatNumber}</p>
                                     </>
                                 )}
                             </div>
                         </div>
                     </div>
-                    <div className="text-center md:text-right">
-                        <h2 className="text-2xl md:text-4xl font-black uppercase tracking-[0.2em] text-primary">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
-                        <div className="flex items-center justify-center md:justify-end gap-2 mt-2">
-                            <span className="text-gray-500 font-mono text-base md:text-lg">#</span>
+                    <div className="text-center md:text-right border-t border-white/5 pt-4 md:pt-0 md:border-t-0 w-full md:w-auto">
+                        <h2 className="text-lg md:text-4xl font-black uppercase tracking-[0.2em] text-primary">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
+                        <div className="flex items-center justify-center md:justify-end gap-1 md:gap-2 mt-1 md:mt-2">
+                            <span className="text-gray-500 font-mono text-xs md:text-lg">#</span>
                             <input
                                 value={quoteNumber}
                                 onChange={(e) => setQuoteNumber(e.target.value)}
-                                className="bg-transparent border-none text-gray-500 font-mono text-base md:text-lg w-32 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary rounded"
+                                className="bg-transparent border-none text-gray-500 font-mono text-xs md:text-lg w-24 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary rounded"
                                 disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
                             />
                         </div>
@@ -542,11 +542,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 mb-12 md:mb-16">
                     <div className="space-y-6">
                         <div>
-                            <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-4 text-center md:text-left">Bill To</h3>
-                            <div className="text-xl md:text-2xl font-black text-white text-center md:text-left">{invoice.client.companyName || invoice.client.name}</div>
-                            {invoice.client.attentionTo && <div className="text-sm md:text-base font-bold text-gray-400 mt-1 italic text-center md:text-left">Attn: {invoice.client.attentionTo}</div>}
+                            <h3 className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3 text-center md:text-left">Bill To</h3>
+                            <div className="text-lg md:text-2xl font-black text-white text-center md:text-left">{invoice.client.companyName || invoice.client.name}</div>
+                            {invoice.client.attentionTo && <div className="text-xs md:text-base font-bold text-gray-400 mt-1 italic text-center md:text-left">Attn: {invoice.client.attentionTo}</div>}
                         </div>
-                        <div className="text-gray-400 leading-relaxed font-medium bg-white/5 p-4 rounded-xl border border-white/5 whitespace-pre-wrap text-sm md:text-base">{invoice.client.address}</div>
+                        <div className="text-gray-400 leading-relaxed font-medium bg-white/5 p-3 md:p-4 rounded-xl border border-white/5 whitespace-pre-wrap text-xs md:text-base">{invoice.client.address}</div>
 
                         <div className="flex gap-6">
                             {invoice.client.vatNumber && (
@@ -592,12 +592,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             </div>
                             {invoice.projectId && (
                                 <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#64748B]">Commercial Status</span>
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#64748B]">Commercial Status</span>
                                     <select
                                         value={commercialStatus}
                                         onChange={(e) => handleCommercialStatusChange(e.target.value)}
                                         className={cn(
-                                            "bg-transparent border-none text-right font-black outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer px-2 py-1 rounded transition-colors",
+                                            "bg-transparent border-none text-right font-black outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer px-2 py-0 md:py-1 rounded transition-colors",
                                             commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 text-red-500 mr-[-8px]" :
                                                 commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 text-primary mr-[-8px]" :
                                                     "text-white"
@@ -786,8 +786,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 </div>
 
                 {/* Footer UI - Modernized with conditional payment terms Logic */}
-                <div className="grid grid-cols-2 gap-20 mt-16 pt-16 border-t border-white/10">
-                    <div className="space-y-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 mt-10 md:mt-16 pt-10 md:pt-16 border-t border-white/10">
+                    <div className="space-y-6 md:space-y-10">
                         <div className="bg-white/5 p-8 rounded-2xl border border-white/5 relative overflow-hidden group">
                             <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
                             <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-6 flex items-center gap-3">

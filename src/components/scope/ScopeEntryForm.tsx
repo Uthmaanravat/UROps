@@ -60,7 +60,7 @@ const ScopeItemRow = ({
         <div className="flex gap-2 items-start p-2 md:p-3 border border-white/5 rounded-lg bg-background/50 group hover:bg-background/80 transition-all duration-200">
             <div className="flex-1 space-y-2">
                 <div className="flex items-center justify-between">
-                    <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">Item {itemIndex + 1}</Label>
+                    <Label className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/50">Item {itemIndex + 1}</Label>
                     <Button
                         type="button"
                         variant="ghost"
@@ -76,9 +76,9 @@ const ScopeItemRow = ({
                         value={item.description}
                         onChange={handleUpdate}
                         placeholder="Describe technical requirement..."
-                        className="min-h-[50px] md:min-h-[60px] bg-background/50 border-white/5 focus:border-primary/50 text-sm font-bold resize-none"
+                        className="min-h-[45px] md:min-h-[60px] bg-background/50 border-white/5 focus:border-primary/50 text-[13px] md:text-sm font-bold resize-none leading-relaxed"
                     />
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2 relative z-50">
                         <VoiceFieldInput
                             onResult={handleVoice}
                             isRecording={isRecording}
@@ -128,7 +128,7 @@ const AreaSection = ({
                             value={area.name}
                             onChange={(e) => onUpdateName(index, e.target.value)}
                             placeholder="e.g. Roof Section, Ground Floor, Exterior"
-                            className="h-9 md:h-10 bg-[#14141E] border-white/10 text-white font-black text-sm md:text-base shadow-inner"
+                            className="h-8 md:h-10 bg-[#14141E] border-white/10 text-white font-black text-xs md:text-base shadow-inner"
                         />
                     </div>
                     <Button
@@ -442,8 +442,8 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                         </Button>
                     </Link>
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-white uppercase italic">Scope Entry</h1>
-                        <p className="text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-[0.2em] md:tracking-[0.3em] -mt-1">Technical Requirement Capture</p>
+                        <h1 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase italic">Scope Entry</h1>
+                        <p className="text-[8px] md:text-[10px] font-bold text-primary uppercase tracking-[0.2em] md:tracking-[0.3em] -mt-1">Technical Requirement Capture</p>
                     </div>
                 </div>
             </div>
@@ -540,10 +540,10 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                 </div>
             </div>
 
-            <div className="pt-8 pb-10 flex gap-3 flex-col">
+            <div className="pt-6 pb-10 flex gap-3 flex-col">
                 <Button
                     type="submit"
-                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black h-14 md:h-16 rounded-xl text-base md:text-lg shadow-2xl shadow-primary/20 transition-all active:scale-95 uppercase tracking-widest italic"
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black h-12 md:h-16 rounded-xl text-sm md:text-lg shadow-2xl shadow-primary/20 transition-all active:scale-95 uppercase tracking-widest italic"
                     disabled={loading || saving}
                 >
                     {loading ? (

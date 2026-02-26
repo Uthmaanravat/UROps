@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { updateProjectStatus } from "../projects/actions"
 import { ensureAuth } from "@/lib/auth-actions"
+import { convertToInvoiceAction } from "./actions"
 
 export async function updateInvoiceItemsAction(invoiceId: string, items: { id: string, unitPrice?: number, description?: string, unit?: string, quantity?: number, area?: string }[]) {
     const companyId = await ensureAuth()
@@ -110,23 +111,12 @@ export async function rejectQuoteAction(quoteId: string) {
 
 export async function approveQuoteAction(quoteId: string) {
     const companyId = await ensureAuth()
-    // Approve Quote -> Convert to Invoice (Draft)
-    await prisma.invoice.update({
-        where: { id: quoteId, companyId },
-        data: {
-            type: 'INVOICE',
-            status: 'DRAFT'
-        }
-    })
-
-    // Update project status if associated
-    const quote = await prisma.invoice.findUnique({ where: { id: quoteId } })
-    if (quote?.projectId) {
-        // Maybe update project status to something indicating invoice creation phase
-        // For now, keep it simple or use generic status
-    }
+    // 1. Convert to Invoice using the centralized logic (creates separate record)
+    const invoiceId = await convertToInvoiceAction(quoteId)
 
     revalidatePath(`/invoices/${quoteId}`)
+    revalidatePath(`/invoices/${invoiceId}`)
+    return invoiceId
 }
 export async function updateInvoiceNoteAction(invoiceId: string, notes: string) {
     const companyId = await ensureAuth()
