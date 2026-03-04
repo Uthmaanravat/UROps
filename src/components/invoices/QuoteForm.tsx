@@ -75,13 +75,12 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         loadCatalog()
     }, [])
 
-    // Sync Project Name with Site - Reference pattern unless manually edited
+    // Sync Project Name with Reference pattern (simplified to avoid redundancy with Site field)
     useEffect(() => {
         if (!isProjectNameManual) {
-            const calculated = [site, reference].filter(Boolean).join(" - ");
-            setProjectName(calculated);
+            setProjectName(reference);
         }
-    }, [site, reference, isProjectNameManual]);
+    }, [reference, isProjectNameManual]);
 
     const filteredCatalog = catalog.filter(item =>
         item.description.toLowerCase().includes(catalogSearch.toLowerCase()) ||

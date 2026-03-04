@@ -213,17 +213,21 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
         // Column 1: Document Details
         let metaY = 55;
-        doc.text("DOCUMENT DETAILS", 14, metaY);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(71, 85, 105); // slate-600
-        doc.text(`Date: ${new Date(invoice.date).toLocaleDateString('en-GB')}`, 14, metaY + 5);
+        // Column 1: Document Details
+        let detailY = 60;
+        doc.text(`Date: ${new Date(invoice.date).toLocaleDateString('en-GB')}`, 14, detailY);
+        detailY += 5;
+
         if (invoice.project?.name) {
-            doc.text(`Project: ${invoice.project.name}`, 14, metaY + 10);
+            const projectLines = doc.splitTextToSize(`Project: ${invoice.project.name}`, 60);
+            doc.text(projectLines, 14, detailY);
+            detailY += (projectLines.length * 5);
         }
+
         if (invoice.site) {
             const siteLines = doc.splitTextToSize(`Site: ${invoice.site}`, 60);
-            doc.text(siteLines, 14, metaY + 15);
-            metaY += (siteLines.length - 1) * 5;
+            doc.text(siteLines, 14, detailY);
+            detailY += (siteLines.length * 5);
         }
 
         // Column 2: Bill To
