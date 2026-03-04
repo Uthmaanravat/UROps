@@ -65,7 +65,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 if (outstanding > 0.01) {
                     totalDue += outstanding
                     // Logic to ensure we show the correct formatted number
-                    const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Quotation-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
+                    const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
 
                     rows.push([
                         new Date(i.date).toLocaleDateString('en-GB'),

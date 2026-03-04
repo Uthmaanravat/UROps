@@ -32,10 +32,14 @@ export async function createInvoiceAction(data: {
         const match = data.quoteNumber.match(/(\d+)$/);
         if (match) {
             const manualSeq = parseInt(match[1]);
-            await prisma.companySettings.update({
-                where: { companyId },
-                data: isInvoice ? { lastInvoiceNumber: manualSeq } : { lastQuoteNumber: manualSeq }
-            });
+            // Only update sequence if the manual entry is HIGHER than current settings
+            const currentLast = isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0);
+            if (manualSeq > currentLast) {
+                await prisma.companySettings.update({
+                    where: { companyId },
+                    data: isInvoice ? { lastInvoiceNumber: manualSeq } : { lastQuoteNumber: manualSeq }
+                });
+            }
             nextNumber = manualSeq;
         } else {
             nextNumber = (isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0)) + 1;
@@ -51,7 +55,7 @@ export async function createInvoiceAction(data: {
         nextNumber = isInvoice ? updatedSettings.lastInvoiceNumber : updatedSettings.lastQuoteNumber;
         formattedQuoteNumber = isInvoice
             ? `INV-${year}-${nextNumber.toString().padStart(3, '0')}`
-            : `Quotation-${year}-${nextNumber.toString().padStart(3, '0')}`;
+            : `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
     }
 
     let effectiveProjectId = data.projectId;
@@ -146,7 +150,7 @@ export async function getQuoteSequenceAction() {
     // Use whichever is higher: the DB counter or the highest actual number found
     const nextNumber = Math.max(settings.lastQuoteNumber || 0, lastQuote?.number || 0) + 1;
     const year = new Date().getFullYear();
-    return `Quotation-${year}-${nextNumber.toString().padStart(3, '0')}`;
+    return `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
 }
 
 export async function getInvoiceSequenceAction() {

@@ -20,7 +20,7 @@ export async function sendInvoiceEmail(invoiceId: string, recipients?: string[])
             return { success: false, error: "No recipient emails provided" }
         }
 
-        const formattedNumber = invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Quotation-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
+        const formattedNumber = invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
         const subject = `${invoice.type} ${formattedNumber} from UROps`
         const body = `Hi ${invoice.client.name},
 

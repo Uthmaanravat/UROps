@@ -18,7 +18,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
 
     const year = new Date().getFullYear()
     const nextNumber = settings.lastQuoteNumber
-    const suggestedQuoteNumber = `Quotation-${year}-${nextNumber.toString().padStart(3, '0')}`
+    const suggestedQuoteNumber = `Q-${year}-${nextNumber.toString().padStart(3, '0')}`
 
     const invoice = await prisma.invoice.create({
         data: {
@@ -67,7 +67,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
             status: 'DRAFT',
             version: 1,
             site,
-            quoteNumber: suggestedQuoteNumber, // Stores "Quotation-2026-100" but backed by Invoice #100
+            quoteNumber: suggestedQuoteNumber, // Stores "Q-2026-100" but backed by Invoice #100
             items: {
                 create: items.map(i => ({
                     area: i.area,
@@ -187,30 +187,33 @@ export async function generateQuotationFromWBP(
     })
 
     // 3. Update Existing Draft Invoice to Official Quote (SENT)
-    // We find the invoice by matching the quoteNumber string or we should probably store wbpId on invoice earlier.
-    // However, since we stored "Q-123" in wbp.quoteNumber, we can extract the ID 123.
-    // A better way is to find the Invoice where quoteNumber matches or just search by logic.
-    // For now, let's find the DRAFT quote for this project/client or parse the number.
-
     // Robustness: Try to find the existing PROVISIONAL invoice created at SOW stage
-    // Method A: Direct link via wbpId (Most robust if Step 3a in submitScopeOfWork succeeded)
     let quote = await prisma.invoice.findFirst({
         where: { wbpId: wbpId }
     })
 
-    const provisionalNumber = wbp.quoteNumber; // e.g. Q-123
+    let finalNumber = quote?.number || 0;
+    const manualQuoteNumber = options?.quoteNumber;
 
-    // Method B: Fallback to Number parsing if link missing
-    if (!quote && provisionalNumber) {
-        // Try to find by the auto-increment number hidden in the string (handling both Q- and Quotation-)
-        const numberMatch = provisionalNumber.match(/\d+$/)
-        if (numberMatch) {
-            const invoiceId = parseInt(numberMatch[0])
-            quote = await prisma.invoice.findFirst({
-                where: { number: invoiceId, companyId: wbp.project.companyId }
-            })
+    if (manualQuoteNumber) {
+        // Parse numeric suffix to sync system sequence if manually entered
+        const match = manualQuoteNumber.match(/(\d+)$/);
+        if (match) {
+            const manualSeq = parseInt(match[1]);
+            finalNumber = manualSeq;
+
+            // Sync CompanySettings if manual number is higher
+            const settings = await prisma.companySettings.findUnique({ where: { companyId: wbp.project.companyId } });
+            if (settings && manualSeq > (settings.lastQuoteNumber || 0)) {
+                await prisma.companySettings.update({
+                    where: { companyId: wbp.project.companyId },
+                    data: { lastQuoteNumber: manualSeq }
+                });
+            }
         }
     }
+
+    const provisionalNumber = wbp.quoteNumber; // e.g. Q-123
 
     if (quote) {
         // Update the existing reservation
@@ -223,6 +226,7 @@ export async function generateQuotationFromWBP(
                 taxRate,
                 taxAmount,
                 total,
+                number: finalNumber || quote.number, // Update numeric ID if manual override provided
                 site: options?.site || wbp.site,
                 quoteNumber: options?.quoteNumber || provisionalNumber, // Keep consistent
                 reference: options?.reference,
@@ -255,6 +259,7 @@ export async function generateQuotationFromWBP(
                 taxRate,
                 taxAmount,
                 total,
+                number: finalNumber,
                 site: options?.site || wbp.site,
                 quoteNumber: options?.quoteNumber,
                 reference: options?.reference,
@@ -271,6 +276,14 @@ export async function generateQuotationFromWBP(
                     }))
                 }
             }
+        })
+    }
+
+    // Sync back to WBP so the projects page (which might list WBP records) stays accurate
+    if (options?.quoteNumber) {
+        await prisma.workBreakdownPricing.update({
+            where: { id: wbpId },
+            data: { quoteNumber: options.quoteNumber }
         })
     }
 

@@ -228,7 +228,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             <div className="space-y-2">
                                 <Label>Quote # (Optional)</Label>
                                 <Input
-                                    placeholder="e.g. Quotation-2024-001"
+                                    placeholder="e.g. Q-2024-001"
                                     value={quoteNumber}
                                     onChange={(e) => setQuoteNumber(e.target.value)}
                                 />

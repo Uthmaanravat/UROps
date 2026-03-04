@@ -199,7 +199,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         // 1. Header Bar (Shared)
         const numberLabel = invoice.quoteNumber
             ? invoice.quoteNumber
-            : (invoice.type === 'QUOTE' ? `Quotation-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
+            : (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
         await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel);
 
         // 2. Metadata Section (Columns & Dividers)
