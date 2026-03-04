@@ -202,14 +202,11 @@ export async function generateQuotationFromWBP(
             const manualSeq = parseInt(match[1]);
             finalNumber = manualSeq;
 
-            // Sync CompanySettings if manual number is higher
-            const settings = await prisma.companySettings.findUnique({ where: { companyId: wbp.project.companyId } });
-            if (settings && manualSeq > (settings.lastQuoteNumber || 0)) {
-                await prisma.companySettings.update({
-                    where: { companyId: wbp.project.companyId },
-                    data: { lastQuoteNumber: manualSeq }
-                });
-            }
+            // Always sync CompanySettings if manual number is provided (allows "resetting" sequence)
+            await prisma.companySettings.update({
+                where: { companyId: wbp.project.companyId },
+                data: { lastQuoteNumber: manualSeq }
+            });
         }
     }
 
@@ -363,15 +360,15 @@ export async function approveQuote(quoteId: string) {
             reference: quote.reference,
             date: new Date(),
             items: {
-                create: quote.items.map(item => ({
-                    description: item.description,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    total: item.total,
-                    unit: item.unit,
-                    area: item.area,
-                    notes: item.notes
-                }))
+                create: [{
+                    area: "GENERAL",
+                    description: `As per quotation ${quote.quoteNumber}`,
+                    quantity: 1,
+                    unit: "UNIT",
+                    unitPrice: quote.subtotal,
+                    total: quote.subtotal,
+                    notes: `Reference Quote: ${quote.quoteNumber}`
+                }]
             }
         }
     })

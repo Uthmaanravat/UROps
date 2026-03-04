@@ -273,35 +273,21 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             return acc;
         }, {});
 
-        if (invoice.type === 'INVOICE' && !showDetailedBreakdown) {
-            const referenceText = invoice.quoteNumber && invoice.quoteNumber.startsWith('INV-')
-                ? `As Per Quotation`
-                : `As Per Quotation ${invoice.quoteNumber || invoice.number}`;
-
-            tableBody.push([
-                referenceText,
-                '1',
-                'EA',
-                formatCurrency(invoice.subtotal, currencySymbol),
-                formatCurrency(invoice.subtotal, currencySymbol)
-            ]);
-        } else {
-            Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
-                if (area) {
-                    tableBody.push([{ content: area.toUpperCase(), colSpan: 5, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 9, halign: 'center' } }]);
-                }
-                areaItems.forEach((item: any) => {
-                    const desc = item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description;
-                    tableBody.push([
-                        desc,
-                        item.quantity,
-                        item.unit || '',
-                        formatCurrency(item.unitPrice, currencySymbol),
-                        formatCurrency(item.total, currencySymbol)
-                    ]);
-                });
+        Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
+            if (area) {
+                tableBody.push([{ content: area.toUpperCase(), colSpan: 5, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 9, halign: 'center' } }]);
+            }
+            areaItems.forEach((item: any) => {
+                const desc = item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description;
+                tableBody.push([
+                    desc,
+                    item.quantity,
+                    item.unit || '',
+                    formatCurrency(item.unitPrice, currencySymbol),
+                    formatCurrency(item.total, currencySymbol)
+                ]);
             });
-        }
+        });
 
         autoTable(doc, {
             head: [['DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL']],
@@ -648,27 +634,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {(() => {
-                                if (invoice.type === 'INVOICE' && !showDetailedBreakdown && !isPricingMode) {
-                                    return (
-                                        <tr className="group hover:bg-white/[0.02] transition-colors">
-                                            <td className="py-12 pr-12">
-                                                <div className="text-2xl font-black text-white tracking-tight uppercase italic">
-                                                    As Per Quotation {invoice.quoteNumber}
-                                                </div>
-                                            </td>
-                                            <td className="py-12 text-center align-top">
-                                                <span className="text-xl font-black text-gray-400">1 <span className="text-[10px] uppercase ml-1 opacity-50">EA</span></span>
-                                            </td>
-                                            <td className="py-12 text-right align-top">
-                                                <span className="text-xl font-bold text-white">{formatCurrency(subtotal, currencySymbol)}</span>
-                                            </td>
-                                            <td className="py-12 text-right font-black text-2xl text-white align-top">
-                                                {formatCurrency(subtotal, currencySymbol)}
-                                            </td>
-                                        </tr>
-                                    );
-                                }
-
                                 const grouped = items.reduce((acc: any, item: any) => {
                                     const area = item.area?.trim() || ""
                                     if (!acc[area]) acc[area] = []

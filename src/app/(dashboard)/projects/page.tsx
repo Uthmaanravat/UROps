@@ -37,7 +37,8 @@ export default async function ProjectsPage() {
                         site: true,
                         reference: true,
                         quoteNumber: true
-                    }
+                    },
+                    orderBy: { createdAt: 'desc' }
                 }
             },
             take: 50
@@ -65,9 +66,11 @@ export default async function ProjectsPage() {
                 {projects.map((project: any) => {
                     const latestWbp = project.workBreakdowns[0]
                     const latestScope = project.scopes[0]
-                    const totalWorth = latestWbp
-                        ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15
-                        : (project.invoices.find((i: any) => i.type === 'QUOTE' || i.type === 'INVOICE')?.total || 0)
+                    const latestInvoice = project.invoices[0]
+
+                    const totalWorth = latestInvoice
+                        ? latestInvoice.total
+                        : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0)
 
                     return (
                         <div key={project.id} className="bg-card border border-white/5 rounded-2xl p-5 space-y-4 shadow-xl">
@@ -153,6 +156,7 @@ export default async function ProjectsPage() {
                             {projects.map((project: any) => {
                                 const latestWbp = project.workBreakdowns[0]
                                 const latestScope = project.scopes[0]
+                                const latestInvoice = project.invoices[0]
 
                                 const activeItems = latestWbp?.items || latestScope?.items || []
 
@@ -161,9 +165,9 @@ export default async function ProjectsPage() {
                                     ? `Project involves ${activeItems[0].description.toLowerCase()}${activeItems.length > 1 ? ` and other specialized works` : ''}. Focused on ${project.client.name}'s requirements at ${project.invoices[0]?.site || 'the designated site'}.`
                                     : "Scope pending definition."
 
-                                const totalWorth = latestWbp
-                                    ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15
-                                    : (project.invoices.find((i: any) => i.type === 'QUOTE' || i.type === 'INVOICE')?.total || 0)
+                                const totalWorth = latestInvoice
+                                    ? latestInvoice.total
+                                    : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0)
 
                                 return (
                                     <tr key={project.id} className="border-b border-white/5 transition-colors hover:bg-white/5">

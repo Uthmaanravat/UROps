@@ -15,11 +15,11 @@ export async function createInvoiceAction(data: {
     site?: string
     quoteNumber?: string
     reference?: string
+    projectName?: string // New field
     type?: 'QUOTE' | 'INVOICE'
     paymentNotes?: string
 }) {
     const companyId = await ensureAuth()
-
     const year = new Date().getFullYear();
     let nextNumber: number;
     let formattedQuoteNumber = data.quoteNumber;
@@ -28,20 +28,18 @@ export async function createInvoiceAction(data: {
     if (!settings) throw new Error("Company settings not found");
 
     if (data.quoteNumber) {
-        // Parse manual number to sync sequence
-        const match = data.quoteNumber.match(/(\d+)$/);
+        const manualNumber = data.quoteNumber;
+        const match = manualNumber.match(/(\d+)$/);
         if (match) {
             const manualSeq = parseInt(match[1]);
-            // Only update sequence if the manual entry is HIGHER than current settings
-            const currentLast = isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0);
-            if (manualSeq > currentLast) {
-                await prisma.companySettings.update({
-                    where: { companyId },
-                    data: isInvoice ? { lastInvoiceNumber: manualSeq } : { lastQuoteNumber: manualSeq }
-                });
-            }
+            // Always sync CompanySettings if manual number is provided (allows "resetting" sequence)
+            await prisma.companySettings.update({
+                where: { companyId },
+                data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
+            });
             nextNumber = manualSeq;
         } else {
+            // If manual number provided but no sequence found, use current settings + 1
             nextNumber = (isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0)) + 1;
         }
     } else {
@@ -60,12 +58,15 @@ export async function createInvoiceAction(data: {
 
     let effectiveProjectId = data.projectId;
 
-    // Always create a project for new quotes if not already linked (which it won't be from the new UI)
+    // Always create a project for new quotes if not already linked
     if (!effectiveProjectId) {
+        // Build default name: [Site] - [Reference] (No redundant dates)
+        const defaultName = [data.site, data.reference].filter(Boolean).join(" - ") || "New Project";
+
         const project = await prisma.project.create({
             data: {
                 companyId,
-                name: data.reference || `${data.site || "New Quotation Project"} - ${new Date(data.date).toLocaleDateString()}`,
+                name: data.projectName || defaultName,
                 clientId: data.clientId,
                 status: 'SOW',
                 workflowStage: 'SOW',
@@ -221,15 +222,15 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             clientPoNumber: clientPoNumber || null,
             date: new Date(), // Current date for the invoice
             items: {
-                create: quote.items.map(item => ({
-                    description: item.description,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    total: item.total,
-                    unit: item.unit,
-                    area: item.area,
-                    notes: item.notes
-                }))
+                create: [{
+                    area: "GENERAL",
+                    description: `As per quotation ${quote.quoteNumber}`,
+                    quantity: 1,
+                    unit: "UNIT",
+                    unitPrice: quote.subtotal,
+                    total: quote.subtotal,
+                    notes: `Reference Quote: ${quote.quoteNumber}`
+                }]
             }
         }
     })

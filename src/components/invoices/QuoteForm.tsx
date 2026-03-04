@@ -45,6 +45,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [site, setSite] = useState("")
     const [quoteNumber, setQuoteNumber] = useState("")
     const [reference, setReference] = useState("")
+    const [projectName, setProjectName] = useState("")
+    const [isProjectNameManual, setIsProjectNameManual] = useState(false)
     const [paymentNotes, setPaymentNotes] = useState("50% deposit required before project commences.")
     const [showPaymentNotes, setShowPaymentNotes] = useState(true)
 
@@ -72,6 +74,14 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         }
         loadCatalog()
     }, [])
+
+    // Sync Project Name with Site - Reference pattern unless manually edited
+    useEffect(() => {
+        if (!isProjectNameManual) {
+            const calculated = [site, reference].filter(Boolean).join(" - ");
+            setProjectName(calculated);
+        }
+    }, [site, reference, isProjectNameManual]);
 
     const filteredCatalog = catalog.filter(item =>
         item.description.toLowerCase().includes(catalogSearch.toLowerCase()) ||
@@ -131,6 +141,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 site,
                 quoteNumber,
                 reference,
+                projectName,
                 paymentNotes: showPaymentNotes ? paymentNotes : undefined
             })
             setLastInvoiceId(invoiceId)
@@ -221,6 +232,23 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 placeholder="e.g. 123 MAIN ST"
                                 value={site}
                                 onChange={(e) => setSite(e.target.value)}
+                                className="bg-transparent border-white/10 font-bold"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="flex justify-between">
+                                Project Name
+                                <span className="text-[10px] text-primary/50 font-normal italic">
+                                    {isProjectNameManual ? "(Manual)" : "(Auto-syncing)"}
+                                </span>
+                            </Label>
+                            <Input
+                                placeholder="e.g. SITE - REFERENCE"
+                                value={projectName}
+                                onChange={(e) => {
+                                    setProjectName(e.target.value);
+                                    setIsProjectNameManual(true);
+                                }}
                                 className="bg-transparent border-white/10 font-bold"
                             />
                         </div>
