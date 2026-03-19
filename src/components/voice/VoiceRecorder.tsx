@@ -24,9 +24,12 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
                 ? "audio/webm;codecs=opus"
                 : MediaRecorder.isTypeSupported("audio/mp4")
                     ? "audio/mp4"
-                    : "audio/webm"
+                    : MediaRecorder.isTypeSupported("audio/webm")
+                        ? "audio/webm"
+                        : ""
 
-            const mediaRecorder = new MediaRecorder(stream, { mimeType })
+            const options = mimeType ? { mimeType } : undefined
+            const mediaRecorder = new MediaRecorder(stream, options)
             mediaRecorderRef.current = mediaRecorder
             chunksRef.current = []
 
@@ -37,12 +40,13 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
             }
 
             mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(chunksRef.current, { type: mimeType })
+                const finalMimeType = mediaRecorder.mimeType || mimeType || "audio/mp4"
+                const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
                 await processAudio(audioBlob)
             }
 
-            // Start with a timeslice to ensure data is captured even if interrupted
-            mediaRecorder.start(1000)
+            // Start without timeslice to prevent chunk corruption on iOS Safari
+            mediaRecorder.start()
             setIsRecording(true)
         } catch (error) {
             console.error("Error accessing microphone:", error)
@@ -62,7 +66,7 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
         setIsProcessing(true)
         try {
             const formData = new FormData()
-            const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
+            const extension = blob.type.includes('mp4') || blob.type.includes('m4a') ? 'm4a' : 'webm'
             formData.append("file", blob, `recording.${extension}`)
 
             const transcriptionResult = await transcribeAudio(formData)

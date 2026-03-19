@@ -137,15 +137,14 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             console.log("Using MIME Type for recording:", mimeType);
             try { window.alert(`DEBUG: MIME selected: ${mimeType || "none!"}`) } catch (e) { }
 
-            const mediaRecorder = new MediaRecorder(stream, { mimeType })
+            const options = mimeType ? { mimeType } : undefined
+            const mediaRecorder = new MediaRecorder(stream, options)
             mediaRecorderRef.current = mediaRecorder
             chunksRef.current = []
 
             mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) {
                     chunksRef.current.push(e.data)
-                    const totalSizeKB = (chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0) / 1024).toFixed(1)
-                    setStatus(`Listening (${totalSizeKB}KB)...`)
                 }
             }
 
@@ -158,7 +157,8 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 console.log("MediaRecorder stopped, processing audio. Total Size:", totalSize);
                 try { window.alert(`DEBUG: Stopped. Size: ${totalSize} bytes`) } catch (e) { }
 
-                const audioBlob = new Blob(chunksRef.current, { type: mimeType })
+                const finalMimeType = mediaRecorder.mimeType || mimeType || (isMobileRef.current ? "audio/mp4" : "audio/webm")
+                const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
                 stream.getTracks().forEach(track => track.stop())
 
                 if (totalSize < 500) {
@@ -185,11 +185,11 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 }
             }
 
-            // Use a 1s interval for data availability to be safe on mobile
-            mediaRecorder.start(1000)
+            // Start without timeslice to prevent chunk corruption on iOS Safari
+            mediaRecorder.start()
             setIsRecording(true)
             onToggle?.(true)
-            setStatus("Listening (0KB)...")
+            setStatus("Listening...")
         } catch (error: any) {
             console.error("Microphone access error:", error)
             setError(error.message || "Mic access denied")
@@ -224,7 +224,7 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             console.log("Sending to AI, blob size:", (blob.size / 1024).toFixed(2), "KB");
             const formData = new FormData()
             // Map MIME to extension
-            const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
+            const extension = blob.type.includes('mp4') || blob.type.includes('m4a') ? 'm4a' : 'webm'
             formData.append("file", blob, `recording.${extension}`)
 
             const result = await transcribeAudio(formData)
