@@ -19,17 +19,29 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
-            // Mobile compatibility: check supported types
-            const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-                ? "audio/webm;codecs=opus"
-                : MediaRecorder.isTypeSupported("audio/mp4")
-                    ? "audio/mp4"
-                    : MediaRecorder.isTypeSupported("audio/webm")
-                        ? "audio/webm"
-                        : ""
+            let mediaRecorder: MediaRecorder | null = null;
+            try {
+                const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+                const preferredMime = isIOS ? "audio/mp4" : "audio/webm;codecs=opus";
+                mediaRecorder = new MediaRecorder(stream, { mimeType: preferredMime });
+            } catch (e) {
+                try {
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+                } catch (e2) {
+                    try {
+                        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/mp4" });
+                    } catch (e3) {
+                        try {
+                            mediaRecorder = new MediaRecorder(stream);
+                        } catch (e4) {
+                            alert("MediaRecorder initialization failed.");
+                            stream.getTracks().forEach(track => track.stop());
+                            return;
+                        }
+                    }
+                }
+            }
 
-            const options = mimeType ? { mimeType } : undefined
-            const mediaRecorder = new MediaRecorder(stream, options)
             mediaRecorderRef.current = mediaRecorder
             chunksRef.current = []
 
@@ -40,7 +52,8 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
             }
 
             mediaRecorder.onstop = async () => {
-                const finalMimeType = mediaRecorder.mimeType || mimeType || "audio/mp4"
+                const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+                const finalMimeType = mediaRecorder!.mimeType || (isIOS ? "audio/mp4" : "audio/webm")
                 const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
                 await processAudio(audioBlob)
             }
@@ -66,7 +79,8 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
         setIsProcessing(true)
         try {
             const formData = new FormData()
-            const extension = blob.type.includes('mp4') || blob.type.includes('m4a') ? 'm4a' : 'webm'
+            const isMp4 = blob.type.includes('mp4') || blob.type.includes('m4a') || /iPhone|iPad|iPod/i.test(navigator.userAgent);
+            const extension = isMp4 ? 'm4a' : 'webm'
             formData.append("file", blob, `recording.${extension}`)
 
             const transcriptionResult = await transcribeAudio(formData)

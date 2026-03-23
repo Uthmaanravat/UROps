@@ -258,15 +258,28 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.setTextColor(20, 20, 30);
         doc.setFont("helvetica", "bold");
         doc.text("FROM", 196, 55, { align: 'right' });
+
+        let fromY = 60;
+        doc.setTextColor(20, 20, 30);
+        doc.setFont("helvetica", "bold");
+        doc.text(company.name, 196, fromY, { align: 'right' });
+        fromY += 5;
+
         doc.setFont("helvetica", "normal");
         doc.setTextColor(71, 85, 105);
-        doc.text(company.phone, 196, 60, { align: 'right' });
-        doc.text(company.email, 196, 65, { align: 'right' });
+
         if (company.vatNumber) {
-            doc.text(`VAT: ${company.vatNumber}`, 196, 70, { align: 'right' });
+            doc.text(`VAT: ${company.vatNumber}`, 196, fromY, { align: 'right' });
+            fromY += 5;
         }
+
         const compAddr = doc.splitTextToSize(company.address, 55);
-        doc.text(compAddr, 196, company.vatNumber ? 75 : 70, { align: 'right' });
+        doc.text(compAddr, 196, fromY, { align: 'right' });
+        fromY += (compAddr.length * 4);
+
+        doc.text(company.phone, 196, fromY, { align: 'right' });
+        fromY += 5;
+        doc.text(company.email, 196, fromY, { align: 'right' });
 
         // 3. Table with Area Grouping
         const tableBody: any[] = [];

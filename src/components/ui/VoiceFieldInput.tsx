@@ -85,9 +85,6 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
     }, [])
 
     const startRecording = async () => {
-        // AGGRESSIVE DEBUGGING - Confirm tap
-        try { window.alert("DEBUG: Tap Registered") } catch (e) { }
-
         console.log("startRecording called. Mobile mode:", isMobileRef.current);
         nativeResultRef.current = ""
         setError(null)
@@ -95,19 +92,16 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
         startTimeRef.current = Date.now()
 
         // Feature detection alerts
-        if (!navigator.mediaDevices) {
-            setError("No mediaDevices support (Check HTTPS)")
-            try { window.alert("ERROR: navigator.mediaDevices is undefined. Are you on HTTPS?") } catch (e) { }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setError("Mic access unavailable (Check HTTPS/Browser)")
             return
         }
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-            try { window.alert("DEBUG: Mic stream acquired") } catch (e) { }
 
             if (typeof MediaRecorder === 'undefined') {
                 setError("MediaRecorder not supported")
-                try { window.alert("ERROR: MediaRecorder is undefined") } catch (e) { }
                 return
             }
 
@@ -121,24 +115,31 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 }
             }
 
-            // iOS requires audio/mp4, Android/Chrome/Firefox prefer audio/webm
-            const preferredMime = isMobileRef.current && /iPhone|iPad|iPod/i.test(navigator.userAgent)
-                ? "audio/mp4"
-                : "audio/webm;codecs=opus"
+            let mediaRecorder: MediaRecorder | null = null;
+            try {
+                const isIOS = isMobileRef.current && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+                const preferredMime = isIOS ? "audio/mp4" : "audio/webm;codecs=opus";
+                mediaRecorder = new MediaRecorder(stream, { mimeType: preferredMime });
+            } catch (e) {
+                try {
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+                } catch (e2) {
+                    try {
+                        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/mp4" });
+                    } catch (e3) {
+                        try {
+                            mediaRecorder = new MediaRecorder(stream);
+                        } catch (e4) {
+                            setError("MediaRecorder init failed");
+                            stream.getTracks().forEach(track => track.stop());
+                            return;
+                        }
+                    }
+                }
+            }
 
-            const mimeType = MediaRecorder.isTypeSupported(preferredMime)
-                ? preferredMime
-                : MediaRecorder.isTypeSupported("audio/webm")
-                    ? "audio/webm"
-                    : MediaRecorder.isTypeSupported("audio/mp4")
-                        ? "audio/mp4"
-                        : ""
+            console.log("Using MIME Type for recording:", mediaRecorder.mimeType);
 
-            console.log("Using MIME Type for recording:", mimeType);
-            try { window.alert(`DEBUG: MIME selected: ${mimeType || "none!"}`) } catch (e) { }
-
-            const options = mimeType ? { mimeType } : undefined
-            const mediaRecorder = new MediaRecorder(stream, options)
             mediaRecorderRef.current = mediaRecorder
             chunksRef.current = []
 
@@ -148,16 +149,11 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 }
             }
 
-            mediaRecorder.onstart = () => {
-                try { window.alert("DEBUG: MediaRecorder.onstart fired") } catch (e) { }
-            }
-
             mediaRecorder.onstop = async () => {
                 const totalSize = chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0)
                 console.log("MediaRecorder stopped, processing audio. Total Size:", totalSize);
-                try { window.alert(`DEBUG: Stopped. Size: ${totalSize} bytes`) } catch (e) { }
 
-                const finalMimeType = mediaRecorder.mimeType || mimeType || (isMobileRef.current ? "audio/mp4" : "audio/webm")
+                const finalMimeType = mediaRecorder!.mimeType || (isMobileRef.current && /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "audio/mp4" : "audio/webm")
                 const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
                 stream.getTracks().forEach(track => track.stop())
 
@@ -194,7 +190,6 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             console.error("Microphone access error:", error)
             setError(error.message || "Mic access denied")
             setStatus("Mic Error")
-            try { window.alert(`ERROR: Mic access failed: ${error.message}`) } catch (e) { }
         }
     }
 
@@ -224,7 +219,8 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             console.log("Sending to AI, blob size:", (blob.size / 1024).toFixed(2), "KB");
             const formData = new FormData()
             // Map MIME to extension
-            const extension = blob.type.includes('mp4') || blob.type.includes('m4a') ? 'm4a' : 'webm'
+            const isMp4 = blob.type.includes('mp4') || blob.type.includes('m4a') || (isMobileRef.current && /iPhone|iPad|iPod/i.test(navigator.userAgent));
+            const extension = isMp4 ? 'm4a' : 'webm'
             formData.append("file", blob, `recording.${extension}`)
 
             const result = await transcribeAudio(formData)
