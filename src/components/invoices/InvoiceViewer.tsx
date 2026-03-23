@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -68,8 +68,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
     }, [invoice.id, invoice.type, invoice.quoteNumber]);
 
-    // Allow editing if it's a DRAFT or if it's a SENT quotation (as per user request) or an INVOICED document
-    const isPricingMode = (invoice.status === 'DRAFT') || (invoice.type === 'QUOTE' && invoice.status === 'SENT') || (invoice.status === 'INVOICED');
+    // Allow editing unless it's fully paid
+    const isPricingMode = invoice.status !== 'PAID';
 
     const handleItemUpdate = (id: string, field: string, value: any) => {
         setItems(prev => prev.map(item => {
@@ -481,6 +481,21 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
                         </Button>
                     )}
+                    <Button
+                        variant="outline"
+                        onClick={async () => {
+                            if (!window.confirm(`Are you sure you want to ${invoice.status === 'PAID' ? 'unlock' : 'mark as paid and lock'} this document?`)) return;
+                            setLoading(true);
+                            const { updateInvoiceStatus } = await import("@/app/(dashboard)/invoices/actions");
+                            await updateInvoiceStatus(invoice.id, invoice.status === 'PAID' ? 'DRAFT' : 'PAID');
+                            setLoading(false);
+                            router.refresh();
+                        }}
+                        disabled={loading}
+                        className={invoice.status === 'PAID' ? "text-red-500 border-red-500 hover:text-red-600 hover:bg-red-500/10" : "text-green-500 border-green-500 hover:text-green-600 hover:bg-green-500/10"}
+                    >
+                        {invoice.status === 'PAID' ? <><Unlock className="mr-2 h-4 w-4" /> Unlock Document</> : <><Lock className="mr-2 h-4 w-4" /> Mark as Paid (Lock)</>}
+                    </Button>
                     {invoice.type === 'INVOICE' && !isPaid && (
                         <Button onClick={handlePayment} disabled={loading}>
                             <CreditCard className="mr-2 h-4 w-4" /> Record Payment
@@ -536,7 +551,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 value={quoteNumber}
                                 onChange={(e) => setQuoteNumber(e.target.value)}
                                 className="bg-transparent border-none text-gray-500 font-mono text-xs md:text-lg w-24 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary rounded"
-                                disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                disabled={invoice.status === 'PAID'}
                             />
                         </div>
                     </div>
@@ -577,7 +592,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base"
-                                    disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                    disabled={invoice.status === 'PAID'}
                                 />
                             </div>
                             <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
@@ -586,7 +601,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     value={projectId}
                                     onChange={(e) => setProjectId(e.target.value)}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[150px] md:max-w-[200px] text-sm md:text-base cursor-pointer"
-                                    disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                    disabled={invoice.status === 'PAID'}
                                 >
                                     <option value="" className="bg-[#1E293B]">None / Link to Project</option>
                                     {availableProjects.map((p: any) => (
@@ -606,7 +621,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 text-primary mr-[-8px]" :
                                                     "text-white"
                                         )}
-                                        disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                        disabled={invoice.status === 'PAID'}
                                     >
                                         <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
                                         <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
@@ -621,7 +636,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     onChange={(e) => setSite(e.target.value)}
                                     placeholder="Site Location"
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base w-full max-w-[200px]"
-                                    disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                    disabled={invoice.status === 'PAID'}
                                 />
                             </div>
                             <div className="flex justify-between items-center text-sm pb-1">
@@ -631,7 +646,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     onChange={(e) => setReference(e.target.value)}
                                     placeholder="Customer Ref"
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base w-full max-w-[200px]"
-                                    disabled={invoice.type === 'INVOICE' && invoice.status === 'PAID'}
+                                    disabled={invoice.status === 'PAID'}
                                 />
                             </div>
                         </div>
