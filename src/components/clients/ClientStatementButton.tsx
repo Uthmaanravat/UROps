@@ -54,11 +54,13 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             const rows: any[] = []
             let totalDue = 0
 
-            const unpaidInvoices = client.invoices.filter((i: any) =>
-                i.type === 'INVOICE' &&
-                i.status !== 'PAID' &&
-                i.status !== 'CANCELLED'
-            )
+            const unpaidInvoices = client.invoices
+                .filter((i: any) =>
+                    i.type === 'INVOICE' &&
+                    i.status !== 'PAID' &&
+                    i.status !== 'CANCELLED'
+                )
+                .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
             unpaidInvoices.forEach((i: any) => {
                 const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
@@ -86,8 +88,8 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 body: rows,
                 theme: 'striped',
                 headStyles: {
-                    fillColor: [220, 38, 38], // Red for outstanding
-                    textColor: [255, 255, 255],
+                    fillColor: [20, 20, 30], // Professional Navy
+                    textColor: [163, 230, 53], // Lime pop
                     fontStyle: 'bold'
                 },
                 bodyStyles: {
@@ -200,7 +202,8 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             tableHead.font = { bold: true, color: { argb: 'FFFFFFFF' } };
             tableHead.height = 20;
             tableHead.eachCell((cell, colNumber) => {
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; // Statement Red
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } }; // Professional Navy
+                cell.font = { bold: true, color: { argb: 'FFA3E635' } }; // Lime pop
                 cell.alignment = { 
                     vertical: 'middle', 
                     horizontal: colNumber <= 3 ? 'left' : 'right' 
@@ -259,7 +262,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             summaryRow.getCell(4).font = { bold: true };
             summaryRow.getCell(4).alignment = { horizontal: 'right' };
             summaryRow.getCell(5).value = totalDue;
-            summaryRow.getCell(5).font = { bold: true, size: 12, color: { argb: 'FFDC2626' } };
+            summaryRow.getCell(5).font = { bold: true, size: 12, color: { argb: 'FF14141E' } };
             summaryRow.getCell(5).numFmt = '"R"#,##0.00';
             summaryRow.getCell(5).alignment = { horizontal: 'right' };
             summaryRow.getCell(5).border = { top: { style: 'thin', color: { argb: 'FF14141E' } } };
