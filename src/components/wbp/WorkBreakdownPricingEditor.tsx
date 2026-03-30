@@ -391,7 +391,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
         setItems((prev: any[]) => {
             const newItem = {
                 id: Math.random().toString(36).substr(2, 9),
-                area: prev[prev.length - 1]?.area || "",
+                area: prev[prev.length - 1]?.area || "GENERAL",
                 description: catalogItem.description,
                 quantity: 1,
                 unit: catalogItem.unit || "",
@@ -407,6 +407,29 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
         })
         setIsCatalogOpen(false)
         setCatalogSearch("")
+    }, [])
+
+    const addSection = useCallback(() => {
+        const timestamp = new Date().getTime()
+        const newAreaName = `NEW SECTION ${items.length + 1}`
+        setItems((prev: any[]) => [...prev, {
+            id: Math.random().toString(36).substr(2, timestamp % 1000),
+            area: newAreaName,
+            description: "",
+            quantity: 1,
+            unit: "",
+            notes: "",
+            unitPrice: 0
+        }])
+    }, [items.length])
+
+    const handleAreaRename = useCallback((oldArea: string, newArea: string) => {
+        setItems((prev: any[]) => prev.map(item => {
+            if ((item.area || "").trim() === oldArea.trim()) {
+                return { ...item, area: newArea }
+            }
+            return item
+        }))
     }, [])
 
     const deferredCatalogSearch = useDeferredValue(catalogSearch)
@@ -527,9 +550,14 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 Engineering metrics & commercial validation.
                             </p>
                         </div>
-                        <Button variant="outline" size="sm" onClick={addItem} className="border-primary/20 hover:bg-primary/10 text-primary font-black px-6 transition-all">
-                            <Plus className="h-4 w-4 mr-2" /> Add Component
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={addSection} className="border-primary/20 hover:bg-primary/10 text-primary font-black px-4 transition-all">
+                                <Plus className="h-4 w-4 mr-2" /> Add Section
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={addItem} className="border-primary/20 hover:bg-primary/10 text-primary font-black px-4 transition-all">
+                                <Plus className="h-4 w-4 mr-2" /> Add Component
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/5">
@@ -705,9 +733,17 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                         <>
                                             <tr key={`header-${area}`} className="bg-primary/5 border-y border-white/5">
                                                 <td colSpan={6} className="px-8 py-3">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-4">
                                                         <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{area ? `Heading: ${area}` : ""}</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[9px] font-black uppercase text-primary/40 tracking-[0.2em] italic mb-1">Group Heading</span>
+                                                            <Input
+                                                                value={area || "NO HEADING"}
+                                                                onChange={(e) => handleAreaRename(area, e.target.value)}
+                                                                className="h-8 min-w-[300px] max-w-lg bg-transparent border-none text-[11px] font-black uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0 placeholder:opacity-20"
+                                                                placeholder="ENTER SECTION HEADING..."
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
