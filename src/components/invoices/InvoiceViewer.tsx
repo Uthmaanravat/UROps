@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
 import { drawPdfHeader } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
-import * as XLSX from "xlsx"
+import ExcelJS from "exceljs"
+import { saveAs } from "file-saver"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction } from "@/app/(dashboard)/invoices/pricing-actions"
@@ -390,64 +391,217 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.save(`${numberLabel}.pdf`);
     }
 
-    const generateExcel = () => {
-        const numberLabel = invoice.quoteNumber
-            ? invoice.quoteNumber
-            : (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
+    const generateExcel = async () => {
+        setLoading(true);
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet(invoice.type === 'QUOTE' ? 'Quote' : 'Invoice');
 
-        const wsData = [
-            [company.name],
-            ["Email:", company.email, "Phone:", company.phone],
-            ["VAT:", company.vatNumber || "N/A"],
-            [],
-            [invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel],
-            ["Date:", new Date(invoice.date).toLocaleDateString('en-GB')],
-            ["Bill To:", invoice.client.companyName || invoice.client.name],
-            ["Project:", invoice.project?.name || "N/A"],
-            ["Site:", invoice.site || "N/A"],
-            [],
-            ["Area/Heading", "Description", "Qty", "Unit", "Unit Price", "Total"]
-        ];
+            const numberLabel = invoice.quoteNumber
+                ? invoice.quoteNumber
+                : (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
 
-        // Format Items grouped by area
-        const grouped = items.reduce((acc: any, item: any) => {
-            const area = item.area?.trim() || "";
-            if (!acc[area]) acc[area] = [];
-            acc[area].push(item);
-            return acc;
-        }, {});
+            // 1. Set Column Widths
+            worksheet.columns = [
+                { width: 25 }, // Area / Meta Labels
+                { width: 50 }, // Description
+                { width: 10 }, // Qty
+                { width: 10 }, // Unit
+                { width: 15 }, // Price
+                { width: 15 }  // Total
+            ];
 
-        Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
-            areaItems.forEach((item: any) => {
-                wsData.push([
-                    area ? area.toUpperCase() : "",
-                    item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description,
-                    item.quantity,
-                    item.unit || '',
-                    item.unitPrice,
-                    item.quantity * item.unitPrice
-                ]);
+            // 2. Branding Bars (Navy and Lime)
+            const navyBar = worksheet.getRow(1);
+            navyBar.height = 15;
+            worksheet.mergeCells('A1:F1');
+            worksheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } };
+
+            const limeBar = worksheet.getRow(2);
+            limeBar.height = 4;
+            worksheet.mergeCells('A2:F2');
+            worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
+
+            // 3. Logo & Document Title
+            worksheet.getRow(4).height = 40;
+            if (company.logoUrl) {
+                try {
+                    const response = await fetch(company.logoUrl);
+                    const buffer = await response.arrayBuffer();
+                    const imageId = workbook.addImage({
+                        buffer: buffer,
+                        extension: 'png',
+                    });
+                    worksheet.addImage(imageId, {
+                        tl: { col: 0, row: 3 },
+                        ext: { width: 100, height: 50 }
+                    });
+                } catch (e) {
+                    console.error("Logo fetch failed", e);
+                }
+            }
+
+            worksheet.mergeCells('D4:F4');
+            const titleCell = worksheet.getCell('D4');
+            titleCell.value = invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE';
+            titleCell.font = { name: 'Arial', bold: true, size: 24, color: { argb: 'FF14141E' } };
+            titleCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+            worksheet.mergeCells('D5:F5');
+            const numCell = worksheet.getCell('D5');
+            numCell.value = numberLabel;
+            numCell.font = { name: 'Arial', bold: true, size: 14, color: { argb: 'FFA3E635' } };
+            numCell.alignment = { horizontal: 'right' };
+
+            // 4. Metadata (Bill To, From, Dates)
+            let currentRow = 7;
+            
+            // Header for sections
+            worksheet.getCell(`A${currentRow}`).value = 'DATE:';
+            worksheet.getCell(`B${currentRow}`).value = new Date(invoice.date).toLocaleDateString('en-GB');
+            worksheet.getCell(`D${currentRow}`).value = 'FROM:';
+            worksheet.getCell(`E${currentRow}`).value = company.name;
+            [worksheet.getCell(`A${currentRow}`), worksheet.getCell(`D${currentRow}`)].forEach(c => c.font = { bold: true, size: 10 });
+            currentRow++;
+
+            worksheet.getCell(`A${currentRow}`).value = 'PROJECT:';
+            worksheet.getCell(`B${currentRow}`).value = invoice.project?.name || 'N/A';
+            worksheet.getCell(`D${currentRow}`).value = 'EMAIL:';
+            worksheet.getCell(`E${currentRow}`).value = company.email;
+            [worksheet.getCell(`A${currentRow}`), worksheet.getCell(`D${currentRow}`)].forEach(c => c.font = { bold: true, size: 10 });
+            currentRow++;
+
+            worksheet.getCell(`A${currentRow}`).value = 'SITE:';
+            worksheet.getCell(`B${currentRow}`).value = invoice.site || 'N/A';
+            worksheet.getCell(`D${currentRow}`).value = 'PHONE:';
+            worksheet.getCell(`E${currentRow}`).value = company.phone;
+            [worksheet.getCell(`A${currentRow}`), worksheet.getCell(`D${currentRow}`)].forEach(c => c.font = { bold: true, size: 10 });
+            currentRow++;
+
+            currentRow += 2;
+            worksheet.getCell(`A${currentRow}`).value = 'BILL TO:';
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 11, color: { argb: 'FF14141E' } };
+            currentRow++;
+            worksheet.getCell(`A${currentRow}`).value = invoice.client.companyName || invoice.client.name;
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+            currentRow++;
+            worksheet.getCell(`A${currentRow}`).value = invoice.client.address;
+            worksheet.getRow(currentRow).height = 30;
+            worksheet.getCell(`A${currentRow}`).alignment = { wrapText: true };
+            if (invoice.client.vatNumber) {
+                currentRow++;
+                worksheet.getCell(`A${currentRow}`).value = `VAT: ${invoice.client.vatNumber}`;
+            }
+
+            // 5. Table Head
+            currentRow += 2;
+            const tableHead = worksheet.getRow(currentRow);
+            tableHead.values = ['AREA/HEADING', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL'];
+            tableHead.font = { bold: true, color: { argb: 'FFA3E635' } };
+            tableHead.height = 25;
+            tableHead.eachCell((cell) => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
             });
-        });
+            worksheet.getCell(`B${currentRow}`).alignment = { vertical: 'middle', horizontal: 'left' };
+            worksheet.getCell(`E${currentRow}`).alignment = { vertical: 'middle', horizontal: 'right' };
+            worksheet.getCell(`F${currentRow}`).alignment = { vertical: 'middle', horizontal: 'right' };
 
-        wsData.push([]);
-        wsData.push(["", "", "", "", "Subtotal", subtotal]);
-        wsData.push(["", "", "", "", "VAT (15%)", taxAmount]);
-        wsData.push(["", "", "", "", "TOTAL DUE", total]);
+            // 6. Table Body
+            const grouped = items.reduce((acc: any, item: any) => {
+                const area = item.area?.trim() || "";
+                if (!acc[area]) acc[area] = [];
+                acc[area].push(item);
+                return acc;
+            }, {});
 
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        ws['!cols'] = [
-            { wch: 15 }, // Area
-            { wch: 50 }, // Description
-            { wch: 8 },  // Qty
-            { wch: 8 },  // Unit
-            { wch: 15 }, // Price
-            { wch: 15 }  // Total
-        ];
+            currentRow++;
+            Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
+                if (area) {
+                    worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
+                    const groupCell = worksheet.getCell(`A${currentRow}`);
+                    groupCell.value = area.toUpperCase();
+                    groupCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+                    groupCell.font = { bold: true, size: 10, italic: true, color: { argb: 'FF14141E' } };
+                    groupCell.alignment = { horizontal: 'center' };
+                    currentRow++;
+                }
 
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, invoice.type === 'QUOTE' ? 'Quote' : 'Invoice');
-        XLSX.writeFile(wb, `${numberLabel}.xlsx`);
+                areaItems.forEach((item: any) => {
+                    const row = worksheet.getRow(currentRow);
+                    row.values = [
+                        '',
+                        item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description,
+                        item.quantity,
+                        item.unit || '',
+                        item.unitPrice,
+                        item.quantity * item.unitPrice
+                    ];
+                    row.getCell(2).alignment = { wrapText: true };
+                    row.getCell(5).numFmt = '"R"#,##0.00';
+                    row.getCell(6).numFmt = '"R"#,##0.00';
+                    row.getCell(6).font = { bold: true };
+                    
+                    // Borders
+                    row.eachCell((cell) => {
+                        cell.border = { bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } } };
+                    });
+
+                    currentRow++;
+                });
+            });
+
+            // 7. Totals
+            currentRow++;
+            worksheet.getCell(`E${currentRow}`).value = 'Subtotal';
+            worksheet.getCell(`F${currentRow}`).value = subtotal;
+            worksheet.getCell(`F${currentRow}`).numFmt = '"R"#,##0.00';
+            currentRow++;
+            worksheet.getCell(`E${currentRow}`).value = 'VAT (15%)';
+            worksheet.getCell(`F${currentRow}`).value = taxAmount;
+            worksheet.getCell(`F${currentRow}`).numFmt = '"R"#,##0.00';
+            currentRow++;
+            const totalRow = worksheet.getRow(currentRow);
+            totalRow.getCell(5).value = 'TOTAL DUE';
+            totalRow.getCell(5).font = { bold: true, size: 12 };
+            totalRow.getCell(6).value = total;
+            totalRow.getCell(6).font = { bold: true, size: 14, color: { argb: 'FF14141E' } };
+            totalRow.getCell(6).numFmt = '"R"#,##0.00';
+            totalRow.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
+            totalRow.getCell(6).alignment = { horizontal: 'right' };
+
+            // 8. Footer (Banking & Notes)
+            currentRow += 3;
+            worksheet.getCell(`A${currentRow}`).value = 'BANKING DETAILS';
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FF14141E' } };
+            currentRow++;
+            worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
+            worksheet.getCell(`A${currentRow}`).value = company.bankDetails;
+            worksheet.getCell(`A${currentRow}`).font = { size: 9, color: { argb: 'FF475569' } };
+            worksheet.getRow(currentRow).height = 30;
+            worksheet.getCell(`A${currentRow}`).alignment = { wrapText: true };
+
+            if (note) {
+                currentRow += 2;
+                worksheet.getCell(`A${currentRow}`).value = 'TERMS & NOTES';
+                worksheet.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FF14141E' } };
+                currentRow++;
+                worksheet.mergeCells(`A${currentRow}:F${currentRow + 2}`);
+                worksheet.getCell(`A${currentRow}`).value = note;
+                worksheet.getCell(`A${currentRow}`).font = { size: 9, color: { argb: 'FF475569' } };
+                worksheet.getCell(`A${currentRow}`).alignment = { wrapText: true, vertical: 'top' };
+            }
+
+            // Write and Save
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `${numberLabel}.xlsx`);
+        } catch (e) {
+            console.error("Excel generation error", e);
+            alert("Failed to generate styled Excel document.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleConvert = async () => {

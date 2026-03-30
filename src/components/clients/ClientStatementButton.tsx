@@ -5,7 +5,8 @@ import { FileText, Loader2, Table } from "lucide-react"
 import jsPDF from "jspdf"
 import { drawPdfHeader } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
-import * as XLSX from "xlsx"
+import ExcelJS from "exceljs"
+import { saveAs } from "file-saver"
 import { useState } from "react"
 import { formatCurrency } from "@/lib/utils"
 
@@ -121,19 +122,87 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
     const generateExcelStatement = async () => {
         setLoading(true)
         try {
-            const wsData = [
-                [company.name],
-                ["Email:", company.email, "Phone:", company.phone],
-                ["Bank:", company.bankDetails],
-                [],
-                ["STATEMENT OF ACCOUNT"],
-                ["Date:", new Date().toLocaleDateString('en-GB')],
-                ["Client:", client.companyName || client.name],
-                ["VAT No:", client.vatNumber || "N/A"],
-                [],
-                ["Date", "Document #", "Site / Project", "Total", "Outstanding"]
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Statement');
+
+            // 1. Set Column Widths
+            worksheet.columns = [
+                { width: 15 }, // Date
+                { width: 18 }, // Doc #
+                { width: 40 }, // Site / Project
+                { width: 15 }, // Total
+                { width: 15 }  // Outstanding
             ];
 
+            // 2. Branding Bars (Navy and Lime)
+            const navyBar = worksheet.getRow(1);
+            navyBar.height = 15;
+            worksheet.mergeCells('A1:E1');
+            worksheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } };
+
+            const limeBar = worksheet.getRow(2);
+            limeBar.height = 4;
+            worksheet.mergeCells('A2:E2');
+            worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
+
+            // 3. Logo & Title
+            worksheet.getRow(4).height = 40;
+            if (company.logoUrl) {
+                try {
+                    const response = await fetch(company.logoUrl);
+                    const buffer = await response.arrayBuffer();
+                    const imageId = workbook.addImage({
+                        buffer: buffer,
+                        extension: 'png',
+                    });
+                    worksheet.addImage(imageId, {
+                        tl: { col: 0, row: 3 },
+                        ext: { width: 100, height: 50 }
+                    });
+                } catch (e) {
+                    console.error("Logo fetch failed", e);
+                }
+            }
+
+            worksheet.mergeCells('C4:E4');
+            const titleCell = worksheet.getCell('C4');
+            titleCell.value = 'STATEMENT OF ACCOUNT';
+            titleCell.font = { name: 'Arial', bold: true, size: 20, color: { argb: 'FF14141E' } };
+            titleCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+            // 4. Metadata
+            let currentRow = 7;
+            worksheet.getCell(`A${currentRow}`).value = 'DATE:';
+            worksheet.getCell(`B${currentRow}`).value = new Date().toLocaleDateString('en-GB');
+            worksheet.getCell(`A${currentRow}`).font = { bold: true };
+            currentRow++;
+
+            worksheet.getCell(`A${currentRow}`).value = 'CLIENT:';
+            worksheet.getCell(`B${currentRow}`).value = client.companyName || client.name;
+            worksheet.getCell(`A${currentRow}`).font = { bold: true };
+            currentRow++;
+
+            if (client.vatNumber) {
+                worksheet.getCell(`A${currentRow}`).value = 'VAT NO:';
+                worksheet.getCell(`B${currentRow}`).value = client.vatNumber;
+                worksheet.getCell(`A${currentRow}`).font = { bold: true };
+                currentRow++;
+            }
+
+            // 5. Table Head
+            currentRow += 2;
+            const tableHead = worksheet.getRow(currentRow);
+            tableHead.values = ['Date', 'Document #', 'Site / Project', 'Total', 'Outstanding'];
+            tableHead.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            tableHead.height = 20;
+            tableHead.eachCell((cell) => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; // Statement Red
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
+            });
+            worksheet.getCell(`C${currentRow}`).alignment = { vertical: 'middle', horizontal: 'left' };
+
+            // 6. Table Body
             let totalDue = 0;
             const unpaidInvoices = client.invoices.filter((i: any) =>
                 i.type === 'INVOICE' &&
@@ -141,6 +210,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 i.status !== 'CANCELLED'
             )
 
+            currentRow++;
             unpaidInvoices.forEach((i: any) => {
                 const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
                 const outstanding = i.total - paid
@@ -149,31 +219,49 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                     totalDue += outstanding
                     const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
 
-                    wsData.push([
+                    const row = worksheet.getRow(currentRow);
+                    row.values = [
                         new Date(i.date).toLocaleDateString('en-GB'),
                         docNumber,
                         i.site || i.project?.name || '-',
                         i.total,
                         outstanding
-                    ])
+                    ];
+
+                    row.getCell(4).numFmt = '"R"#,##0.00';
+                    row.getCell(5).numFmt = '"R"#,##0.00';
+                    row.getCell(5).font = { bold: true };
+                    
+                    row.eachCell((cell) => {
+                        cell.border = { bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } } };
+                    });
+
+                    currentRow++;
                 }
             })
 
-            wsData.push([]);
-            wsData.push(["", "", "", "Total Amount Due:", totalDue]);
+            // 7. Footer Summary
+            currentRow++;
+            const summaryRow = worksheet.getRow(currentRow);
+            summaryRow.getCell(4).value = 'Total Amount Due:';
+            summaryRow.getCell(4).font = { bold: true };
+            summaryRow.getCell(5).value = totalDue;
+            summaryRow.getCell(5).font = { bold: true, size: 12, color: { argb: 'FFDC2626' } };
+            summaryRow.getCell(5).numFmt = '"R"#,##0.00';
+            summaryRow.getCell(5).border = { top: { style: 'thin', color: { argb: 'FF14141E' } } };
 
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            ws['!cols'] = [
-                { wch: 12 }, // Date
-                { wch: 15 }, // Doc #
-                { wch: 30 }, // Project
-                { wch: 15 }, // Total
-                { wch: 15 }  // Outstanding
-            ];
+            // 8. Banking Info
+            currentRow += 3;
+            worksheet.getCell(`A${currentRow}`).value = 'BANKING DETAILS';
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FF14141E' } };
+            currentRow++;
+            worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+            worksheet.getCell(`A${currentRow}`).value = company.bankDetails;
+            worksheet.getCell(`A${currentRow}`).font = { size: 9, color: { argb: 'FF475569' } };
 
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Statement');
-            XLSX.writeFile(wb, `Statement_${client.name}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            // Write and Save
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `Statement_${client.name}_${new Date().toISOString().split('T')[0]}.xlsx`);
 
         } catch (e) {
             console.error(e)
