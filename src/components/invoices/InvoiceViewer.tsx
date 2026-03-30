@@ -36,7 +36,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [quoteNumber, setQuoteNumber] = useState(invoice.quoteNumber || "");
     const [date, setDate] = useState(new Date(invoice.date).toISOString().split('T')[0]);
     const [projectId, setProjectId] = useState(invoice.projectId || "");
-    const [commercialStatus, setCommercialStatus] = useState(invoice.project?.commercialStatus || "AWAITING_PO");
+    const [projectName, setProjectName] = useState(invoice.project?.name || "");
+    const [commercialStatus, setCommercialStatus] = useState<any>(invoice.project?.commercialStatus || "AWAITING_PO");
 
     // Add new Item Handler
     const handleAddItem = () => {
@@ -333,7 +334,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             bodyStyles: {
                 fontSize: 8,
                 textColor: [20, 20, 30],
-                cellPadding: 3
+                cellPadding: 2
             },
             columnStyles: {
                 0: { cellWidth: 95 },
@@ -562,6 +563,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     row.eachCell((cell) => {
                         cell.border = { bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } } };
                     });
+                    row.height = 20; // Compact row height
 
                     currentRow++;
                 });
@@ -857,7 +859,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 />
                             </div>
                             <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
-                                <span className="text-primary font-black uppercase tracking-widest text-[9px]">Project</span>
+                                <span className="text-primary font-black uppercase tracking-widest text-[9px]">Project Link</span>
                                 <select
                                     value={projectId}
                                     onChange={(e) => handleProjectChange(e.target.value)}
@@ -870,6 +872,24 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     ))}
                                 </select>
                             </div>
+                            {invoice.projectId && (
+                                <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                    <span className="text-gray-400 font-black uppercase tracking-widest text-[8px]">Rename Project</span>
+                                    <input
+                                        value={projectName}
+                                        onChange={(e) => setProjectName(e.target.value)}
+                                        onBlur={async () => {
+                                            if (projectName !== invoice.project?.name) {
+                                                const { updateProject } = await import("@/app/(dashboard)/projects/actions");
+                                                await updateProject(invoice.projectId!, { name: projectName });
+                                                router.refresh();
+                                            }
+                                        }}
+                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-xs md:text-sm w-full max-w-[200px]"
+                                        disabled={invoice.status === 'PAID'}
+                                    />
+                                </div>
+                            )}
                             {invoice.projectId && (
                                 <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
                                     <span className="text-[8px] font-black uppercase tracking-widest text-[#64748B]">Commercial Status</span>

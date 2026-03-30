@@ -90,6 +90,10 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                     textColor: [255, 255, 255],
                     fontStyle: 'bold'
                 },
+                bodyStyles: {
+                    cellPadding: 3,
+                    fontSize: 9
+                },
                 columnStyles: {
                     3: { halign: 'right' },
                     4: { halign: 'right', fontStyle: 'bold' }
@@ -242,6 +246,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                     row.eachCell((cell) => {
                         cell.border = { bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } } };
                     });
+                    row.height = 20; // Compact row height
 
                     currentRow++;
                 }
