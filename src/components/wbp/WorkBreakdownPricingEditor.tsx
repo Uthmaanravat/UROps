@@ -186,6 +186,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const [reference, setReference] = useState(wbp.reference || project.name || "")
     const [commercialStatus, setCommercialStatus] = useState<any>(project.commercialStatus || "AWAITING_PO")
     const [quotationNotes, setQuotationNotes] = useState(wbp.notes || "")
+    const [projectName, setProjectName] = useState(project.name || "")
     const [suggestions, setSuggestions] = useState<Record<string, { typicalPrice: number; source: string }>>({})
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
     const [isGenerating, setIsGenerating] = useState(false)
@@ -221,10 +222,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     useEffect(() => {
         if (items.length > 0 && !submitted) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                items, site, quoteNumber, reference, notes: quotationNotes, timestamp: Date.now()
+                items, site, quoteNumber, reference, notes: quotationNotes, projectName, timestamp: Date.now()
             }))
         }
-    }, [items, site, quoteNumber, reference, quotationNotes, submitted, STORAGE_KEY])
+    }, [items, site, quoteNumber, reference, quotationNotes, projectName, submitted, STORAGE_KEY])
 
     // Catalog state
     const [catalog, setCatalog] = useState<any[]>([])
@@ -450,6 +451,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const handleGenerate = async () => {
         setIsGenerating(true)
         try {
+            // Update Project Name first
+            if (projectName !== project.name) {
+                await updateProject(project.id, { name: projectName })
+            }
             const quote = await generateQuotationAction(wbpId, items, { site, quoteNumber, reference, notes: quotationNotes })
             // @ts-ignore
             setLastQuoteId(quote.id)
@@ -474,6 +479,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const handleSaveDraft = async () => {
         setIsSavingDraft(true)
         try {
+            // Update Project Name first
+            if (projectName !== project.name) {
+                await updateProject(project.id, { name: projectName })
+            }
             await saveWBPDraftAction(wbpId, items, { site, quoteNumber, reference, notes: quotationNotes })
             alert("Draft saved successfully!")
         } catch (error) {
@@ -607,13 +616,22 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/5 bg-primary/5 -mx-6 px-6 py-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-white/5">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Project Name</Label>
+                            <Input
+                                value={projectName}
+                                onChange={(e) => setProjectName(e.target.value)}
+                                placeholder="Edit Project Name..."
+                                className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
+                            />
+                        </div>
                         <div className="space-y-2">
                             <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Select Client from CRM</Label>
                             <select
                                 value={selectedClientId}
                                 onChange={(e) => handleClientSwitch(e.target.value)}
-                                className="flex h-11 w-full rounded-md border border-primary/20 bg-[#14141E] px-3 py-2 text-sm text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ring-offset-background cursor-pointer hover:border-primary/40 transition-colors"
+                                className="flex h-12 w-full rounded-md border border-primary/20 bg-[#14141E] px-3 py-2 text-sm text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:border-primary/40 transition-colors"
                             >
                                 {allClients.map(c => (
                                     <option key={c.id} value={c.id}>{c.companyName || c.name}</option>
@@ -629,7 +647,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                     clientUpdatesRef.current.vat = e.target.value
                                 }}
                                 placeholder="123456789"
-                                className="bg-[#14141E] border-primary/20 text-white font-bold h-11 focus:border-primary"
+                                className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
                             />
                         </div>
                         <div className="space-y-2">
@@ -641,7 +659,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                     clientUpdatesRef.current.reg = e.target.value
                                 }}
                                 placeholder="2024/123456/07"
-                                className="bg-[#14141E] border-primary/20 text-white font-bold h-11 focus:border-primary"
+                                className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
                             />
                         </div>
                     </div>
@@ -722,32 +740,45 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {(() => {
-                                    const grouped = items.reduce((acc: any, item, originalIndex) => {
-                                        const area = item.area?.trim() || ""
-                                        if (!acc[area]) acc[area] = []
-                                        acc[area].push({ ...item, originalIndex })
-                                        return acc
-                                    }, {})
+                                    const sequentialGroups: { area: string, items: any[] }[] = [];
+                                    items.forEach((item, index) => {
+                                        const area = item.area?.trim() || "GENERAL"
+                                        const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+                                        if (lastGroup && lastGroup.area === area) {
+                                            lastGroup.items.push({ ...item, originalIndex: index });
+                                        } else {
+                                            sequentialGroups.push({ area, items: [{ ...item, originalIndex: index }] });
+                                        }
+                                    });
 
-                                    return Object.entries(grouped).map(([area, areaItems]: [string, any]) => (
-                                        <>
-                                            <tr key={`header-${area}`} className="bg-primary/5 border-y border-white/5">
+                                    return sequentialGroups.map((group: any, gIdx: number) => (
+                                        <React.Fragment key={`group-${group.area}-${gIdx}`}>
+                                            <tr className="bg-primary/5 border-y border-white/5">
                                                 <td colSpan={6} className="px-8 py-3">
                                                     <div className="flex items-center gap-4">
                                                         <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                                                         <div className="flex flex-col">
                                                             <span className="text-[9px] font-black uppercase text-primary/40 tracking-[0.2em] italic mb-1">Group Heading</span>
                                                             <Input
-                                                                value={area || "NO HEADING"}
-                                                                onChange={(e) => handleAreaRename(area, e.target.value)}
-                                                                className="h-8 min-w-[300px] max-w-lg bg-transparent border-none text-[11px] font-black uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0 placeholder:opacity-20"
+                                                                value={group.area || "NO HEADING"}
+                                                                onChange={(e) => {
+                                                                    // Rename items ONLY in this contiguous group
+                                                                    const newArea = e.target.value;
+                                                                    setItems(prev => prev.map((item, i) => {
+                                                                        if (group.items.some((gi: any) => gi.originalIndex === i)) {
+                                                                            return { ...item, area: newArea };
+                                                                        }
+                                                                        return item;
+                                                                    }));
+                                                                }}
+                                                                className="h-8 min-w-[300px] max-w-lg bg-transparent border-none text-[11px] font-black text-left uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0 placeholder:opacity-20"
                                                                 placeholder="ENTER SECTION HEADING..."
                                                             />
                                                         </div>
                                                     </div>
                                                 </td>
                                             </tr>
-                                            {areaItems.map((item: any) => {
+                                            {group.items.map((item: any) => {
                                                 const suggestion = suggestions[item.description]
                                                 return (
                                                     <WbpItemRow
@@ -762,7 +793,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                     />
                                                 )
                                             })}
-                                        </>
+                                        </React.Fragment>
                                     ))
                                 })()}
                             </tbody>

@@ -229,7 +229,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         if (invoice.site) {
             const siteLines = doc.splitTextToSize(`Site: ${invoice.site}`, 60);
             doc.text(siteLines, 14, detailY);
-            detailY += (siteLines.length * 5);
+            detailY += (siteLines.length * 4);
+        }
+
+        if (reference) {
+            const refLines = doc.splitTextToSize(`Ref: ${reference}`, 60);
+            doc.text(refLines, 14, detailY);
+            detailY += (refLines.length * 4);
         }
 
         // Column 2: Bill To
@@ -283,27 +289,31 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         fromY += 5;
         doc.text(company.email, 196, fromY, { align: 'right' });
 
-        // 3. Table with Area Grouping
+        // 3. Table with Sequential Grouping
         const tableBody: any[] = [];
-        const grouped = items.reduce((acc: any, item: any) => {
+        const sequentialGroups: { area: string, items: any[] }[] = [];
+        items.forEach((item: any) => {
             const area = item.area?.trim() || "";
-            if (!acc[area]) acc[area] = [];
-            acc[area].push(item);
-            return acc;
-        }, {});
-
-        Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
-            if (area) {
-                tableBody.push([{ content: area.toUpperCase(), colSpan: 5, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 9, halign: 'center' } }]);
+            const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+            if (lastGroup && lastGroup.area === area) {
+                lastGroup.items.push(item);
+            } else {
+                sequentialGroups.push({ area, items: [item] });
             }
-            areaItems.forEach((item: any) => {
+        });
+
+        sequentialGroups.forEach((group: any) => {
+            if (group.area) {
+                tableBody.push([{ content: group.area.toUpperCase(), colSpan: 5, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 8, halign: 'left' } }]);
+            }
+            group.items.forEach((item: any) => {
                 const desc = item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description;
                 tableBody.push([
                     desc,
                     item.quantity,
                     item.unit || '',
                     formatCurrency(item.unitPrice, currencySymbol),
-                    formatCurrency(item.total, currencySymbol)
+                    formatCurrency(item.quantity * item.unitPrice, currencySymbol)
                 ]);
             });
         });
@@ -321,9 +331,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 halign: 'left'
             },
             bodyStyles: {
-                fontSize: 9,
+                fontSize: 8,
                 textColor: [20, 20, 30],
-                cellPadding: 5
+                cellPadding: 3
             },
             columnStyles: {
                 0: { cellWidth: 95 },
@@ -503,28 +513,33 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
             });
 
-            // 6. Table Body
-            const grouped = items.reduce((acc: any, item: any) => {
+            // 6. Table Body with Sequential Grouping
+            const sequentialGroups: { area: string, items: any[] }[] = [];
+            items.forEach((item: any) => {
                 const area = item.area?.trim() || "";
-                if (!acc[area]) acc[area] = [];
-                acc[area].push(item);
-                return acc;
-            }, {});
+                const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+                if (lastGroup && lastGroup.area === area) {
+                    lastGroup.items.push(item);
+                } else {
+                    sequentialGroups.push({ area, items: [item] });
+                }
+            });
 
             currentRow++;
-            Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
-                if (area) {
+            sequentialGroups.forEach((group: any) => {
+                if (group.area) {
                     worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
                     const groupCell = worksheet.getCell(`A${currentRow}`);
-                    groupCell.value = area.toUpperCase();
+                    groupCell.value = group.area.toUpperCase();
                     groupCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-                    groupCell.font = { bold: true, size: 10, italic: true, color: { argb: 'FF14141E' } };
-                    groupCell.alignment = { horizontal: 'center' };
+                    groupCell.font = { bold: true, size: 9, italic: true, color: { argb: 'FF14141E' } };
+                    groupCell.alignment = { horizontal: 'left' };
                     currentRow++;
                 }
 
-                areaItems.forEach((item: any) => {
+                group.items.forEach((item: any) => {
                     const row = worksheet.getRow(currentRow);
+                    row.height = 20; // Compact row height
                     row.values = [
                         '',
                         item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description,
@@ -656,83 +671,104 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     return (
         <div className="max-w-5xl mx-auto space-y-6 px-4 md:px-0 pb-20">
             {/* Header Actions */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 py-4 print:hidden">
+            {/* Professional Action Bar */}
+            <div className="flex flex-col xl:flex-row justify-between items-center gap-6 py-8 print:hidden border-b border-white/5 pb-10">
                 <Link href="/work-breakdown-pricing">
-                    <Button variant="ghost"><ArrowLeft className="mr-2 h-4 w-4" /> Back to List</Button>
+                    <Button variant="ghost" className="hover:bg-white/5 text-muted-foreground font-black uppercase tracking-widest text-[10px]">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workspace
+                    </Button>
                 </Link>
-                <div className="flex gap-2 flex-wrap justify-center">
-                    <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="outline" disabled={loading}>
-                                <Mail className="mr-2 h-4 w-4" /> Email
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Send via Email</DialogTitle>
-                                <DialogDescription>
-                                    Send this {invoice.type.toLowerCase()} directly to the client. You can enter multiple emails separated by commas.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="emails">Recipient Emails</Label>
-                                    <Input
-                                        id="emails"
-                                        placeholder="e.g. client@example.com, accounting@example.com"
-                                        value={recipientEmails}
-                                        onChange={(e) => setRecipientEmails(e.target.value)}
-                                    />
-                                    <p className="text-[10px] text-muted-foreground italic">Separate multiple addresses with commas.</p>
-                                </div>
-                            </div>
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsEmailDialogOpen(false)}>Cancel</Button>
-                                <Button onClick={handleSendEmail} disabled={loading || !recipientEmails}>
-                                    {loading ? "Sending..." : "Send Now"}
+                
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                    {/* Document & Sharing Actions */}
+                    <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 shadow-inner">
+                        <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
+                                    <Mail className="mr-2 h-4 w-4 text-primary" /> Email
                                 </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                    <Button onClick={generateExcel} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold border border-emerald-500 shadow-md">
-                        <Download className="mr-2 h-4 w-4" /> Export Excel
-                    </Button>
-                    <Button variant="outline" onClick={generatePDF}>
-                        <Download className="mr-2 h-4 w-4" /> Download PDF
-                    </Button>
-                    {invoice.type === 'QUOTE' && invoice.status !== 'INVOICED' && (
-                        <Button onClick={handleConvert} disabled={loading}>
-                            <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
+                            </DialogTrigger>
+                            <DialogContent className="bg-[#0F172A] border-white/10 text-white">
+                                <DialogHeader>
+                                    <DialogTitle className="text-2xl font-black uppercase tracking-wider">Send via Email</DialogTitle>
+                                    <DialogDescription className="text-gray-400">
+                                        Send this {invoice.type.toLowerCase()} directly to the client.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-6 py-6">
+                                    <div className="space-y-3">
+                                        <Label htmlFor="emails" className="text-[10px] font-black uppercase tracking-widest text-primary">Recipient Emails</Label>
+                                        <Input
+                                            id="emails"
+                                            placeholder="client@example.com, admin@example.com"
+                                            value={recipientEmails}
+                                            onChange={(e) => setRecipientEmails(e.target.value)}
+                                            className="bg-white/5 border-white/10 text-white h-12 focus:border-primary"
+                                        />
+                                        <p className="text-[10px] text-muted-foreground italic">Separate multiple addresses with commas.</p>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="ghost" onClick={() => setIsEmailDialogOpen(false)} className="text-gray-400">Cancel</Button>
+                                    <Button onClick={handleSendEmail} disabled={loading || !recipientEmails} className="bg-primary text-primary-foreground font-black px-8">
+                                        {loading ? "Sending..." : "Dispatch Email"}
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+
+                        <div className="w-px h-6 bg-white/10 self-center mx-1" />
+
+                        <Button variant="ghost" size="sm" onClick={generateExcel} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
+                            <Download className="mr-2 h-4 w-4 text-emerald-500" /> Excel
                         </Button>
-                    )}
-                    <Button
-                        variant="outline"
-                        onClick={async () => {
-                            if (!window.confirm(`Are you sure you want to ${invoice.status === 'PAID' ? 'unlock' : 'mark as paid and lock'} this document?`)) return;
-                            setLoading(true);
-                            const { updateInvoiceStatus } = await import("@/app/(dashboard)/invoices/actions");
-                            await updateInvoiceStatus(invoice.id, invoice.status === 'PAID' ? 'DRAFT' : 'PAID');
-                            setLoading(false);
-                            router.refresh();
-                        }}
-                        disabled={loading}
-                        className={invoice.status === 'PAID' ? "text-red-500 border-red-500 hover:text-red-600 hover:bg-red-500/10" : "text-green-500 border-green-500 hover:text-green-600 hover:bg-green-500/10"}
-                    >
-                        {invoice.status === 'PAID' ? <><Unlock className="mr-2 h-4 w-4" /> Unlock Document</> : <><Lock className="mr-2 h-4 w-4" /> Mark as Paid (Lock)</>}
-                    </Button>
-                    {invoice.type === 'INVOICE' && !isPaid && (
-                        <Button onClick={handlePayment} disabled={loading}>
-                            <CreditCard className="mr-2 h-4 w-4" /> Record Payment
+                        <Button variant="ghost" size="sm" onClick={generatePDF} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
+                            <Download className="mr-2 h-4 w-4 text-rose-500" /> PDF
                         </Button>
-                    )}
-                    {invoice.type === 'INVOICE' && (
-                        <Button variant="outline" onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)}>
-                            <FileText className="mr-2 h-4 w-4" /> {showDetailedBreakdown ? "Show Summarized View" : "Show Detailed Breakdown"}
+                        
+                        <div className="w-px h-6 bg-white/10 self-center mx-1" />
+                        
+                        <Button variant="ghost" size="sm" onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
+                            <FileText className="mr-2 h-4 w-4 text-blue-400" /> {showDetailedBreakdown ? "Summarized" : "Detailed"}
                         </Button>
-                    )}
-                    <Button variant="destructive" onClick={handleDelete} disabled={loading}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete
-                    </Button>
+                    </div>
+
+                    {/* Status & Management Actions */}
+                    <div className="flex gap-2">
+                        {invoice.type === 'QUOTE' && invoice.status !== 'INVOICED' && (
+                            <Button onClick={handleConvert} disabled={loading} variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl">
+                                <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
+                            </Button>
+                        )}
+                        {!isPaid && (
+                            <Button
+                                variant="outline"
+                                onClick={async () => {
+                                    if (!window.confirm(`Are you sure you want to ${invoice.status === 'PAID' ? 'unlock' : 'mark as paid and lock'} this document?`)) return;
+                                    setLoading(true);
+                                    const { updateInvoiceStatus } = await import("@/app/(dashboard)/invoices/actions");
+                                    await updateInvoiceStatus(invoice.id, invoice.status === 'PAID' ? 'DRAFT' : 'PAID');
+                                    setLoading(false);
+                                    router.refresh();
+                                }}
+                                disabled={loading}
+                                className={cn(
+                                    "font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl transition-all",
+                                    invoice.status === 'PAID' ? "text-red-500 border-red-500/20 bg-red-500/5 hover:bg-red-500/10" : "text-green-500 border-green-500/20 bg-green-500/5 hover:bg-green-500/10"
+                                )}
+                            >
+                                {invoice.status === 'PAID' ? <><Unlock className="mr-2 h-4 w-4" /> Unlock</> : <><Lock className="mr-2 h-4 w-4" /> Mark as Paid (Lock)</>}
+                            </Button>
+                        )}
+                        {invoice.type === 'INVOICE' && !isPaid && (
+                            <Button onClick={handlePayment} disabled={loading} className="bg-primary text-primary-foreground font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl shadow-xl shadow-primary/20">
+                                <CreditCard className="mr-2 h-4 w-4" /> Record Payment
+                            </Button>
+                        )}
+                        <Button variant="ghost" onClick={handleDelete} disabled={loading} className="h-12 w-12 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors">
+                            <Trash2 className="h-5 w-5" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -774,6 +810,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             <input
                                 value={quoteNumber}
                                 onChange={(e) => setQuoteNumber(e.target.value)}
+                                onBlur={saveChanges}
                                 className="bg-transparent border-none text-gray-500 font-mono text-xs md:text-lg w-24 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary rounded"
                                 disabled={invoice.status === 'PAID'}
                             />
@@ -807,35 +844,35 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         </div>
                     </div>
 
-                    <div className="flex flex-col space-y-4">
-                        <div className="bg-[#1E293B] p-4 md:p-6 rounded-2xl w-full max-w-sm ml-auto border border-white/5 space-y-3">
-                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Date Issued</span>
+                    <div className="flex flex-col space-y-2">
+                        <div className="bg-[#1E293B] p-5 rounded-2xl w-full max-w-sm ml-auto border border-white/5 space-y-2 group shadow-xl">
+                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[9px]">Date Issued</span>
                                 <input
                                     type="date"
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
-                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base cursor-pointer"
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
-                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                <span className="text-primary font-bold uppercase tracking-widest text-[10px]">Project</span>
+                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                <span className="text-primary font-black uppercase tracking-widest text-[9px]">Project</span>
                                 <select
                                     value={projectId}
-                                    onChange={(e) => setProjectId(e.target.value)}
-                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[150px] md:max-w-[200px] text-sm md:text-base cursor-pointer"
+                                    onChange={(e) => handleProjectChange(e.target.value)}
+                                    className="bg-transparent border-none text-right font-black text-primary outline-none focus:ring-0 max-w-[150px] md:max-w-[200px] text-sm md:text-base cursor-pointer"
                                     disabled={invoice.status === 'PAID'}
                                 >
-                                    <option value="" className="bg-[#1E293B]">None / Link to Project</option>
+                                    <option value="" className="bg-[#1E293B]">Select Project</option>
                                     {availableProjects.map((p: any) => (
-                                        <option key={p.id} value={p.id} className="bg-[#1E293B]">{p.name}</option>
+                                        <option key={p.id} value={p.id} className="bg-[#1E293B] uppercase">{p.name}</option>
                                     ))}
                                 </select>
                             </div>
                             {invoice.projectId && (
-                                <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#64748B]">Commercial Status</span>
+                                <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-[#64748B]">Commercial Status</span>
                                     <select
                                         value={commercialStatus}
                                         onChange={(e) => handleCommercialStatusChange(e.target.value)}
@@ -853,21 +890,23 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     </select>
                                 </div>
                             )}
-                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Site Location</span>
+                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[9px]">Site Location</span>
                                 <input
                                     value={site}
                                     onChange={(e) => setSite(e.target.value)}
-                                    placeholder="Site Location"
+                                    onBlur={saveChanges}
+                                    placeholder="Enter Site..."
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base w-full max-w-[200px]"
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
-                            <div className="flex justify-between items-center text-sm pb-1">
-                                <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Reference</span>
+                            <div className="flex justify-between items-center text-sm pb-1 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[9px]">Reference</span>
                                 <input
                                     value={reference}
                                     onChange={(e) => setReference(e.target.value)}
+                                    onBlur={saveChanges}
                                     placeholder="Customer Ref"
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base w-full max-w-[200px]"
                                     disabled={invoice.status === 'PAID'}
@@ -890,28 +929,30 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {(() => {
-                                const grouped = items.reduce((acc: any, item: any) => {
-                                    const area = item.area?.trim() || ""
-                                    if (!acc[area]) acc[area] = []
-                                    acc[area].push(item)
-                                    return acc
-                                }, {})
+                                const sequentialGroups: { area: string, items: any[] }[] = [];
+                                items.forEach((item: any, index: number) => {
+                                    const area = item.area?.trim() || "GENERAL"
+                                    const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+                                    if (lastGroup && lastGroup.area === area) {
+                                        lastGroup.items.push({ ...item, originalIndex: index });
+                                    } else {
+                                        sequentialGroups.push({ area, items: [{ ...item, originalIndex: index }] });
+                                    }
+                                });
 
-                                return Object.entries(grouped).map(([area, areaItems]: [string, any]) => (
-                                    <React.Fragment key={`group-${area}`}>
-                                        <tr key={`header-${area}`} className="bg-white/5 border-y border-white/5">
-                                            <td colSpan={4} className="py-4 px-6">
+                                return sequentialGroups.map((group: any, gIdx: number) => (
+                                    <React.Fragment key={`group-${group.area}-${gIdx}`}>
+                                        <tr key={`header-${group.area}`} className="bg-white/5 border-y border-white/5">
+                                            <td colSpan={4} className="py-2 px-6">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-2 w-2 rounded-full bg-primary" />
                                                     {isPricingMode ? (
                                                         <Input
-                                                            value={area}
+                                                            value={group.area}
                                                             onChange={(e) => {
-                                                                // Update ALL items in this group
                                                                 const newArea = e.target.value;
-                                                                setItems(prev => prev.map(i => {
-                                                                    const iArea = (i.area || "").trim();
-                                                                    if (iArea === area) {
+                                                                setItems(prev => prev.map((i, idx) => {
+                                                                    if (group.items.some((gi: any) => gi.originalIndex === idx)) {
                                                                         return { ...i, area: newArea };
                                                                     }
                                                                     return i;
@@ -921,21 +962,21 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             placeholder="HEADING (OPTIONAL)"
                                                         />
                                                     ) : (
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{area ? `Heading: ${area}` : ""}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{group.area ? group.area : "GENERAL"}</span>
                                                     )}
                                                 </div>
                                             </td>
                                         </tr>
-                                        {areaItems.map((item: any) => (
+                                        {group.items.map((item: any) => (
                                             <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
-                                                <td className="py-8 pr-12">
+                                                <td className="py-4 pr-12">
                                                     {isPricingMode ? (
                                                         <div className="flex gap-4">
                                                             <div className="flex-1">
                                                                 <Textarea
                                                                     value={item.description}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
-                                                                    className="min-h-[60px] bg-transparent border-white/10 focus:border-primary text-lg font-bold text-white tracking-tight resize-none p-2"
+                                                                    className="min-h-[40px] bg-transparent border-white/10 focus:border-primary text-base font-bold text-white tracking-tight resize-none p-2"
                                                                     placeholder="Item Description"
                                                                 />
                                                             </div>
@@ -943,7 +984,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                 <Input
                                                                     value={item.area || ""}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
-                                                                    className="h-full bg-transparent border-white/10 focus:border-primary text-xs font-bold text-primary uppercase tracking-widest"
+                                                                    className="h-10 bg-transparent border-white/10 focus:border-primary text-xs font-bold text-primary uppercase tracking-widest"
                                                                     placeholder="HEADING"
                                                                 />
                                                             </div>
@@ -957,45 +998,45 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             </Button>
                                                         </div>
                                                     ) : (
-                                                        <div className="text-lg font-bold text-white tracking-tight">{item.description}</div>
+                                                        <div className="text-base font-bold text-white tracking-tight leading-snug">{item.description}</div>
                                                     )}
                                                 </td>
-                                                <td className="py-8 text-center align-top">
+                                                <td className="py-4 text-center align-top">
                                                     {isPricingMode ? (
-                                                        <div className="flex flex-col gap-2 items-center">
+                                                        <div className="flex flex-col gap-1 items-center">
                                                             <Input
                                                                 type="number"
                                                                 value={item.quantity}
                                                                 onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                className="w-16 h-8 text-center bg-transparent border-white/10 font-bold"
+                                                                className="w-14 h-8 text-center bg-transparent border-white/10 font-bold"
                                                             />
                                                             <Input
                                                                 value={item.unit || ""}
                                                                 onChange={(e) => handleItemUpdate(item.id, 'unit', e.target.value)}
                                                                 placeholder="Unit"
-                                                                className="w-16 h-6 text-center text-[10px] uppercase bg-transparent border-none opacity-50"
+                                                                className="w-14 h-5 text-center text-[9px] uppercase bg-transparent border-none opacity-50"
                                                             />
                                                         </div>
                                                     ) : (
-                                                        <span className="text-base font-black text-gray-400">{item.quantity} <span className="text-[10px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></span>
+                                                        <span className="text-sm font-black text-gray-400">{item.quantity} <span className="text-[10px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></span>
                                                     )}
                                                 </td>
-                                                <td className="py-8 text-right align-top">
+                                                <td className="py-4 text-right align-top">
                                                     {isPricingMode ? (
-                                                        <div className="inline-flex items-center gap-1 bg-white/5 p-2 rounded-lg border border-white/10">
-                                                            <span className="text-gray-500 font-bold text-sm">{currencySymbol}</span>
+                                                        <div className="inline-flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
+                                                            <span className="text-gray-500 font-bold text-xs">{currencySymbol}</span>
                                                             <input
                                                                 type="number"
-                                                                className="w-24 bg-transparent text-right text-white font-bold outline-none no-spinner"
+                                                                className="w-20 bg-transparent text-right text-white font-bold outline-none no-spinner text-sm"
                                                                 value={item.unitPrice}
                                                                 onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                                                             />
                                                         </div>
                                                     ) : (
-                                                        <span className="text-base font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
+                                                        <span className="text-sm font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
                                                     )}
                                                 </td>
-                                                <td className="py-8 text-right font-black text-lg text-white align-top">
+                                                <td className="py-4 text-right font-black text-base text-white align-top">
                                                     {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
                                                 </td>
                                             </tr>
