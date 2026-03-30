@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, memo, useRef, useDeferredValue, useMemo } from "react"
+import { useState, useEffect, useCallback, memo, useRef, useDeferredValue, useMemo, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -752,7 +752,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                     });
 
                                     return sequentialGroups.map((group: any, gIdx: number) => (
-                                        <React.Fragment key={`group-${group.area}-${gIdx}`}>
+                                        <Fragment key={`group-${group.area}-${gIdx}`}>
                                             <tr className="bg-primary/5 border-y border-white/5">
                                                 <td colSpan={6} className="px-8 py-3">
                                                     <div className="flex items-center gap-4">
@@ -793,7 +793,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                     />
                                                 )
                                             })}
-                                        </React.Fragment>
+                                        </Fragment>
                                     ))
                                 })()}
                             </tbody>

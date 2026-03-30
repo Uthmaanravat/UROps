@@ -1,0 +1,62 @@
+﻿
+> urops@0.1.0 build
+> next build
+
+   Γû▓ Next.js 14.1.0
+   - Environments: .env
+
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully
+   Linting and checking validity of types ...
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Failed to compile.
+
+./src/app/(dashboard)/DashboardLayoutClient.tsx
+51:29  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using 
+`<Image />` from `next/image` to automatically optimize images. This may incur additional 
+usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  
+@next/next/no-img-element
+124:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider 
+using `<Image />` from `next/image` to automatically optimize images. This may incur 
+additional usage or cost from your provider. See: 
+https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+169:33  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider 
+using `<Image />` from `next/image` to automatically optimize images. This may incur 
+additional usage or cost from your provider. See: 
+https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/invoices/InvoiceViewer.tsx
+72:8  Warning: React Hook useEffect has a missing dependency: 'quoteNumber'. Either include 
+it or remove the dependency array.  react-hooks/exhaustive-deps
+789:29  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider 
+using `<Image />` from `next/image` to automatically optimize images. This may incur 
+additional usage or cost from your provider. See: 
+https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/invoices/QuoteForm.tsx
+76:8  Warning: React Hook useEffect has a missing dependency: 'quoteNumber'. Either include 
+it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/scope/ScopeEntryForm.tsx
+206:8  Warning: React Hook useEffect has a missing dependency: 'STORAGE_KEY'. Either include 
+it or remove the dependency array.  react-hooks/exhaustive-deps
+213:8  Warning: React Hook useEffect has a missing dependency: 'STORAGE_KEY'. Either include 
+it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/settings/SettingsForm.tsx
+197:41  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider 
+using `<Image />` from `next/image` to automatically optimize images. This may incur 
+additional usage or cost from your provider. See: 
+https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/wbp/WorkBreakdownPricingEditor.tsx
+755:42  Error: 'React' is not defined.  react/jsx-no-undef
+
+info  - Need to disable some ESLint rules? Learn more here: 
+https://nextjs.org/docs/basic-features/eslint#disabling-rules

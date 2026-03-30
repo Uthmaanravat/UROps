@@ -15,7 +15,7 @@ import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction } from "@/app/(dashboard)/invoices/project-actions"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -961,7 +961,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 });
 
                                 return sequentialGroups.map((group: any, gIdx: number) => (
-                                    <React.Fragment key={`group-${group.area}-${gIdx}`}>
+                                    <Fragment key={`group-${group.area}-${gIdx}`}>
                                         <tr key={`header-${group.area}`} className="bg-white/5 border-y border-white/5">
                                             <td colSpan={4} className="py-2 px-6">
                                                 <div className="flex items-center gap-2">
@@ -1061,7 +1061,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 </td>
                                             </tr>
                                         ))}
-                                    </React.Fragment>
+                                    </Fragment>
                                 ));
                             })()}
                         </tbody>
