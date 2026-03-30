@@ -164,14 +164,14 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 }
             }
 
-            worksheet.mergeCells('C4:E4');
-            const titleCell = worksheet.getCell('C4');
+            worksheet.mergeCells('D4:E4');
+            const titleCell = worksheet.getCell('D4');
             titleCell.value = 'STATEMENT OF ACCOUNT';
             titleCell.font = { name: 'Arial', bold: true, size: 20, color: { argb: 'FF14141E' } };
             titleCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
             // 4. Metadata
-            let currentRow = 7;
+            let currentRow = 8;
             worksheet.getCell(`A${currentRow}`).value = 'DATE:';
             worksheet.getCell(`B${currentRow}`).value = new Date().toLocaleDateString('en-GB');
             worksheet.getCell(`A${currentRow}`).font = { bold: true };
@@ -195,12 +195,14 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             tableHead.values = ['Date', 'Document #', 'Site / Project', 'Total', 'Outstanding'];
             tableHead.font = { bold: true, color: { argb: 'FFFFFFFF' } };
             tableHead.height = 20;
-            tableHead.eachCell((cell) => {
+            tableHead.eachCell((cell, colNumber) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; // Statement Red
-                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.alignment = { 
+                    vertical: 'middle', 
+                    horizontal: colNumber <= 3 ? 'left' : 'right' 
+                };
                 cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
             });
-            worksheet.getCell(`C${currentRow}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
             // 6. Table Body
             let totalDue = 0;
@@ -228,7 +230,12 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                         outstanding
                     ];
 
+                    row.getCell(1).alignment = { horizontal: 'left' };
+                    row.getCell(2).alignment = { horizontal: 'left' };
+                    row.getCell(3).alignment = { horizontal: 'left' };
+                    row.getCell(4).alignment = { horizontal: 'right' };
                     row.getCell(4).numFmt = '"R"#,##0.00';
+                    row.getCell(5).alignment = { horizontal: 'right' };
                     row.getCell(5).numFmt = '"R"#,##0.00';
                     row.getCell(5).font = { bold: true };
                     
@@ -245,9 +252,11 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             const summaryRow = worksheet.getRow(currentRow);
             summaryRow.getCell(4).value = 'Total Amount Due:';
             summaryRow.getCell(4).font = { bold: true };
+            summaryRow.getCell(4).alignment = { horizontal: 'right' };
             summaryRow.getCell(5).value = totalDue;
             summaryRow.getCell(5).font = { bold: true, size: 12, color: { argb: 'FFDC2626' } };
             summaryRow.getCell(5).numFmt = '"R"#,##0.00';
+            summaryRow.getCell(5).alignment = { horizontal: 'right' };
             summaryRow.getCell(5).border = { top: { style: 'thin', color: { argb: 'FF14141E' } } };
 
             // 8. Banking Info

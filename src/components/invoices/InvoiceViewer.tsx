@@ -441,41 +441,34 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 }
             }
 
-            worksheet.mergeCells('D4:F4');
-            const titleCell = worksheet.getCell('D4');
+            worksheet.mergeCells('E4:F4');
+            const titleCell = worksheet.getCell('E4');
             titleCell.value = invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE';
             titleCell.font = { name: 'Arial', bold: true, size: 24, color: { argb: 'FF14141E' } };
             titleCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
-            worksheet.mergeCells('D5:F5');
-            const numCell = worksheet.getCell('D5');
+            worksheet.mergeCells('E5:F5');
+            const numCell = worksheet.getCell('E5');
             numCell.value = numberLabel;
             numCell.font = { name: 'Arial', bold: true, size: 14, color: { argb: 'FFA3E635' } };
             numCell.alignment = { horizontal: 'right' };
 
-            // 4. Metadata (Bill To, From, Dates)
-            let currentRow = 7;
+            // 4. Metadata (Bill To, Dates, Project)
+            let currentRow = 8;
             
-            // Header for sections
             worksheet.getCell(`A${currentRow}`).value = 'DATE:';
             worksheet.getCell(`B${currentRow}`).value = new Date(invoice.date).toLocaleDateString('en-GB');
-            worksheet.getCell(`D${currentRow}`).value = 'FROM:';
-            worksheet.getCell(`E${currentRow}`).value = company.name;
-            [worksheet.getCell(`A${currentRow}`), worksheet.getCell(`D${currentRow}`)].forEach(c => c.font = { bold: true, size: 10 });
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
             currentRow++;
 
             worksheet.getCell(`A${currentRow}`).value = 'PROJECT:';
             worksheet.getCell(`B${currentRow}`).value = invoice.project?.name || 'N/A';
-            worksheet.getCell(`D${currentRow}`).value = 'EMAIL:';
-            worksheet.getCell(`E${currentRow}`).value = company.email;
-            [worksheet.getCell(`A${currentRow}`), worksheet.getCell(`D${currentRow}`)].forEach(c => c.font = { bold: true, size: 10 });
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
             currentRow++;
 
             worksheet.getCell(`A${currentRow}`).value = 'SITE:';
             worksheet.getCell(`B${currentRow}`).value = invoice.site || 'N/A';
-            worksheet.getCell(`D${currentRow}`).value = 'PHONE:';
-            worksheet.getCell(`E${currentRow}`).value = company.phone;
-            [worksheet.getCell(`A${currentRow}`), worksheet.getCell(`D${currentRow}`)].forEach(c => c.font = { bold: true, size: 10 });
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
             currentRow++;
 
             currentRow += 2;
@@ -485,12 +478,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             worksheet.getCell(`A${currentRow}`).value = invoice.client.companyName || invoice.client.name;
             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
             currentRow++;
+            worksheet.mergeCells(`A${currentRow}:B${currentRow+1}`);
             worksheet.getCell(`A${currentRow}`).value = invoice.client.address;
-            worksheet.getRow(currentRow).height = 30;
-            worksheet.getCell(`A${currentRow}`).alignment = { wrapText: true };
+            worksheet.getCell(`A${currentRow}`).alignment = { wrapText: true, vertical: 'top' };
+            currentRow += 2;
             if (invoice.client.vatNumber) {
-                currentRow++;
                 worksheet.getCell(`A${currentRow}`).value = `VAT: ${invoice.client.vatNumber}`;
+                worksheet.getCell(`A${currentRow}`).font = { size: 10 };
+                currentRow++;
             }
 
             // 5. Table Head
@@ -499,14 +494,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             tableHead.values = ['AREA/HEADING', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL'];
             tableHead.font = { bold: true, color: { argb: 'FFA3E635' } };
             tableHead.height = 25;
-            tableHead.eachCell((cell) => {
+            tableHead.eachCell((cell, colNumber) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } };
-                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.alignment = { 
+                    vertical: 'middle', 
+                    horizontal: colNumber <= 2 ? 'left' : 'right' 
+                };
                 cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
             });
-            worksheet.getCell(`B${currentRow}`).alignment = { vertical: 'middle', horizontal: 'left' };
-            worksheet.getCell(`E${currentRow}`).alignment = { vertical: 'middle', horizontal: 'right' };
-            worksheet.getCell(`F${currentRow}`).alignment = { vertical: 'middle', horizontal: 'right' };
 
             // 6. Table Body
             const grouped = items.reduce((acc: any, item: any) => {
@@ -538,8 +533,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         item.unitPrice,
                         item.quantity * item.unitPrice
                     ];
-                    row.getCell(2).alignment = { wrapText: true };
+                    
+                    row.getCell(2).alignment = { wrapText: true, horizontal: 'left' };
+                    row.getCell(3).alignment = { horizontal: 'right' };
+                    row.getCell(4).alignment = { horizontal: 'right' };
+                    row.getCell(5).alignment = { horizontal: 'right' };
                     row.getCell(5).numFmt = '"R"#,##0.00';
+                    row.getCell(6).alignment = { horizontal: 'right' };
                     row.getCell(6).numFmt = '"R"#,##0.00';
                     row.getCell(6).font = { bold: true };
                     
@@ -555,18 +555,24 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             // 7. Totals
             currentRow++;
             worksheet.getCell(`E${currentRow}`).value = 'Subtotal';
+            worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
             worksheet.getCell(`F${currentRow}`).value = subtotal;
             worksheet.getCell(`F${currentRow}`).numFmt = '"R"#,##0.00';
+            worksheet.getCell(`F${currentRow}`).alignment = { horizontal: 'right' };
             currentRow++;
             worksheet.getCell(`E${currentRow}`).value = 'VAT (15%)';
+            worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
             worksheet.getCell(`F${currentRow}`).value = taxAmount;
             worksheet.getCell(`F${currentRow}`).numFmt = '"R"#,##0.00';
+            worksheet.getCell(`F${currentRow}`).alignment = { horizontal: 'right' };
             currentRow++;
             const totalRow = worksheet.getRow(currentRow);
             totalRow.getCell(5).value = 'TOTAL DUE';
             totalRow.getCell(5).font = { bold: true, size: 12 };
+            totalRow.getCell(5).alignment = { horizontal: 'right' };
+
             totalRow.getCell(6).value = total;
-            totalRow.getCell(6).font = { bold: true, size: 14, color: { argb: 'FF14141E' } };
+            totalRow.getCell(6).font = { bold: true, size: 14 };
             totalRow.getCell(6).numFmt = '"R"#,##0.00';
             totalRow.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
             totalRow.getCell(6).alignment = { horizontal: 'right' };
