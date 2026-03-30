@@ -1,10 +1,11 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { FileText, Loader2 } from "lucide-react"
+import { FileText, Loader2, Table } from "lucide-react"
 import jsPDF from "jspdf"
 import { drawPdfHeader } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
+import * as XLSX from "xlsx"
 import { useState } from "react"
 import { formatCurrency } from "@/lib/utils"
 
@@ -117,10 +118,81 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
         }
     }
 
+    const generateExcelStatement = async () => {
+        setLoading(true)
+        try {
+            const wsData = [
+                [company.name],
+                ["Email:", company.email, "Phone:", company.phone],
+                ["Bank:", company.bankDetails],
+                [],
+                ["STATEMENT OF ACCOUNT"],
+                ["Date:", new Date().toLocaleDateString('en-GB')],
+                ["Client:", client.companyName || client.name],
+                ["VAT No:", client.vatNumber || "N/A"],
+                [],
+                ["Date", "Document #", "Site / Project", "Total", "Outstanding"]
+            ];
+
+            let totalDue = 0;
+            const unpaidInvoices = client.invoices.filter((i: any) =>
+                i.type === 'INVOICE' &&
+                i.status !== 'PAID' &&
+                i.status !== 'CANCELLED'
+            )
+
+            unpaidInvoices.forEach((i: any) => {
+                const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
+                const outstanding = i.total - paid
+
+                if (outstanding > 0.01) {
+                    totalDue += outstanding
+                    const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
+
+                    wsData.push([
+                        new Date(i.date).toLocaleDateString('en-GB'),
+                        docNumber,
+                        i.site || i.project?.name || '-',
+                        i.total,
+                        outstanding
+                    ])
+                }
+            })
+
+            wsData.push([]);
+            wsData.push(["", "", "", "Total Amount Due:", totalDue]);
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            ws['!cols'] = [
+                { wch: 12 }, // Date
+                { wch: 15 }, // Doc #
+                { wch: 30 }, // Project
+                { wch: 15 }, // Total
+                { wch: 15 }  // Outstanding
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Statement');
+            XLSX.writeFile(wb, `Statement_${client.name}_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+        } catch (e) {
+            console.error(e)
+            alert("Failed to generate Excel statement")
+        } finally {
+            setLoading(false)
+        }
+    }
+
     return (
-        <Button variant="outline" onClick={generateStatement} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-            Statement
-        </Button>
+        <div className="flex gap-2">
+            <Button variant="default" onClick={generateExcelStatement} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500">
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Table className="mr-2 h-4 w-4" />}
+                Statement (Excel)
+            </Button>
+            <Button variant="outline" onClick={generateStatement} disabled={loading}>
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                Statement (PDF)
+            </Button>
+        </div>
     )
 }

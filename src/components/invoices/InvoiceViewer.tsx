@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
 import { drawPdfHeader } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
+import * as XLSX from "xlsx"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction } from "@/app/(dashboard)/invoices/pricing-actions"
@@ -389,6 +390,66 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.save(`${numberLabel}.pdf`);
     }
 
+    const generateExcel = () => {
+        const numberLabel = invoice.quoteNumber
+            ? invoice.quoteNumber
+            : (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
+
+        const wsData = [
+            [company.name],
+            ["Email:", company.email, "Phone:", company.phone],
+            ["VAT:", company.vatNumber || "N/A"],
+            [],
+            [invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel],
+            ["Date:", new Date(invoice.date).toLocaleDateString('en-GB')],
+            ["Bill To:", invoice.client.companyName || invoice.client.name],
+            ["Project:", invoice.project?.name || "N/A"],
+            ["Site:", invoice.site || "N/A"],
+            [],
+            ["Area/Heading", "Description", "Qty", "Unit", "Unit Price", "Total"]
+        ];
+
+        // Format Items grouped by area
+        const grouped = items.reduce((acc: any, item: any) => {
+            const area = item.area?.trim() || "";
+            if (!acc[area]) acc[area] = [];
+            acc[area].push(item);
+            return acc;
+        }, {});
+
+        Object.entries(grouped).forEach(([area, areaItems]: [string, any]) => {
+            areaItems.forEach((item: any) => {
+                wsData.push([
+                    area ? area.toUpperCase() : "",
+                    item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description,
+                    item.quantity,
+                    item.unit || '',
+                    item.unitPrice,
+                    item.quantity * item.unitPrice
+                ]);
+            });
+        });
+
+        wsData.push([]);
+        wsData.push(["", "", "", "", "Subtotal", subtotal]);
+        wsData.push(["", "", "", "", "VAT (15%)", taxAmount]);
+        wsData.push(["", "", "", "", "TOTAL DUE", total]);
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [
+            { wch: 15 }, // Area
+            { wch: 50 }, // Description
+            { wch: 8 },  // Qty
+            { wch: 8 },  // Unit
+            { wch: 15 }, // Price
+            { wch: 15 }  // Total
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, invoice.type === 'QUOTE' ? 'Quote' : 'Invoice');
+        XLSX.writeFile(wb, `${numberLabel}.xlsx`);
+    };
+
     const handleConvert = async () => {
         const poNumber = prompt("Please enter the Client PO Number (Optional):");
         if (poNumber === null) return;
@@ -473,6 +534,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+                    <Button onClick={generateExcel} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold border border-emerald-500 shadow-md">
+                        <Download className="mr-2 h-4 w-4" /> Export Excel
+                    </Button>
                     <Button variant="outline" onClick={generatePDF}>
                         <Download className="mr-2 h-4 w-4" /> Download PDF
                     </Button>
