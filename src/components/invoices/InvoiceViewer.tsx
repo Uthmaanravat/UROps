@@ -303,13 +303,20 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             }
         });
 
-        sequentialGroups.forEach((group: any) => {
-            if (group.area) {
-                tableBody.push([{ content: group.area.toUpperCase(), colSpan: 5, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 8, halign: 'left' } }]);
+        sequentialGroups.forEach((group: any, gIdx: number) => {
+            // Calculate global start index for this group
+            let globalStartIndex = 0;
+            for (let i = 0; i < gIdx; i++) {
+                globalStartIndex += sequentialGroups[i].items.length;
             }
-            group.items.forEach((item: any) => {
+
+            if (group.area) {
+                tableBody.push([{ content: group.area.toUpperCase(), colSpan: 6, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 7.5, halign: 'left', cellPadding: 1.5 } }]);
+            }
+            group.items.forEach((item: any, iIdx: number) => {
                 const desc = item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description;
                 tableBody.push([
+                    globalStartIndex + iIdx + 1,
                     desc,
                     item.quantity,
                     item.unit || '',
@@ -320,74 +327,101 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         });
 
         autoTable(doc, {
-            head: [['DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL']],
+            head: [['#', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL']],
             body: tableBody,
-            startY: 95,
+            startY: 85,
             theme: 'striped',
             headStyles: {
                 fillColor: [20, 20, 30],
                 textColor: [163, 230, 53],
                 fontStyle: 'bold',
-                fontSize: 9,
+                fontSize: 8.5,
                 halign: 'left'
             },
             bodyStyles: {
-                fontSize: 8,
+                fontSize: 7.5,
                 textColor: [20, 20, 30],
-                cellPadding: 2
+                cellPadding: 1.5
             },
             columnStyles: {
-                0: { cellWidth: 95 },
-                1: { halign: 'center' },
+                0: { cellWidth: 8, halign: 'center' },
+                1: { cellWidth: 87 },
                 2: { halign: 'center' },
-                3: { halign: 'right' },
-                4: { halign: 'right', fontStyle: 'bold' }
+                3: { halign: 'center' },
+                4: { halign: 'right' },
+                5: { halign: 'right', fontStyle: 'bold' }
             },
             alternateRowStyles: {
                 fillColor: [252, 254, 255]
             }
         });
 
-        const finalY = (doc as any).lastAutoTable.finalY + 15;
+        const finalY = (doc as any).lastAutoTable.finalY + 12;
+
+        // Check if footer components will fit on current page
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const footerEstimate = 60; // Estimated height for summary + notes + banking
+        let currentY = finalY;
+
+        if (currentY + footerEstimate > pageHeight - 15) {
+            doc.addPage();
+            currentY = 25; // Reset to top of new page
+        }
 
         // 4. Summary (Standard Style)
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.2);
-        doc.line(135, finalY - 5, 196, finalY - 5);
+        doc.line(135, currentY - 5, 196, currentY - 5);
 
-        doc.setFontSize(9);
+        doc.setFontSize(8.5);
         doc.setTextColor(71, 85, 105);
         doc.setFont("helvetica", "normal");
-        doc.text(`Subtotal:`, 140, finalY);
-        doc.text(formatCurrency(invoice.subtotal, currencySymbol), 196, finalY, { align: 'right' });
+        doc.text(`Subtotal:`, 140, currentY);
+        doc.text(formatCurrency(invoice.subtotal, currencySymbol), 196, currentY, { align: 'right' });
 
-        doc.text(`VAT (15%):`, 140, finalY + 7);
-        doc.text(formatCurrency(invoice.taxAmount, currencySymbol), 196, finalY + 7, { align: 'right' });
+        doc.text(`VAT (15%):`, 140, currentY + 6);
+        doc.text(formatCurrency(invoice.taxAmount, currencySymbol), 196, currentY + 6, { align: 'right' });
 
-        doc.setFontSize(12);
+        doc.setFontSize(11);
         doc.setTextColor(20, 20, 30);
         doc.setFont("helvetica", "bold");
-        doc.text(`TOTAL DUE:`, 140, finalY + 16);
-        doc.text(formatCurrency(invoice.total, currencySymbol), 196, finalY + 16, { align: 'right' });
+        doc.text(`TOTAL DUE:`, 140, currentY + 14);
+        doc.text(formatCurrency(invoice.total, currencySymbol), 196, currentY + 14, { align: 'right' });
 
         // 5. Notes & Banking (Professional Footer)
-        let currentY = finalY + 35;
+        currentY += 28;
 
         if (note) {
-            doc.setFontSize(9);
+            const noteLines = doc.splitTextToSize(note, 180);
+            const noteHeight = (noteLines.length * 4.5) + 10;
+
+            if (currentY + noteHeight > pageHeight - 15) {
+                doc.addPage();
+                currentY = 25;
+            }
+
+            doc.setFontSize(8.5);
             doc.setFont("helvetica", "bold");
+            doc.setTextColor(20, 20, 30);
             doc.text("TERMS & NOTES", 14, currentY);
             doc.setDrawColor(163, 230, 53); // Lime separator
             doc.line(14, currentY + 2, 40, currentY + 2);
 
             doc.setFont("helvetica", "normal");
             doc.setTextColor(71, 85, 105);
-            const noteLines = doc.splitTextToSize(note, 180);
             doc.text(noteLines, 14, currentY + 8);
-            currentY += (noteLines.length * 5) + 20;
+            currentY += noteHeight + 5;
         }
 
-        doc.setFontSize(9);
+        const bankLines = doc.splitTextToSize(company.bankDetails, 180);
+        const bankHeight = (bankLines.length * 4.5) + 10;
+
+        if (currentY + bankHeight > pageHeight - 15) {
+            doc.addPage();
+            currentY = 25;
+        }
+
+        doc.setFontSize(8.5);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(20, 20, 30);
         doc.text("BANKING DETAILS", 14, currentY);
@@ -396,7 +430,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
         doc.setFont("helvetica", "normal");
         doc.setTextColor(71, 85, 105);
-        const bankLines = doc.splitTextToSize(company.bankDetails, 180);
         doc.text(bankLines, 14, currentY + 8);
 
         doc.save(`${numberLabel}.pdf`);
@@ -414,23 +447,24 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
             // 1. Set Column Widths
             worksheet.columns = [
+                { width: 5 },  // #
                 { width: 25 }, // Area / Meta Labels
-                { width: 50 }, // Description
-                { width: 10 }, // Qty
-                { width: 10 }, // Unit
+                { width: 45 }, // Description
+                { width: 8 },  // Qty
+                { width: 8 },  // Unit
                 { width: 15 }, // Price
                 { width: 15 }  // Total
             ];
 
             // 2. Branding Bars (Navy and Lime)
             const navyBar = worksheet.getRow(1);
-            navyBar.height = 15;
-            worksheet.mergeCells('A1:F1');
+            navyBar.height = 12;
+            worksheet.mergeCells('A1:G1');
             worksheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } };
 
             const limeBar = worksheet.getRow(2);
-            limeBar.height = 4;
-            worksheet.mergeCells('A2:F2');
+            limeBar.height = 3;
+            worksheet.mergeCells('A2:G2');
             worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
 
             // 3. Logo & Document Title
@@ -452,16 +486,16 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 }
             }
 
-            worksheet.mergeCells('E4:F4');
-            const titleCell = worksheet.getCell('E4');
+            worksheet.mergeCells('F4:G4');
+            const titleCell = worksheet.getCell('F4');
             titleCell.value = invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE';
-            titleCell.font = { name: 'Arial', bold: true, size: 24, color: { argb: 'FF14141E' } };
+            titleCell.font = { name: 'Arial', bold: true, size: 20, color: { argb: 'FF14141E' } };
             titleCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
-            worksheet.mergeCells('E5:F5');
-            const numCell = worksheet.getCell('E5');
+            worksheet.mergeCells('F5:G5');
+            const numCell = worksheet.getCell('F5');
             numCell.value = numberLabel;
-            numCell.font = { name: 'Arial', bold: true, size: 14, color: { argb: 'FFA3E635' } };
+            numCell.font = { name: 'Arial', bold: true, size: 12, color: { argb: 'FFA3E635' } };
             numCell.alignment = { horizontal: 'right' };
 
             // 4. Metadata (Bill To, Dates, Project)
@@ -502,14 +536,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             // 5. Table Head
             currentRow += 2;
             const tableHead = worksheet.getRow(currentRow);
-            tableHead.values = ['AREA/HEADING', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL'];
-            tableHead.font = { bold: true, color: { argb: 'FFA3E635' } };
-            tableHead.height = 25;
+            tableHead.values = ['#', 'AREA/HEADING', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL'];
+            tableHead.font = { bold: true, size: 9, color: { argb: 'FFA3E635' } };
+            tableHead.height = 20;
             tableHead.eachCell((cell, colNumber) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } };
                 cell.alignment = { 
                     vertical: 'middle', 
-                    horizontal: colNumber <= 2 ? 'left' : 'right' 
+                    horizontal: colNumber === 1 || colNumber === 4 || colNumber === 5 ? 'center' : (colNumber >= 6 ? 'right' : 'left')
                 };
                 cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
             });
@@ -527,21 +561,28 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             });
 
             currentRow++;
-            sequentialGroups.forEach((group: any) => {
+            sequentialGroups.forEach((group: any, gIdx: number) => {
+                // Calculate global start index for this group
+                let globalStartIndex = 0;
+                for (let i = 0; i < gIdx; i++) {
+                    globalStartIndex += sequentialGroups[i].items.length;
+                }
+
                 if (group.area) {
-                    worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
+                    worksheet.mergeCells(`A${currentRow}:G${currentRow}`);
                     const groupCell = worksheet.getCell(`A${currentRow}`);
                     groupCell.value = group.area.toUpperCase();
                     groupCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-                    groupCell.font = { bold: true, size: 9, italic: true, color: { argb: 'FF14141E' } };
+                    groupCell.font = { bold: true, size: 8, italic: true, color: { argb: 'FF14141E' } };
                     groupCell.alignment = { horizontal: 'left' };
                     currentRow++;
                 }
 
-                group.items.forEach((item: any) => {
+                group.items.forEach((item: any, iIdx: number) => {
                     const row = worksheet.getRow(currentRow);
-                    row.height = 20; // Compact row height
+                    row.height = 18; // Even more compact
                     row.values = [
+                        globalStartIndex + iIdx + 1,
                         '',
                         item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description,
                         item.quantity,
@@ -550,67 +591,66 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         item.quantity * item.unitPrice
                     ];
                     
-                    row.getCell(2).alignment = { wrapText: true, horizontal: 'left' };
-                    row.getCell(3).alignment = { horizontal: 'right' };
+                    row.getCell(1).alignment = { horizontal: 'center' };
+                    row.getCell(3).alignment = { wrapText: true, horizontal: 'left' };
                     row.getCell(4).alignment = { horizontal: 'right' };
                     row.getCell(5).alignment = { horizontal: 'right' };
-                    row.getCell(5).numFmt = '"R"#,##0.00';
                     row.getCell(6).alignment = { horizontal: 'right' };
                     row.getCell(6).numFmt = '"R"#,##0.00';
-                    row.getCell(6).font = { bold: true };
+                    row.getCell(7).alignment = { horizontal: 'right' };
+                    row.getCell(7).numFmt = '"R"#,##0.00';
+                    row.getCell(7).font = { bold: true };
                     
                     // Borders
                     row.eachCell((cell) => {
                         cell.border = { bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } } };
                     });
-                    row.height = 20; // Compact row height
-
                     currentRow++;
                 });
             });
 
             // 7. Totals
             currentRow++;
-            worksheet.getCell(`E${currentRow}`).value = 'Subtotal';
-            worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
-            worksheet.getCell(`F${currentRow}`).value = subtotal;
-            worksheet.getCell(`F${currentRow}`).numFmt = '"R"#,##0.00';
+            worksheet.getCell(`F${currentRow}`).value = 'Subtotal';
             worksheet.getCell(`F${currentRow}`).alignment = { horizontal: 'right' };
+            worksheet.getCell(`G${currentRow}`).value = subtotal;
+            worksheet.getCell(`G${currentRow}`).numFmt = '"R"#,##0.00';
+            worksheet.getCell(`G${currentRow}`).alignment = { horizontal: 'right' };
             currentRow++;
-            worksheet.getCell(`E${currentRow}`).value = 'VAT (15%)';
-            worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
-            worksheet.getCell(`F${currentRow}`).value = taxAmount;
-            worksheet.getCell(`F${currentRow}`).numFmt = '"R"#,##0.00';
+            worksheet.getCell(`F${currentRow}`).value = 'VAT (15%)';
             worksheet.getCell(`F${currentRow}`).alignment = { horizontal: 'right' };
+            worksheet.getCell(`G${currentRow}`).value = taxAmount;
+            worksheet.getCell(`G${currentRow}`).numFmt = '"R"#,##0.00';
+            worksheet.getCell(`G${currentRow}`).alignment = { horizontal: 'right' };
             currentRow++;
             const totalRow = worksheet.getRow(currentRow);
-            totalRow.getCell(5).value = 'TOTAL DUE';
-            totalRow.getCell(5).font = { bold: true, size: 12 };
-            totalRow.getCell(5).alignment = { horizontal: 'right' };
-
-            totalRow.getCell(6).value = total;
-            totalRow.getCell(6).font = { bold: true, size: 14 };
-            totalRow.getCell(6).numFmt = '"R"#,##0.00';
-            totalRow.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
+            totalRow.getCell(6).value = 'TOTAL DUE';
+            totalRow.getCell(6).font = { bold: true, size: 12 };
             totalRow.getCell(6).alignment = { horizontal: 'right' };
 
+            totalRow.getCell(7).value = total;
+            totalRow.getCell(7).font = { bold: true, size: 13 };
+            totalRow.getCell(7).numFmt = '"R"#,##0.00';
+            totalRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
+            totalRow.getCell(7).alignment = { horizontal: 'right' };
+
             // 8. Footer (Banking & Notes)
-            currentRow += 3;
+            currentRow += 2;
             worksheet.getCell(`A${currentRow}`).value = 'BANKING DETAILS';
-            worksheet.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FF14141E' } };
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10, color: { argb: 'FF14141E' } };
             currentRow++;
-            worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
+            worksheet.mergeCells(`A${currentRow}:G${currentRow}`);
             worksheet.getCell(`A${currentRow}`).value = company.bankDetails;
             worksheet.getCell(`A${currentRow}`).font = { size: 9, color: { argb: 'FF475569' } };
-            worksheet.getRow(currentRow).height = 30;
+            worksheet.getRow(currentRow).height = 25;
             worksheet.getCell(`A${currentRow}`).alignment = { wrapText: true };
 
             if (note) {
                 currentRow += 2;
                 worksheet.getCell(`A${currentRow}`).value = 'TERMS & NOTES';
-                worksheet.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FF14141E' } };
+                worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10, color: { argb: 'FF14141E' } };
                 currentRow++;
-                worksheet.mergeCells(`A${currentRow}:F${currentRow + 2}`);
+                worksheet.mergeCells(`A${currentRow}:G${currentRow + 2}`);
                 worksheet.getCell(`A${currentRow}`).value = note;
                 worksheet.getCell(`A${currentRow}`).font = { size: 9, color: { argb: 'FF475569' } };
                 worksheet.getCell(`A${currentRow}`).alignment = { wrapText: true, vertical: 'top' };
@@ -783,37 +823,37 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 )}
 
                 {/* Modern Navy Header */}
-                <div className="bg-[#1E293B] -mx-4 -mt-4 md:-mx-8 md:-mt-8 p-4 md:p-12 mb-6 md:mb-12 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6 border-b border-white/5">
+                <div className="bg-[#1E293B] -mx-4 -mt-4 md:-mx-8 md:-mt-8 p-4 md:p-10 mb-5 md:mb-8 flex flex-col md:flex-row justify-between items-center gap-3 md:gap-5 border-b border-white/5">
                     <div className="flex flex-col md:flex-row items-center gap-3 md:gap-8 text-center md:text-left">
                         {company.logoUrl ? (
-                            <img src={company.logoUrl} alt="Logo" className="h-16 md:h-24 w-auto object-contain brightness-110" />
+                            <img src={company.logoUrl} alt="Logo" className="h-14 md:h-20 w-auto object-contain brightness-110" />
                         ) : (
-                            <div className="h-16 w-16 md:h-20 md:w-20 bg-primary flex items-center justify-center font-black text-[#0F172A] text-2xl md:text-3xl rounded-lg md:rounded-xl shadow-2xl rotate-3">LR</div>
+                            <div className="h-14 w-14 md:h-16 md:w-16 bg-primary flex items-center justify-center font-black text-[#0F172A] text-xl md:text-2xl rounded-lg md:rounded-xl shadow-2xl rotate-3">LR</div>
                         )}
                         <div>
-                            <h1 className="text-xl md:text-4xl font-black tracking-tight text-white">{company.name}</h1>
-                            <div className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-4 mt-2">
-                                <p className="text-gray-400 text-[10px] md:text-sm font-medium">{company.phone}</p>
+                            <h1 className="text-xl md:text-3xl font-black tracking-tight text-white">{company.name}</h1>
+                            <div className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-3 mt-1 md:mt-2">
+                                <p className="text-gray-400 text-[9px] md:text-xs font-medium">{company.phone}</p>
                                 <span className="text-gray-600 hidden md:inline">•</span>
-                                <p className="text-gray-400 text-[10px] md:text-sm font-medium">{company.email}</p>
+                                <p className="text-gray-400 text-[9px] md:text-xs font-medium">{company.email}</p>
                                 {company.vatNumber && (
                                     <>
                                         <span className="text-gray-600 hidden md:inline">•</span>
-                                        <p className="text-gray-400 text-[10px] md:text-sm font-medium uppercase tracking-tighter">VAT: {company.vatNumber}</p>
+                                        <p className="text-gray-400 text-[9px] md:text-xs font-medium uppercase tracking-tighter">VAT: {company.vatNumber}</p>
                                     </>
                                 )}
                             </div>
                         </div>
                     </div>
-                    <div className="text-center md:text-right border-t border-white/5 pt-4 md:pt-0 md:border-t-0 w-full md:w-auto">
-                        <h2 className="text-lg md:text-4xl font-black uppercase tracking-[0.2em] text-primary">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
-                        <div className="flex items-center justify-center md:justify-end gap-1 md:gap-2 mt-1 md:mt-2">
-                            <span className="text-gray-500 font-mono text-xs md:text-lg">#</span>
+                    <div className="text-center md:text-right border-t border-white/5 pt-3 md:pt-0 md:border-t-0 w-full md:w-auto">
+                        <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-primary">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
+                        <div className="flex items-center justify-center md:justify-end gap-1 md:gap-2 mt-1">
+                            <span className="text-gray-500 font-mono text-xs md:text-base">#</span>
                             <input
                                 value={quoteNumber}
                                 onChange={(e) => setQuoteNumber(e.target.value)}
                                 onBlur={saveChanges}
-                                className="bg-transparent border-none text-gray-500 font-mono text-xs md:text-lg w-24 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary rounded"
+                                className="bg-transparent border-none text-gray-400 font-mono text-xs md:text-base w-24 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary/20 rounded"
                                 disabled={invoice.status === 'PAID'}
                             />
                         </div>
@@ -821,49 +861,49 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 </div>
 
                 {/* Metadata & Billing */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 mb-12 md:mb-16">
-                    <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 mb-8 md:mb-10">
+                    <div className="space-y-4">
                         <div>
-                            <h3 className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3 text-center md:text-left">Bill To</h3>
-                            <div className="text-lg md:text-2xl font-black text-white text-center md:text-left">{invoice.client.companyName || invoice.client.name}</div>
-                            {invoice.client.attentionTo && <div className="text-xs md:text-base font-bold text-gray-400 mt-1 italic text-center md:text-left">Attn: {invoice.client.attentionTo}</div>}
+                            <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] mb-2 text-center md:text-left">Bill To</h3>
+                            <div className="text-lg md:text-xl font-black text-white text-center md:text-left">{invoice.client.companyName || invoice.client.name}</div>
+                            {invoice.client.attentionTo && <div className="text-[10px] md:text-xs font-bold text-gray-400 mt-1 italic text-center md:text-left">Attn: {invoice.client.attentionTo}</div>}
                         </div>
-                        <div className="text-gray-400 leading-relaxed font-medium bg-white/5 p-3 md:p-4 rounded-xl border border-white/5 whitespace-pre-wrap text-xs md:text-base">{invoice.client.address}</div>
+                        <div className="text-gray-400 leading-relaxed font-medium bg-white/5 p-3 rounded-xl border border-white/5 whitespace-pre-wrap text-[10px] md:text-sm">{invoice.client.address}</div>
 
-                        <div className="flex gap-6">
+                        <div className="flex gap-4">
                             {invoice.client.vatNumber && (
-                                <div className="bg-white/5 px-3 py-1 rounded-md border border-white/5">
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mr-2">VAT</span>
-                                    <span className="text-xs font-bold text-gray-300">{invoice.client.vatNumber}</span>
+                                <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest mr-2">VAT</span>
+                                    <span className="text-[10px] font-bold text-gray-300">{invoice.client.vatNumber}</span>
                                 </div>
                             )}
                             {invoice.client.registrationNumber && (
-                                <div className="bg-white/5 px-3 py-1 rounded-md border border-white/5">
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mr-2">REG</span>
-                                    <span className="text-xs font-bold text-gray-300">{invoice.client.registrationNumber}</span>
+                                <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest mr-2">REG</span>
+                                    <span className="text-[10px] font-bold text-gray-300">{invoice.client.registrationNumber}</span>
                                 </div>
                             )}
                         </div>
                     </div>
 
                     <div className="flex flex-col space-y-2">
-                        <div className="bg-[#1E293B] p-5 rounded-2xl w-full max-w-sm ml-auto border border-white/5 space-y-2 group shadow-xl">
-                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
-                                <span className="text-gray-500 font-black uppercase tracking-widest text-[9px]">Date Issued</span>
+                        <div className="bg-[#1E293B] p-4 rounded-2xl w-full max-w-sm ml-auto border border-white/5 space-y-1.5 group shadow-xl">
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Date Issued</span>
                                 <input
                                     type="date"
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
-                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base cursor-pointer"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
-                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
-                                <span className="text-primary font-black uppercase tracking-widest text-[9px]">Project Link</span>
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                <span className="text-primary font-black uppercase tracking-widest text-[8px]">Project Link</span>
                                 <select
                                     value={projectId}
                                     onChange={(e) => handleProjectChange(e.target.value)}
-                                    className="bg-transparent border-none text-right font-black text-primary outline-none focus:ring-0 max-w-[150px] md:max-w-[200px] text-sm md:text-base cursor-pointer"
+                                    className="bg-transparent border-none text-right font-black text-primary outline-none focus:ring-0 max-w-[150px] md:max-w-[200px] text-[10px] md:text-xs cursor-pointer"
                                     disabled={invoice.status === 'PAID'}
                                 >
                                     <option value="" className="bg-[#1E293B]">Select Project</option>
@@ -873,7 +913,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 </select>
                             </div>
                             {invoice.projectId && (
-                                <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
                                     <span className="text-gray-400 font-black uppercase tracking-widest text-[8px]">Rename Project</span>
                                     <input
                                         value={projectName}
@@ -885,14 +925,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 router.refresh();
                                             }
                                         }}
-                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-xs md:text-sm w-full max-w-[200px]"
+                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[200px]"
                                         disabled={invoice.status === 'PAID'}
                                     />
                                 </div>
                             )}
                             {invoice.projectId && (
-                                <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-[#64748B]">Commercial Status</span>
+                                <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                    <span className="text-[7px] font-black uppercase tracking-widest text-[#64748B]">Commercial Status</span>
                                     <select
                                         value={commercialStatus}
                                         onChange={(e) => handleCommercialStatusChange(e.target.value)}
@@ -910,25 +950,25 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     </select>
                                 </div>
                             )}
-                            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
-                                <span className="text-gray-500 font-black uppercase tracking-widest text-[9px]">Site Location</span>
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Site Location</span>
                                 <input
                                     value={site}
                                     onChange={(e) => setSite(e.target.value)}
                                     onBlur={saveChanges}
                                     placeholder="Enter Site..."
-                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base w-full max-w-[200px]"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[200px]"
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
-                            <div className="flex justify-between items-center text-sm pb-1 transition-all group-hover:border-primary/20">
-                                <span className="text-gray-500 font-black uppercase tracking-widest text-[9px]">Reference</span>
+                            <div className="flex justify-between items-center text-xs pb-1 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Reference</span>
                                 <input
                                     value={reference}
                                     onChange={(e) => setReference(e.target.value)}
                                     onBlur={saveChanges}
                                     placeholder="Customer Ref"
-                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-sm md:text-base w-full max-w-[200px]"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[200px]"
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
@@ -937,14 +977,15 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 </div>
 
                 {/* Items Table - Modern High-Contrast Style */}
-                <div className="mb-16 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                <div className="mb-10 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
                     <table className="w-full min-w-[600px] md:min-w-full">
                         <thead>
                             <tr className="border-b border-white/10">
-                                <th className="py-6 text-left font-black text-[11px] uppercase tracking-[0.2em] text-gray-500">Service Description</th>
-                                <th className="py-6 text-center w-24 font-black text-[11px] uppercase tracking-[0.2em] text-gray-500">Qty</th>
-                                <th className="py-6 text-right w-36 font-black text-[11px] uppercase tracking-[0.2em] text-gray-500">Unit Price</th>
-                                <th className="py-6 text-right w-40 font-black text-[11px] uppercase tracking-[0.2em] text-gray-500">Line Total</th>
+                                <th className="py-4 text-center w-8 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">#</th>
+                                <th className="py-4 text-left font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Service Description</th>
+                                <th className="py-4 text-center w-24 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Qty</th>
+                                <th className="py-4 text-right w-36 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Unit Price</th>
+                                <th className="py-4 text-right w-40 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Line Total</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
@@ -960,10 +1001,17 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     }
                                 });
 
-                                return sequentialGroups.map((group: any, gIdx: number) => (
-                                    <Fragment key={`group-${group.area}-${gIdx}`}>
-                                        <tr key={`header-${group.area}`} className="bg-white/5 border-y border-white/5">
-                                            <td colSpan={4} className="py-2 px-6">
+                                return sequentialGroups.map((group: any, gIdx: number) => {
+                                    // Calculate global start index for this group
+                                    let globalStartIndex = 0;
+                                    for (let i = 0; i < gIdx; i++) {
+                                        globalStartIndex += sequentialGroups[i].items.length;
+                                    }
+
+                                    return (
+                                        <Fragment key={`group-${group.area}-${gIdx}`}>
+                                            <tr key={`header-${group.area}`} className="bg-white/5 border-y border-white/5">
+                                                <td colSpan={5} className="py-1 px-4 md:px-6">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-2 w-2 rounded-full bg-primary" />
                                                     {isPricingMode ? (
@@ -987,131 +1035,135 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 </div>
                                             </td>
                                         </tr>
-                                        {group.items.map((item: any) => (
-                                            <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
-                                                <td className="py-4 pr-12">
-                                                    {isPricingMode ? (
-                                                        <div className="flex gap-4">
-                                                            <div className="flex-1">
-                                                                <Textarea
-                                                                    value={item.description}
-                                                                    onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
-                                                                    className="min-h-[40px] bg-transparent border-white/10 focus:border-primary text-base font-bold text-white tracking-tight resize-none p-2"
-                                                                    placeholder="Item Description"
-                                                                />
+                                            {group.items.map((item: any, iIdx: number) => (
+                                                <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors border-b border-white/[0.02]">
+                                                    <td className="py-2.5 text-center align-top">
+                                                        <span className="text-[10px] font-black text-gray-600">{globalStartIndex + iIdx + 1}</span>
+                                                    </td>
+                                                    <td className="py-2.5 pr-8">
+                                                        {isPricingMode ? (
+                                                            <div className="flex gap-3">
+                                                                <div className="flex-1">
+                                                                    <Textarea
+                                                                        value={item.description}
+                                                                        onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
+                                                                        className="min-h-[40px] bg-transparent border-white/10 focus:border-primary text-[13px] md:text-sm font-bold text-white tracking-tight resize-none p-2"
+                                                                        placeholder="Item Description"
+                                                                    />
+                                                                </div>
+                                                                <div className="w-1/3 max-w-[120px]">
+                                                                    <Input
+                                                                        value={item.area || ""}
+                                                                        onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
+                                                                        className="h-8 bg-transparent border-white/10 focus:border-primary text-[9px] font-bold text-primary uppercase tracking-widest"
+                                                                        placeholder="HEADING"
+                                                                    />
+                                                                </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-red-500 hover:bg-red-500/10 self-center"
+                                                                    onClick={() => handleDeleteItem(item.id)}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
                                                             </div>
-                                                            <div className="w-1/3 max-w-[150px]">
+                                                        ) : (
+                                                            <div className="text-[13px] md:text-sm font-bold text-white tracking-tight leading-snug">{item.description}</div>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-2.5 text-center align-top">
+                                                        {isPricingMode ? (
+                                                            <div className="flex flex-col gap-0.5 items-center">
                                                                 <Input
-                                                                    value={item.area || ""}
-                                                                    onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
-                                                                    className="h-10 bg-transparent border-white/10 focus:border-primary text-xs font-bold text-primary uppercase tracking-widest"
-                                                                    placeholder="HEADING"
+                                                                    type="number"
+                                                                    value={item.quantity}
+                                                                    onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                                                    className="w-12 h-7 text-center bg-transparent border-white/10 font-bold p-0 text-xs"
+                                                                />
+                                                                <Input
+                                                                    value={item.unit || ""}
+                                                                    onChange={(e) => handleItemUpdate(item.id, 'unit', e.target.value)}
+                                                                    placeholder="Unit"
+                                                                    className="w-12 h-4 text-center text-[8px] uppercase bg-transparent border-none opacity-50 p-0"
                                                                 />
                                                             </div>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-10 w-10 text-red-500 hover:bg-red-500/10 self-center"
-                                                                onClick={() => handleDeleteItem(item.id)}
-                                                            >
-                                                                <Trash2 className="h-5 w-5" />
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-base font-bold text-white tracking-tight leading-snug">{item.description}</div>
-                                                    )}
-                                                </td>
-                                                <td className="py-4 text-center align-top">
-                                                    {isPricingMode ? (
-                                                        <div className="flex flex-col gap-1 items-center">
-                                                            <Input
-                                                                type="number"
-                                                                value={item.quantity}
-                                                                onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                className="w-14 h-8 text-center bg-transparent border-white/10 font-bold"
-                                                            />
-                                                            <Input
-                                                                value={item.unit || ""}
-                                                                onChange={(e) => handleItemUpdate(item.id, 'unit', e.target.value)}
-                                                                placeholder="Unit"
-                                                                className="w-14 h-5 text-center text-[9px] uppercase bg-transparent border-none opacity-50"
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm font-black text-gray-400">{item.quantity} <span className="text-[10px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></span>
-                                                    )}
-                                                </td>
-                                                <td className="py-4 text-right align-top">
-                                                    {isPricingMode ? (
-                                                        <div className="inline-flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
-                                                            <span className="text-gray-500 font-bold text-xs">{currencySymbol}</span>
-                                                            <input
-                                                                type="number"
-                                                                className="w-20 bg-transparent text-right text-white font-bold outline-none no-spinner text-sm"
-                                                                value={item.unitPrice}
-                                                                onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
-                                                    )}
-                                                </td>
-                                                <td className="py-4 text-right font-black text-base text-white align-top">
-                                                    {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </Fragment>
-                                ));
+                                                        ) : (
+                                                            <span className="text-xs font-black text-gray-400">{item.quantity} <span className="text-[9px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-2.5 text-right align-top">
+                                                        {isPricingMode ? (
+                                                            <div className="inline-flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
+                                                                <span className="text-gray-500 font-bold text-[10px]">{currencySymbol}</span>
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-20 bg-transparent text-right text-white font-bold outline-none no-spinner text-xs"
+                                                                    value={item.unitPrice}
+                                                                    onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-2.5 text-right font-black text-[13px] md:text-sm text-white align-top">
+                                                        {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </Fragment>
+                                    );
+                                });
                             })()}
                         </tbody>
                     </table>
                 </div>
 
                 {/* Footer UI - Modernized with conditional payment terms Logic */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 mt-10 md:mt-16 pt-10 md:pt-16 border-t border-white/10">
-                    <div className="space-y-6 md:space-y-10">
-                        <div className="bg-white/5 p-8 rounded-2xl border border-white/5 relative overflow-hidden group">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-14 mt-8 md:mt-10 pt-8 md:pt-10 border-t border-white/10">
+                    <div className="space-y-4 md:space-y-6">
+                        <div className="bg-white/5 p-5 md:p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
                             <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-6 flex items-center gap-3">
-                                <FileText className="h-4 w-4" /> Professional Notes
+                            <h4 className="text-[9px] font-black uppercase tracking-[0.3em] text-primary mb-3 flex items-center gap-2">
+                                <FileText className="h-3.5 w-3.5" /> Professional Notes
                             </h4>
                             {isPricingMode ? (
                                 <textarea
                                     value={note}
                                     onChange={(e) => setNote(e.target.value)}
                                     placeholder="ADD SPECIALIZED TERMS, SITE CONDITIONS, OR PROJECT REQUIREMENTS..."
-                                    className="w-full min-h-[160px] bg-transparent text-gray-300 text-base border-none focus:ring-0 resize-none font-medium leading-relaxed placeholder:opacity-20"
+                                    className="w-full min-h-[120px] bg-transparent text-gray-300 text-[13px] border-none focus:ring-0 resize-none font-medium leading-relaxed placeholder:opacity-20"
                                 />
                             ) : (
-                                <div className="text-base font-bold text-gray-300 leading-relaxed whitespace-pre-wrap italic">
+                                <div className="text-[13px] font-bold text-gray-300 leading-relaxed whitespace-pre-wrap italic">
                                     {note || "No specific project notes applied to this document."}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-4">Settlement Details</h4>
-                            <div className="text-sm font-bold leading-loose font-mono text-gray-400 bg-white/5 p-6 rounded-2xl border border-white/5">
+                            <h4 className="text-[9px] font-black uppercase tracking-[0.3em] text-gray-500 mb-2">Settlement Details</h4>
+                            <div className="text-[11px] font-bold leading-normal font-mono text-gray-400 bg-white/5 p-4 rounded-2xl border border-white/5">
                                 {company.bankDetails}
                             </div>
                         </div>
                     </div>
 
-                    <div className="space-y-6">
-                        <div className="space-y-4 bg-white/[0.02] p-8 rounded-3xl border border-white/5">
-                            <div className="flex justify-between items-center text-lg">
+                    <div className="space-y-4">
+                        <div className="space-y-2 bg-white/[0.02] p-6 rounded-3xl border border-white/5">
+                            <div className="flex justify-between items-center text-sm md:text-base">
                                 <span className="text-gray-500 font-bold">Document Subtotal</span>
                                 <span className="font-bold text-white">{formatCurrency(subtotal, currencySymbol)}</span>
                             </div>
-                            <div className="flex justify-between items-center text-lg">
+                            <div className="flex justify-between items-center text-sm md:text-base">
                                 <span className="text-gray-500 font-bold">VAT (15%)</span>
                                 <span className="font-bold text-white">{formatCurrency(taxAmount, currencySymbol)}</span>
                             </div>
-                            <div className="h-px bg-white/10 my-4" />
+                            <div className="h-px bg-white/10 my-3" />
                             <div className="flex justify-between items-center">
-                                <span className="text-sm font-black uppercase tracking-[0.2em] text-primary">Balance Due</span>
-                                <span className="text-5xl font-black text-white tracking-tighter">{formatCurrency(total, currencySymbol)}</span>
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Balance Due</span>
+                                <span className="text-3xl md:text-4xl font-black text-white tracking-tighter">{formatCurrency(total, currencySymbol)}</span>
                             </div>
                         </div>
                     </div>
