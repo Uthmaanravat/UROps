@@ -203,92 +203,133 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         const numberLabel = invoice.quoteNumber
             ? invoice.quoteNumber
             : (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
-        await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel);
+        
+        const badge = invoice.status === 'CHECKED' ? '✓ VERIFIED / CHECKED' : undefined;
+        const nextY = await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel, badge);
 
-        // 2. Metadata Section (Columns & Dividers)
-        doc.setTextColor(20, 20, 30);
-        doc.setFontSize(9);
+        // 2. Metadata Section (3-Column Layout)
+        const gridY = nextY + 5; // e.g., 53
+
+        // Column 1: Document Details
+        doc.setTextColor(163, 230, 53); // Lime 
         doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.text("DETAILS", 14, gridY);
 
-        // Add a thin separator line below the header
-        doc.setDrawColor(226, 232, 240); // Subtle slate-200
-        doc.line(14, 48, 196, 48);
-
-        // Column 1: Document Details
-        let metaY = 55;
-        // Column 1: Document Details
-        let detailY = 60;
-        doc.text(`Date: ${new Date(invoice.date).toLocaleDateString('en-GB')}`, 14, detailY);
-        detailY += 5;
+        let detailY = gridY + 6;
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139); // slate-500
+        doc.setFont("helvetica", "normal");
+        doc.text("Date Issued:", 14, detailY);
+        doc.setTextColor(30, 41, 59);
+        doc.setFont("helvetica", "bold");
+        doc.text(new Date(invoice.date).toLocaleDateString('en-GB'), 36, detailY);
+        detailY += 6;
 
         if (invoice.project?.name) {
-            const projectLines = doc.splitTextToSize(`Project: ${invoice.project.name}`, 60);
-            doc.text(projectLines, 14, detailY);
-            detailY += (projectLines.length * 5);
+            const projectLines = doc.splitTextToSize(invoice.project.name, 45);
+            doc.setTextColor(100, 116, 139); // slate-500
+            doc.setFont("helvetica", "normal");
+            doc.text("Project:", 14, detailY);
+            doc.setTextColor(30, 41, 59);
+            doc.setFont("helvetica", "bold");
+            doc.text(projectLines, 36, detailY);
+            detailY += (projectLines.length * 4.5);
         }
 
         if (invoice.site) {
-            const siteLines = doc.splitTextToSize(`Site: ${invoice.site}`, 60);
-            doc.text(siteLines, 14, detailY);
-            detailY += (siteLines.length * 4);
+            const siteLines = doc.splitTextToSize(invoice.site, 45);
+            doc.setTextColor(100, 116, 139); // slate-500
+            doc.setFont("helvetica", "normal");
+            doc.text("Site:", 14, detailY);
+            doc.setTextColor(30, 41, 59);
+            doc.text(siteLines, 36, detailY);
+            detailY += (siteLines.length * 4.5);
         }
 
         if (reference) {
-            const refLines = doc.splitTextToSize(`Ref: ${reference}`, 60);
-            doc.text(refLines, 14, detailY);
-            detailY += (refLines.length * 4);
+            const refLines = doc.splitTextToSize(reference, 45);
+            doc.setTextColor(100, 116, 139); // slate-500
+            doc.setFont("helvetica", "normal");
+            doc.text("Ref:", 14, detailY);
+            doc.setTextColor(30, 41, 59);
+            doc.text(refLines, 36, detailY);
+            detailY += (refLines.length * 4.5);
         }
 
         // Column 2: Bill To
-        doc.setTextColor(20, 20, 30);
+        doc.setTextColor(163, 230, 53); // Lime 
         doc.setFont("helvetica", "bold");
-        doc.text("BILL TO", 85, 55);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(71, 85, 105);
+        doc.setFontSize(8);
+        doc.text("BILL TO", 85, gridY);
+        
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(11);
         const billToName = (invoice.client.companyName || invoice.client.name).toUpperCase();
-        doc.setFont("helvetica", "bold");
-        doc.text(billToName, 85, 60);
+        doc.text(billToName, 85, gridY + 6);
+        
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
         doc.setFont("helvetica", "normal");
-        const billToLines = doc.splitTextToSize(invoice.client.address || "", 55);
-        doc.text(billToLines, 85, 65);
+        
+        let clientLegalY = gridY + 11;
+        // @ts-ignore
+        if (invoice.client.attentionTo) {
+            // @ts-ignore
+            doc.text(`Attn: ${invoice.client.attentionTo}`, 85, clientLegalY);
+            clientLegalY += 4.5;
+        }
 
-        let clientLegalY = 65 + (billToLines.length * 4);
+        const billToLines = doc.splitTextToSize(invoice.client.address || "", 55);
+        doc.text(billToLines, 85, clientLegalY);
+        clientLegalY += (billToLines.length * 4.5);
+
         doc.setFontSize(8);
         if (invoice.client.vatNumber) {
             doc.text(`VAT: ${invoice.client.vatNumber}`, 85, clientLegalY);
-            clientLegalY += 4;
+            clientLegalY += 4.5;
         }
         if (invoice.client.registrationNumber) {
-            doc.text(`Reg: ${invoice.client.registrationNumber}`, 85, clientLegalY);
+            doc.text(`REG: ${invoice.client.registrationNumber}`, 85, clientLegalY);
+            clientLegalY += 4.5;
         }
 
         // Column 3: From (Company Contact)
-        doc.setFontSize(9);
-        doc.setTextColor(20, 20, 30);
+        doc.setTextColor(163, 230, 53); // Lime
+        doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
-        doc.text("FROM", 196, 55, { align: 'right' });
+        doc.text("FROM", 196, gridY, { align: 'right' });
 
-        let fromY = 60;
-        doc.setTextColor(20, 20, 30);
-        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(30, 41, 59);
+        let fromY = gridY + 6;
         doc.text(company.name, 196, fromY, { align: 'right' });
+        
         fromY += 5;
-
         doc.setFont("helvetica", "normal");
-        doc.setTextColor(71, 85, 105);
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
 
         if (company.vatNumber) {
             doc.text(`VAT: ${company.vatNumber}`, 196, fromY, { align: 'right' });
-            fromY += 5;
+            fromY += 4.5;
         }
 
         const compAddr = doc.splitTextToSize(company.address, 55);
         doc.text(compAddr, 196, fromY, { align: 'right' });
-        fromY += (compAddr.length * 4);
+        fromY += (compAddr.length * 4.5);
 
+        doc.setTextColor(163, 230, 53); // Lime
+        doc.setFont("helvetica", "bold");
         doc.text(company.phone, 196, fromY, { align: 'right' });
-        fromY += 5;
+        fromY += 4.5;
+        
+        doc.setTextColor(100, 116, 139);
+        doc.setFont("helvetica", "normal");
         doc.text(company.email, 196, fromY, { align: 'right' });
+
+        // Calculate dynamic table start Y
+        const startTableY = Math.max(detailY, clientLegalY, fromY) + 10;
 
         // 3. Table with Sequential Grouping
         const tableBody: any[] = [];
@@ -329,7 +370,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         autoTable(doc, {
             head: [['#', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL']],
             body: tableBody,
-            startY: 85,
+            startY: startTableY,
             theme: 'striped',
             headStyles: {
                 fillColor: [20, 20, 30],

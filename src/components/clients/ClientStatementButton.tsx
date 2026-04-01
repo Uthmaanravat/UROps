@@ -19,6 +19,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
         email: settings?.email || "Loedvi@lrbuilders.co.za",
         phone: settings?.phone || "082 448 7490",
         logoUrl: settings?.logoUrl || "",
+        vatNumber: settings?.vatNumber || "",
         paymentTerms: settings?.paymentTerms || "",
         bankDetails: settings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510"
     };
@@ -29,24 +30,87 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             const doc = new jsPDF()
 
             // Header (Shared)
-            await drawPdfHeader(doc, company, 'STATEMENT OF ACCOUNT', '');
+            const nextY = await drawPdfHeader(doc, company, 'STATEMENT OF ACCOUNT', '');
 
-            doc.setTextColor(20, 20, 30); // Reset to dark for content
-
-            // Client Info Block
-            const clientInfoY = 50;
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 14, clientInfoY);
-
+            // 3-Column Document Details Grid
+            const gridY = nextY;
+            
+            // Column 1: Details
+            doc.setFontSize(8);
+            doc.setTextColor(163, 230, 53); // Lime
             doc.setFont("helvetica", "bold");
-            doc.text(`Client: ${client.companyName || client.name}`, 14, clientInfoY + 5);
+            doc.text("DETAILS", 14, gridY);
+            
+            doc.setFontSize(9);
+            doc.setTextColor(100, 116, 139); // slate-500
             doc.setFont("helvetica", "normal");
+            doc.text("Date:", 14, gridY + 6);
+            doc.setTextColor(30, 41, 59);
+            doc.setFont("helvetica", "bold");
+            doc.text(new Date().toLocaleDateString('en-GB'), 30, gridY + 6);
 
-            if (client.vatNumber) doc.text(`VAT No: ${client.vatNumber}`, 14, clientInfoY + 10);
+            // Column 2: Bill To
+            doc.setFontSize(8);
+            doc.setTextColor(163, 230, 53); // Lime
+            doc.setFont("helvetica", "bold");
+            doc.text("BILL TO", 80, gridY);
+            
+            doc.setFontSize(11);
+            doc.setTextColor(30, 41, 59);
+            doc.text(client.companyName || client.name, 80, gridY + 6);
+            
+            doc.setFontSize(9);
+            doc.setTextColor(100, 116, 139);
+            doc.setFont("helvetica", "normal");
+            let currentBillY = gridY + 11;
+            if (client.attentionTo) {
+                doc.text(`Attn: ${client.attentionTo}`, 80, currentBillY);
+                currentBillY += 4.5;
+            }
+            if (client.address) {
+                const addressLines = doc.splitTextToSize(client.address, 50);
+                doc.text(addressLines, 80, currentBillY);
+                currentBillY += addressLines.length * 4.5;
+            }
+            if (client.vatNumber) {
+                doc.text(`VAT: ${client.vatNumber}`, 80, currentBillY);
+                currentBillY += 4.5;
+            }
+            if (client.registrationNumber) {
+                doc.text(`REG: ${client.registrationNumber}`, 80, currentBillY);
+            }
 
-            // Statement of Outstanding Invoices - Moved further down to avoid overlap
-            const headerY = clientInfoY + 25;
+            // Column 3: From
+            doc.setFontSize(8);
+            doc.setTextColor(163, 230, 53); // Lime
+            doc.setFont("helvetica", "bold");
+            doc.text("FROM", 196, gridY, { align: 'right' });
+            
+            doc.setFontSize(11);
+            doc.setTextColor(30, 41, 59);
+            doc.text(company.name, 196, gridY + 6, { align: 'right' });
+            
+            doc.setFontSize(9);
+            doc.setTextColor(100, 116, 139);
+            doc.setFont("helvetica", "normal");
+            let currentFromY = gridY + 11;
+            if (company.vatNumber) {
+                doc.text(`VAT: ${company.vatNumber}`, 196, currentFromY, { align: 'right' });
+                currentFromY += 4.5;
+            }
+            if (company.address) {
+                const addressLines = doc.splitTextToSize(company.address, 50);
+                doc.text(addressLines, 196, currentFromY, { align: 'right' });
+                currentFromY += addressLines.length * 4.5;
+            }
+            doc.setTextColor(163, 230, 53); // Lime pop for phone
+            doc.setFont("helvetica", "bold");
+            doc.text(company.phone, 196, currentFromY, { align: 'right' });
+
+            const minListY = Math.max(gridY + 12, currentBillY + 5, currentFromY + 5);
+
+            // Statement of Outstanding Invoices
+            const headerY = minListY + 10;
             doc.setFontSize(14)
             doc.setFont("helvetica", "bold")
             doc.text("OUTSTANDING INVOICES", 14, headerY)
@@ -178,25 +242,96 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
             // 4. Metadata
             let currentRow = 8;
-            worksheet.getCell(`A${currentRow}`).value = 'DATE:';
-            worksheet.getCell(`B${currentRow}`).value = new Date().toLocaleDateString('en-GB');
-            worksheet.getCell(`A${currentRow}`).font = { bold: true };
+            
+            // Headings
+            worksheet.getCell(`A${currentRow}`).value = 'DETAILS';
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FFA3E635' } };
+            
+            worksheet.getCell(`C${currentRow}`).value = 'BILL TO';
+            worksheet.getCell(`C${currentRow}`).font = { bold: true, color: { argb: 'FFA3E635' } };
+            
+            worksheet.mergeCells(`D${currentRow}:E${currentRow}`);
+            const fromCell = worksheet.getCell(`D${currentRow}`);
+            fromCell.value = 'FROM';
+            fromCell.font = { bold: true, color: { argb: 'FFA3E635' } };
+            fromCell.alignment = { horizontal: 'right' };
+            
             currentRow++;
-
-            worksheet.getCell(`A${currentRow}`).value = 'CLIENT:';
-            worksheet.getCell(`B${currentRow}`).value = client.companyName || client.name;
-            worksheet.getCell(`A${currentRow}`).font = { bold: true };
-            currentRow++;
-
-            if (client.vatNumber) {
-                worksheet.getCell(`A${currentRow}`).value = 'VAT NO:';
-                worksheet.getCell(`B${currentRow}`).value = client.vatNumber;
-                worksheet.getCell(`A${currentRow}`).font = { bold: true };
-                currentRow++;
+            const startDataRow = currentRow;
+            
+            // Details
+            let detailsRow = startDataRow;
+            worksheet.getCell(`A${detailsRow}`).value = 'Date Issued:';
+            worksheet.getCell(`A${detailsRow}`).font = { color: { argb: 'FF64748B' } };
+            worksheet.getCell(`B${detailsRow}`).value = new Date().toLocaleDateString('en-GB');
+            worksheet.getCell(`B${detailsRow}`).font = { bold: true };
+            
+            // Bill To
+            let billToRow = startDataRow;
+            worksheet.getCell(`C${billToRow}`).value = client.companyName || client.name;
+            worksheet.getCell(`C${billToRow}`).font = { bold: true, size: 12, color: { argb: 'FF1E293B' } };
+            billToRow++;
+            
+            if (client.attentionTo) {
+                worksheet.getCell(`C${billToRow}`).value = `Attn: ${client.attentionTo}`;
+                worksheet.getCell(`C${billToRow}`).font = { color: { argb: 'FF64748B' } };
+                billToRow++;
             }
+            if (client.address) {
+                const cCell = worksheet.getCell(`C${billToRow}`);
+                cCell.value = client.address;
+                cCell.font = { color: { argb: 'FF64748B' } };
+                cCell.alignment = { wrapText: true };
+                worksheet.getRow(billToRow).height = (client.address.split('\n').length || 1) * 15;
+                billToRow++;
+            }
+            if (client.vatNumber) {
+                worksheet.getCell(`C${billToRow}`).value = `VAT: ${client.vatNumber}`;
+                worksheet.getCell(`C${billToRow}`).font = { color: { argb: 'FF64748B' } };
+                billToRow++;
+            }
+            if (client.registrationNumber) {
+                worksheet.getCell(`C${billToRow}`).value = `REG: ${client.registrationNumber}`;
+                worksheet.getCell(`C${billToRow}`).font = { color: { argb: 'FF64748B' } };
+                billToRow++;
+            }
+            
+            // From
+            let fromRow = startDataRow;
+            worksheet.mergeCells(`D${fromRow}:E${fromRow}`);
+            const compNameCell = worksheet.getCell(`D${fromRow}`);
+            compNameCell.value = company.name;
+            compNameCell.font = { bold: true, size: 12, color: { argb: 'FF1E293B' } };
+            compNameCell.alignment = { horizontal: 'right' };
+            fromRow++;
+            
+            if (company.vatNumber) {
+                worksheet.mergeCells(`D${fromRow}:E${fromRow}`);
+                const vatCell = worksheet.getCell(`D${fromRow}`);
+                vatCell.value = `VAT: ${company.vatNumber}`;
+                vatCell.font = { color: { argb: 'FF64748B' } };
+                vatCell.alignment = { horizontal: 'right' };
+                fromRow++;
+            }
+            if (company.address) {
+                worksheet.mergeCells(`D${fromRow}:E${fromRow}`);
+                const addrCell = worksheet.getCell(`D${fromRow}`);
+                addrCell.value = company.address;
+                addrCell.font = { color: { argb: 'FF64748B' } };
+                addrCell.alignment = { wrapText: true, horizontal: 'right' };
+                worksheet.getRow(fromRow).height = (company.address.split('\n').length || 1) * 15;
+                fromRow++;
+            }
+            worksheet.mergeCells(`D${fromRow}:E${fromRow}`);
+            const phoneCell = worksheet.getCell(`D${fromRow}`);
+            phoneCell.value = company.phone;
+            phoneCell.font = { bold: true, color: { argb: 'FFA3E635' } };
+            phoneCell.alignment = { horizontal: 'right' };
+            fromRow++;
+            
+            currentRow = Math.max(detailsRow, billToRow, fromRow) + 3;
 
             // 5. Table Head
-            currentRow += 2;
             const tableHead = worksheet.getRow(currentRow);
             tableHead.values = ['Date', 'Document #', 'Site / Project', 'Total', 'Outstanding'];
             tableHead.font = { bold: true, color: { argb: 'FFFFFFFF' } };
