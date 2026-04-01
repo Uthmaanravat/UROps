@@ -87,7 +87,8 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                 setItemTitle("")
                 setItemDescription("")
                 setItemImage(null)
-                setIsAdding(false)
+                if (fileInputRef.current) fileInputRef.current.value = ""
+                // Keep form open so user can add more items rapidly
                 router.refresh()
             } else {
                 alert("Failed to add item")
@@ -347,7 +348,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                     onClick={() => setIsAdding(false)}
                                     className="font-bold uppercase text-xs tracking-widest"
                                 >
-                                    Cancel
+                                    Done Adding
                                 </Button>
                                 <Button 
                                     type="submit" 
@@ -355,7 +356,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-widest px-10 h-12 rounded-xl"
                                 >
                                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                                    Save Update
+                                    Save & Add Next
                                 </Button>
                             </CardFooter>
                         </form>
