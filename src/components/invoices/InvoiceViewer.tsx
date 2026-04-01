@@ -795,18 +795,41 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 }}
                                 disabled={loading}
                                 className={cn(
-                                    "font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl transition-all",
                                     invoice.status === 'PAID' ? "text-red-500 border-red-500/20 bg-red-500/5 hover:bg-red-500/10" : "text-green-500 border-green-500/20 bg-green-500/5 hover:bg-green-500/10"
                                 )}
                             >
-                                {invoice.status === 'PAID' ? <><Unlock className="mr-2 h-4 w-4" /> Unlock</> : <><Lock className="mr-2 h-4 w-4" /> Mark as Paid (Lock)</>}
+                                {invoice.status === 'PAID' ? <Unlock className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
+                                {invoice.status === 'PAID' ? "Unlock" : "Mark as Paid (Lock)"}
                             </Button>
                         )}
+
+                        {invoice.status !== 'PAID' && (
+                            <Button
+                                variant="outline"
+                                onClick={async () => {
+                                    setLoading(true);
+                                    const { updateInvoiceStatus } = await import("@/app/(dashboard)/invoices/actions");
+                                    await updateInvoiceStatus(invoice.id, invoice.status === 'CHECKED' ? 'DRAFT' : 'CHECKED');
+                                    setLoading(false);
+                                    router.refresh();
+                                }}
+                                disabled={loading}
+                                className={cn(
+                                    "font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl transition-all",
+                                    invoice.status === 'CHECKED' ? "text-cyan-500 border-cyan-500/20 bg-cyan-500/5" : "text-white/60 border-white/10 hover:bg-white/5"
+                                )}
+                            >
+                                <FileCheck className={cn("mr-2 h-4 w-4", invoice.status === 'CHECKED' && "text-cyan-500")} />
+                                {invoice.status === 'CHECKED' ? "Verified" : "Mark as Checked"}
+                            </Button>
+                        )}
+
                         {invoice.type === 'INVOICE' && !isPaid && (
                             <Button onClick={handlePayment} disabled={loading} className="bg-primary text-primary-foreground font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl shadow-xl shadow-primary/20">
                                 <CreditCard className="mr-2 h-4 w-4" /> Record Payment
                             </Button>
                         )}
+
                         <Button variant="ghost" onClick={handleDelete} disabled={loading} className="h-12 w-12 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors">
                             <Trash2 className="h-5 w-5" />
                         </Button>
@@ -840,7 +863,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         </div>
                     </div>
                     <div className="text-center md:text-right border-t border-gray-100 pt-3 md:pt-0 md:border-t-0 w-full md:w-auto">
-                        <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-[#1E293B]">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
+                        <div className="flex flex-col items-center md:items-end gap-1">
+                            {invoice.status === 'CHECKED' && (
+                                <span className="bg-cyan-500/10 text-cyan-600 text-[10px] font-black px-2 py-0.5 rounded-full border border-cyan-500/20 uppercase tracking-widest mb-1 animate-in fade-in zoom-in-95 duration-300">
+                                    ✓ VERIFIED / CHECKED
+                                </span>
+                            )}
+                            <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-[#1E293B]">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
+                        </div>
                         <div className="flex items-center justify-center md:justify-end gap-1 md:gap-2 mt-1">
                             <span className="text-primary font-mono text-xs md:text-base font-black">#</span>
                             <input

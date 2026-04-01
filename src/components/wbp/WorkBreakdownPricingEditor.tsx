@@ -15,6 +15,7 @@ import { saveWBPDraftAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
 import { updateClientJsonAction, getClientsAction } from "@/app/(dashboard)/clients/actions"
 import { updateProject, updateProjectCommercialStatus } from "@/app/(dashboard)/projects/actions"
 import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-actions"
+import { VoiceRecorder } from "@/components/voice/VoiceRecorder"
 
 // Memoized individual item row to prevent full-table re-renders
 const WbpItemRow = memo(({
@@ -666,6 +667,30 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                 </CardHeader>
 
                 <CardContent className="p-0">
+                    {/* Voice-to-Scope Integration */}
+                    <div className="bg-primary/5 border-b border-white/5 px-8 py-6">
+                        <VoiceRecorder onParsed={(newParsedItems) => {
+                            if (newParsedItems && newParsedItems.length > 0) {
+                                const lastArea = items[items.length - 1]?.area || "GENERAL";
+                                const formatted = newParsedItems.map(i => ({
+                                    id: Math.random().toString(36).substr(2, 9),
+                                    area: lastArea,
+                                    description: (i.description || "").toUpperCase(),
+                                    quantity: i.quantity || 1,
+                                    unit: (i.unit || "ea").toLowerCase(),
+                                    notes: "",
+                                    unitPrice: i.unitPrice || 0
+                                }));
+                                
+                                if (items.length === 1 && !items[0].description && items[0].unitPrice === 0) {
+                                    setItems(formatted);
+                                } else {
+                                    setItems(prev => [...prev, ...formatted]);
+                                }
+                            }
+                        }} />
+                    </div>
+
                     {/* Catalog Picker */}
                     {catalog.length > 0 && (
                         <div className="bg-primary/5 border-y border-white/5 px-8 py-4 relative">

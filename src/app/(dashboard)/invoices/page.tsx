@@ -129,10 +129,11 @@ export default async function InvoicesPage({
                                             <span className={cn(
                                                 "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
                                                 isPaid ? "bg-green-500/10 text-green-500" :
+                                                    invoice.status === 'CHECKED' ? "bg-cyan-500/10 text-cyan-500" :
                                                     invoice.status === 'DRAFT' ? "bg-gray-500/10 text-gray-500" :
                                                         "bg-yellow-500/10 text-yellow-500"
                                             )}>
-                                                {isPaid ? "PAID" : invoice.status}
+                                                {isPaid ? "PAID" : (invoice.status === 'CHECKED' ? "VERIFIED" : invoice.status)}
                                             </span>
                                         </td>
                                         <td className="p-4 align-middle">{new Date(invoice.date).toLocaleDateString()}</td>
