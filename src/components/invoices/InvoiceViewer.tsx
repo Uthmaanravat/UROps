@@ -822,73 +822,45 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     </div>
                 )}
 
-                {/* Modern Navy Header */}
-                <div className="bg-[#1E293B] -mx-4 -mt-4 md:-mx-8 md:-mt-8 p-4 md:p-10 mb-5 md:mb-8 flex flex-col md:flex-row justify-between items-center gap-3 md:gap-5 border-b border-white/5">
+                {/* Modern Professional Document Header */}
+                <div className="bg-white -mx-4 -mt-4 md:-mx-8 md:-mt-8 p-4 md:p-10 mb-5 md:mb-8 flex flex-col md:flex-row justify-between items-center gap-3 md:gap-5 border-b border-gray-200">
                     <div className="flex flex-col md:flex-row items-center gap-3 md:gap-8 text-center md:text-left">
                         {company.logoUrl ? (
-                            <img src={company.logoUrl} alt="Logo" className="h-14 md:h-20 w-auto object-contain brightness-110" />
+                            <img src={company.logoUrl} alt="Logo" className="h-14 md:h-20 w-auto object-contain" />
                         ) : (
-                            <div className="h-14 w-14 md:h-16 md:w-16 bg-primary flex items-center justify-center font-black text-[#0F172A] text-xl md:text-2xl rounded-lg md:rounded-xl shadow-2xl rotate-3">LR</div>
+                            <div className="h-14 w-14 md:h-16 md:w-16 bg-primary flex items-center justify-center font-black text-[#0F172A] text-xl md:text-2xl rounded-lg md:rounded-xl shadow-lg rotate-3 outline outline-2 outline-primary/20">LR</div>
                         )}
                         <div>
-                            <h1 className="text-xl md:text-3xl font-black tracking-tight text-white">{company.name}</h1>
+                            <h1 className="text-xl md:text-3xl font-black tracking-tight text-[#1E293B]">{company.name}</h1>
                             <div className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-3 mt-1 md:mt-2">
-                                <p className="text-gray-400 text-[9px] md:text-xs font-medium">{company.phone}</p>
-                                <span className="text-gray-600 hidden md:inline">•</span>
-                                <p className="text-gray-400 text-[9px] md:text-xs font-medium">{company.email}</p>
-                                {company.vatNumber && (
-                                    <>
-                                        <span className="text-gray-600 hidden md:inline">•</span>
-                                        <p className="text-gray-400 text-[9px] md:text-xs font-medium uppercase tracking-tighter">VAT: {company.vatNumber}</p>
-                                    </>
-                                )}
+                                <p className="text-gray-500 text-[9px] md:text-xs font-semibold uppercase tracking-wider">{company.phone}</p>
+                                <span className="text-gray-300 hidden md:inline">•</span>
+                                <p className="text-gray-500 text-[9px] md:text-xs font-semibold lowercase">{company.email}</p>
                             </div>
                         </div>
                     </div>
-                    <div className="text-center md:text-right border-t border-white/5 pt-3 md:pt-0 md:border-t-0 w-full md:w-auto">
-                        <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-primary">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
+                    <div className="text-center md:text-right border-t border-gray-100 pt-3 md:pt-0 md:border-t-0 w-full md:w-auto">
+                        <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-[#1E293B]">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
                         <div className="flex items-center justify-center md:justify-end gap-1 md:gap-2 mt-1">
-                            <span className="text-gray-500 font-mono text-xs md:text-base">#</span>
+                            <span className="text-primary font-mono text-xs md:text-base font-black">#</span>
                             <input
                                 value={quoteNumber}
                                 onChange={(e) => setQuoteNumber(e.target.value)}
                                 onBlur={saveChanges}
-                                className="bg-transparent border-none text-gray-400 font-mono text-xs md:text-base w-24 md:w-48 text-center md:text-right outline-none focus:ring-1 focus:ring-primary/20 rounded"
+                                className="bg-transparent border-none text-primary font-mono font-black text-sm md:text-xl w-32 md:w-48 text-center md:text-right outline-none focus:ring-2 focus:ring-primary/20 rounded-lg transition-all"
                                 disabled={invoice.status === 'PAID'}
                             />
                         </div>
                     </div>
                 </div>
 
-                {/* Metadata & Billing */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 mb-8 md:mb-10">
-                    <div className="space-y-4">
-                        <div>
-                            <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] mb-2 text-center md:text-left">Bill To</h3>
-                            <div className="text-lg md:text-xl font-black text-white text-center md:text-left">{invoice.client.companyName || invoice.client.name}</div>
-                            {invoice.client.attentionTo && <div className="text-[10px] md:text-xs font-bold text-gray-400 mt-1 italic text-center md:text-left">Attn: {invoice.client.attentionTo}</div>}
-                        </div>
-                        <div className="text-gray-400 leading-relaxed font-medium bg-white/5 p-3 rounded-xl border border-white/5 whitespace-pre-wrap text-[10px] md:text-sm">{invoice.client.address}</div>
-
-                        <div className="flex gap-4">
-                            {invoice.client.vatNumber && (
-                                <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
-                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest mr-2">VAT</span>
-                                    <span className="text-[10px] font-bold text-gray-300">{invoice.client.vatNumber}</span>
-                                </div>
-                            )}
-                            {invoice.client.registrationNumber && (
-                                <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
-                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest mr-2">REG</span>
-                                    <span className="text-[10px] font-bold text-gray-300">{invoice.client.registrationNumber}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col space-y-2">
-                        <div className="bg-[#1E293B] p-4 rounded-2xl w-full max-w-sm ml-auto border border-white/5 space-y-1.5 group shadow-xl">
-                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                {/* Professionally Organized Metadata & Billing */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10 mb-8 md:mb-10 items-start">
+                    {/* Column 1: Document Details & Settings */}
+                    <div className="flex flex-col space-y-4">
+                        <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] text-center md:text-left">Details</h3>
+                        <div className="bg-[#1E293B] p-4 rounded-2xl w-full border border-white/5 space-y-2 group shadow-xl ring-1 ring-white/5">
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Date Issued</span>
                                 <input
                                     type="date"
@@ -898,12 +870,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
-                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-primary font-black uppercase tracking-widest text-[8px]">Project Link</span>
                                 <select
                                     value={projectId}
                                     onChange={(e) => handleProjectChange(e.target.value)}
-                                    className="bg-transparent border-none text-right font-black text-primary outline-none focus:ring-0 max-w-[150px] md:max-w-[200px] text-[10px] md:text-xs cursor-pointer"
+                                    className="bg-transparent border-none text-right font-black text-primary outline-none focus:ring-0 max-w-[120px] md:max-w-[150px] text-[10px] md:text-xs cursor-pointer"
                                     disabled={invoice.status === 'PAID'}
                                 >
                                     <option value="" className="bg-[#1E293B]">Select Project</option>
@@ -913,8 +885,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 </select>
                             </div>
                             {invoice.projectId && (
-                                <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
-                                    <span className="text-gray-400 font-black uppercase tracking-widest text-[8px]">Rename Project</span>
+                                <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
+                                    <span className="text-gray-400 font-black uppercase tracking-widest text-[8px]">Rename</span>
                                     <input
                                         value={projectName}
                                         onChange={(e) => setProjectName(e.target.value)}
@@ -925,13 +897,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 router.refresh();
                                             }
                                         }}
-                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[200px]"
+                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
                                         disabled={invoice.status === 'PAID'}
                                     />
                                 </div>
                             )}
                             {invoice.projectId && (
-                                <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                                <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                     <span className="text-[7px] font-black uppercase tracking-widest text-[#64748B]">Commercial Status</span>
                                     <select
                                         value={commercialStatus}
@@ -950,14 +922,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     </select>
                                 </div>
                             )}
-                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1 transition-all group-hover:border-primary/20">
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Site Location</span>
                                 <input
                                     value={site}
                                     onChange={(e) => setSite(e.target.value)}
                                     onBlur={saveChanges}
                                     placeholder="Enter Site..."
-                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[200px]"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
@@ -968,9 +940,56 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     onChange={(e) => setReference(e.target.value)}
                                     onBlur={saveChanges}
                                     placeholder="Customer Ref"
-                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[200px]"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
                                     disabled={invoice.status === 'PAID'}
                                 />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Column 2: BILL TO (Client) */}
+                    <div className="space-y-4">
+                        <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] text-center md:text-left">Bill To</h3>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5 space-y-3 min-h-[160px] shadow-xl">
+                            <div className="text-lg md:text-xl font-black text-white text-center md:text-left">{invoice.client.companyName || invoice.client.name}</div>
+                            {invoice.client.attentionTo && (
+                                <div className="text-[10px] md:text-xs font-bold text-gray-400 italic text-center md:text-left">
+                                    Attn: {invoice.client.attentionTo}
+                                </div>
+                            )}
+                            <div className="text-gray-400 leading-relaxed font-medium whitespace-pre-wrap text-[10px] md:text-sm text-center md:text-left">
+                                {invoice.client.address}
+                            </div>
+                            <div className="flex flex-wrap justify-center md:justify-start gap-2 pt-2 border-t border-white/5 mt-auto">
+                                {invoice.client.vatNumber && (
+                                    <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5 flex items-center gap-2">
+                                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">VAT</span>
+                                        <span className="text-[10px] font-bold text-gray-300">{invoice.client.vatNumber}</span>
+                                    </div>
+                                )}
+                                {invoice.client.registrationNumber && (
+                                    <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5 flex items-center gap-2">
+                                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">REG</span>
+                                        <span className="text-[10px] font-bold text-gray-300">{invoice.client.registrationNumber}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Column 3: FROM (Company) */}
+                    <div className="space-y-4">
+                        <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] text-center md:text-right">From</h3>
+                        <div className="md:text-right space-y-1">
+                            <div className="text-lg md:text-xl font-black text-white">{company.name}</div>
+                            {company.vatNumber && (
+                                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">VAT: {company.vatNumber}</div>
+                            )}
+                            <div className="text-gray-400 text-[10px] md:text-[13px] font-medium leading-normal whitespace-pre-wrap pt-2">
+                                {company.address}
+                            </div>
+                            <div className="text-primary font-black text-[11px] uppercase tracking-widest pt-2">
+                                {company.phone}
                             </div>
                         </div>
                     </div>
