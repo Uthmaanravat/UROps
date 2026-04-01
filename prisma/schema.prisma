@@ -304,6 +304,7 @@ model Report {
   number      Int          @default(autoincrement())
   title       String
   description String?
+  conclusion  String?
   date        DateTime     @default(now())
   clientId    String?
   projectId   String?

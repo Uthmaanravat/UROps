@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Trash2, Loader2, Image as ImageIcon, Camera, FileDown, ArrowLeft, MoreVertical } from "lucide-react"
-import { addReportItem, deleteReportItem } from "@/app/actions/reports"
+import { addReportItem, deleteReportItem, updateReportConclusion } from "@/app/actions/reports"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { drawReportPdf } from "@/lib/pdf-utils"
@@ -24,6 +24,8 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
     const [isAdding, setIsAdding] = useState(false)
     const [isExporting, setIsExporting] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isSavingConclusion, setIsSavingConclusion] = useState(false)
+    const [conclusion, setConclusion] = useState(report.conclusion || "")
     
     // New Item Form State
     const [itemTitle, setItemTitle] = useState("")
@@ -114,11 +116,25 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
         }
     }
 
+    const handleSaveConclusion = async () => {
+        setIsSavingConclusion(true)
+        try {
+            await updateReportConclusion(report.id, conclusion)
+            router.refresh()
+        } catch (error) {
+            console.error(error)
+            alert("Failed to save conclusion")
+        } finally {
+            setIsSavingConclusion(false)
+        }
+    }
+
     const handleExportPDF = async () => {
         setIsExporting(true)
         try {
             const doc = new jsPDF()
-            await drawReportPdf(doc, company, report)
+            // Pass conclusion into the report object for PDF rendering
+            await drawReportPdf(doc, company, { ...report, conclusion })
             doc.save(`Report_${report.number.toString().padStart(3, '0')}_${report.title.replace(/\s+/g, '_')}.pdf`)
         } catch (error) {
             console.error("PDF Export failed:", error)
@@ -363,6 +379,35 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                     </Card>
                 )}
             </div>
+
+            {/* Conclusion Section */}
+            <Card className="bg-card border-white/5 rounded-2xl shadow-xl overflow-hidden">
+                <CardHeader className="bg-white/[0.02] border-b border-white/5 py-5">
+                    <CardTitle className="text-sm font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
+                        <FileDown className="h-4 w-4 text-primary" /> Report Conclusion
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground">Summarize your findings or recommendations. This appears at the bottom of the PDF export.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                    <Textarea
+                        placeholder="e.g. All works completed as per scope. Site left clean and tidy. Recommend follow-up inspection in 2 weeks..."
+                        value={conclusion}
+                        onChange={(e) => setConclusion(e.target.value)}
+                        rows={5}
+                        className="bg-white/5 border-white/10 font-medium leading-relaxed"
+                    />
+                    <div className="flex justify-end">
+                        <Button
+                            onClick={handleSaveConclusion}
+                            disabled={isSavingConclusion}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] tracking-[0.2em] h-10 px-6 rounded-xl"
+                        >
+                            {isSavingConclusion ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                            Save Conclusion
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     )
 }

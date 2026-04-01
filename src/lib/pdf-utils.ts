@@ -194,5 +194,33 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
         currentY += 5;
     }
 
+    // Conclusion
+    if (report.conclusion) {
+        if (currentY > 240) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        // Conclusion header
+        doc.setFontSize(8);
+        doc.setTextColor(163, 230, 53); // Lime
+        doc.setFont("helvetica", "bold");
+        doc.text("CONCLUSION", 14, currentY);
+        currentY += 7;
+
+        // Conclusion body
+        doc.setFontSize(10);
+        doc.setTextColor(71, 85, 105);
+        doc.setFont("helvetica", "normal");
+        const conclusionLines = doc.splitTextToSize(report.conclusion, 180);
+        doc.text(conclusionLines, 14, currentY);
+        currentY += (conclusionLines.length * 5) + 10;
+
+        // Final divider
+        doc.setDrawColor(163, 230, 53); // Lime accent
+        doc.setLineWidth(1);
+        doc.line(14, currentY - 5, 196, currentY - 5);
+    }
+
     return doc;
 }

@@ -113,3 +113,17 @@ export async function deleteReportItem(itemId: string, reportId: string) {
         return { success: false, error: "Failed to delete report item" }
     }
 }
+
+export async function updateReportConclusion(reportId: string, conclusion: string) {
+    try {
+        await prisma.report.update({
+            where: { id: reportId },
+            data: { conclusion }
+        })
+        revalidatePath(`/reports/${reportId}`)
+        return { success: true }
+    } catch (error) {
+        console.error("Failed to update conclusion:", error)
+        return { success: false, error: "Failed to update conclusion" }
+    }
+}
