@@ -896,9 +896,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         )}
                         <div>
                             <h1 className="text-xl md:text-3xl font-black tracking-tight text-[#1E293B]">{company.name}</h1>
-                            <div className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-3 mt-1 md:mt-2">
+                            <div className="flex flex-col items-center md:items-start mt-1 md:mt-2 space-y-0.5">
                                 <p className="text-gray-500 text-[9px] md:text-xs font-semibold uppercase tracking-wider">{company.phone}</p>
-                                <span className="text-gray-300 hidden md:inline">•</span>
                                 <p className="text-gray-500 text-[9px] md:text-xs font-semibold lowercase">{company.email}</p>
                             </div>
                         </div>

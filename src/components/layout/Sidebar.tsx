@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, FileText, FileCheck, CreditCard, Brain, LayoutDashboard, Briefcase, Calendar, Settings, Mic, ClipboardList } from "lucide-react";
+import { Users, FileText, FileCheck, CreditCard, Brain, LayoutDashboard, Briefcase, Calendar, Settings, Mic, ClipboardList, ClipboardCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as React from "react";
 import { getSidebarNotifications } from "@/app/(dashboard)/notification-actions";
@@ -49,6 +49,11 @@ const items = [
         title: "Payments",
         href: "/payments",
         icon: CreditCard,
+    },
+    {
+        title: "Reports",
+        href: "/reports",
+        icon: ClipboardCheck,
     },
     {
         title: "AI Knowledge",
