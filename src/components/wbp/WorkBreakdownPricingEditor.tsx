@@ -606,6 +606,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 className={cn(
                                     "flex h-12 w-full rounded-md border px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary transition-all cursor-pointer",
                                     commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 border-red-500 text-red-400" :
+                                        commercialStatus === 'REACTIVE_WORK' ? "bg-orange-500/20 border-orange-500 text-orange-400" :
                                         commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 border-primary text-primary" :
                                             "bg-[#14141E] border-white/10 text-white"
                                 )}
@@ -613,6 +614,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 <option value="AWAITING_PO">AWAITING PO</option>
                                 <option value="PO_RECEIVED">PO RECEIVED</option>
                                 <option value="EMERGENCY_WORK">EMERGENCY WORK</option>
+                                <option value="REACTIVE_WORK">REACTIVE WORK</option>
                             </select>
                         </div>
                     </div>

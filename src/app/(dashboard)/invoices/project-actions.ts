@@ -71,7 +71,7 @@ export async function updateInvoiceDetailsAction(invoiceId: string, data: { site
     revalidatePath("/projects")
 }
 
-export async function updateProjectCommercialStatusAction(projectId: string, status: 'AWAITING_PO' | 'PO_RECEIVED' | 'EMERGENCY_WORK') {
+export async function updateProjectCommercialStatusAction(projectId: string, status: 'AWAITING_PO' | 'PO_RECEIVED' | 'EMERGENCY_WORK' | 'REACTIVE_WORK') {
     const companyId = await ensureAuth()
 
     await prisma.project.update({

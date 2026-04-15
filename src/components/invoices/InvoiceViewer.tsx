@@ -38,6 +38,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [projectId, setProjectId] = useState(invoice.projectId || "");
     const [projectName, setProjectName] = useState(invoice.project?.name || "");
     const [commercialStatus, setCommercialStatus] = useState<any>(invoice.project?.commercialStatus || "AWAITING_PO");
+    const [showStatusOnQuote, setShowStatusOnQuote] = useState(false);
 
     // Add new Item Handler
     const handleAddItem = () => {
@@ -245,6 +246,24 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             doc.setTextColor(30, 41, 59);
             doc.text(siteLines, 36, detailY);
             detailY += (siteLines.length * 4.5);
+        }
+
+        if (showStatusOnQuote && commercialStatus) {
+            const statusText = commercialStatus.replace('_', ' ');
+            doc.setTextColor(100, 116, 139); // slate-500
+            doc.setFont("helvetica", "normal");
+            doc.text("Type:", 14, detailY);
+            if (commercialStatus === 'REACTIVE_WORK') {
+                doc.setTextColor(249, 115, 22); // orange-500 for reactive
+            } else if (commercialStatus === 'EMERGENCY_WORK') {
+                doc.setTextColor(239, 68, 68); // red-500 for emergency
+            } else {
+                doc.setTextColor(30, 41, 59);
+            }
+            doc.setFont("helvetica", "bold");
+            doc.text(statusText, 36, detailY);
+            doc.setTextColor(30, 41, 59); // Reset
+            detailY += 6;
         }
 
         if (reference) {
@@ -973,24 +992,38 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 </div>
                             )}
                             {invoice.projectId && (
-                                <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
-                                    <span className="text-[7px] font-black uppercase tracking-widest text-[#64748B]">Commercial Status</span>
-                                    <select
-                                        value={commercialStatus}
-                                        onChange={(e) => handleCommercialStatusChange(e.target.value)}
-                                        className={cn(
-                                            "bg-transparent border-none text-right font-black outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer px-2 py-0 md:py-1 rounded transition-colors",
-                                            commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 text-red-500 mr-[-8px]" :
-                                                commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 text-primary mr-[-8px]" :
-                                                    "text-white"
-                                        )}
-                                        disabled={invoice.status === 'PAID'}
-                                    >
-                                        <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
-                                        <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
-                                        <option value="EMERGENCY_WORK" className="bg-[#1E293B]">EMERGENCY WORK</option>
-                                    </select>
-                                </div>
+                                <>
+                                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
+                                        <span className="text-[7px] font-black uppercase tracking-widest text-[#64748B]">Commercial Status</span>
+                                        <select
+                                            value={commercialStatus}
+                                            onChange={(e) => handleCommercialStatusChange(e.target.value)}
+                                            className={cn(
+                                                "bg-transparent border-none text-right font-black outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer px-2 py-0 md:py-1 rounded transition-colors",
+                                                commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 text-red-500 mr-[-8px]" :
+                                                    commercialStatus === 'REACTIVE_WORK' ? "bg-orange-500/20 text-orange-500 mr-[-8px]" :
+                                                    commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 text-primary mr-[-8px]" :
+                                                        "text-white"
+                                            )}
+                                            disabled={invoice.status === 'PAID'}
+                                        >
+                                            <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
+                                            <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
+                                            <option value="EMERGENCY_WORK" className="bg-[#1E293B]">EMERGENCY WORK</option>
+                                            <option value="REACTIVE_WORK" className="bg-[#1E293B]">REACTIVE WORK</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20 mt-2">
+                                        <label htmlFor="show-status" className="text-[7px] font-black uppercase tracking-widest text-[#64748B] cursor-pointer">Show Status on Doc</label>
+                                        <input
+                                            id="show-status"
+                                            type="checkbox"
+                                            checked={showStatusOnQuote}
+                                            onChange={(e) => setShowStatusOnQuote(e.target.checked)}
+                                            className="cursor-pointer mr-0 border-white/10 bg-transparent text-primary rounded outline-none w-3 h-3"
+                                        />
+                                    </div>
+                                </>
                             )}
                             <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Site Location</span>

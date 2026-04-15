@@ -264,6 +264,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                     {project.commercialStatus && (
                                         <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded
                                             ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white animate-pulse' :
+                                                project.commercialStatus === 'REACTIVE_WORK' ? 'bg-orange-500 text-white' :
                                                 project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border border-primary/20' :
                                                     'bg-amber-500/20 text-amber-500 border border-amber-500/20'}`}>
                                             {project.commercialStatus.replace('_', ' ')}

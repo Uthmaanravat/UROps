@@ -62,6 +62,7 @@ export default async function WorkBreakdownPricingListPage() {
                                             {wbp.project?.commercialStatus && (
                                                 <Badge className={`rounded-md font-black text-[9px] uppercase tracking-tighter px-2 py-0.5 shadow-lg border-2
                                                     ${wbp.project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white animate-pulse border-white/50' :
+                                                        wbp.project.commercialStatus === 'REACTIVE_WORK' ? 'bg-orange-500 text-white border-white/50' :
                                                         wbp.project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border-primary' :
                                                             'bg-amber-500/20 text-amber-500 border-amber-500'}`}>
                                                     {wbp.project.commercialStatus.replace('_', ' ')}

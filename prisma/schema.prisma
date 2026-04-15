@@ -391,4 +391,5 @@ enum CommercialStatus {
   AWAITING_PO
   PO_RECEIVED
   EMERGENCY_WORK
+  REACTIVE_WORK
 }

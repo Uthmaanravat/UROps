@@ -175,8 +175,9 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 const totalSize = chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0)
                 console.log("MediaRecorder stopped, processing audio. Total Size:", totalSize);
 
-                const finalMimeType = mediaRecorder!.mimeType || mimeType || "audio/webm"
-                const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
+                const rawMimeType = mediaRecorder!.mimeType || mimeType || "audio/webm"
+                const cleanMimeType = rawMimeType.split(';')[0]
+                const audioBlob = new Blob(chunksRef.current, { type: cleanMimeType })
                 stream.getTracks().forEach(track => track.stop())
 
                 if (totalSize < 500) {
@@ -206,6 +207,7 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
             // Start without timeslice to prevent chunk corruption on iOS Safari
             mediaRecorder.start()
             setIsRecording(true)
+            isRecordingRef.current = true
             onToggle?.(true)
             setStatus("Listening...")
         } catch (error: any) {
@@ -223,12 +225,14 @@ export function VoiceFieldInput({ onResult, isRecording: externalIsRecording, on
                 try { recognitionRef.current.stop() } catch (e) { }
             }
             setIsRecording(false)
+            isRecordingRef.current = false
             onToggle?.(false)
             setIsProcessing(true)
             setStatus("Finalizing...")
         } else {
             // Force reset if stuck
             setIsRecording(false)
+            isRecordingRef.current = false
             setIsProcessing(false)
             onToggle?.(false)
             setStatus("")

@@ -71,8 +71,10 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
             }
 
             mediaRecorder.onstop = async () => {
-                const finalMimeType = mediaRecorder!.mimeType || mimeType || "audio/webm"
-                const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
+                const rawMimeType = mediaRecorder!.mimeType || mimeType || "audio/webm"
+                // Strip codecs=opus from type as OpenAI API expects basic MIME type
+                const cleanMimeType = rawMimeType.split(';')[0]
+                const audioBlob = new Blob(chunksRef.current, { type: cleanMimeType })
                 // Stop tracks safely here, once data is fully acquired
                 stream.getTracks().forEach(track => track.stop());
                 await processAudio(audioBlob)

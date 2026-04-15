@@ -112,9 +112,11 @@ export default async function ProjectsPage() {
                                     </span>
                                     <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest
                                         ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50' :
+                                            project.commercialStatus === 'REACTIVE_WORK' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/50' :
                                             project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border border-primary/40' :
                                                 'bg-amber-500/20 text-amber-500 border border-amber-500/30'}`}>
                                         {project.commercialStatus === 'EMERGENCY_WORK' ? '🚨 EMERGENCY' :
+                                            project.commercialStatus === 'REACTIVE_WORK' ? '⚡ REACTIVE' :
                                             project.commercialStatus === 'PO_RECEIVED' ? '✅ PO RECEIVED' : '⏳ AWAITING PO'}
                                     </span>
                                 </div>
@@ -206,9 +208,11 @@ export default async function ProjectsPage() {
                                                 </span>
                                                 <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest
                                                     ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50' :
+                                                        project.commercialStatus === 'REACTIVE_WORK' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/50' :
                                                         project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border border-primary/40' :
                                                             'bg-amber-500/20 text-amber-500 border border-amber-500/30'}`}>
                                                     {project.commercialStatus === 'EMERGENCY_WORK' ? '🚨 EMERGENCY' :
+                                                        project.commercialStatus === 'REACTIVE_WORK' ? '⚡ REACTIVE' :
                                                         project.commercialStatus === 'PO_RECEIVED' ? '✅ PO RECEIVED' : '⏳ AWAITING PO'}
                                                 </span>
                                             </div>
