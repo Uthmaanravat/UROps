@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save } from "lucide-react"
+import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save, GripVertical, ArrowUp, ArrowDown } from "lucide-react"
 import { formatCurrency, cn } from "@/lib/utils"
 import { generateQuotationAction, getPricingSuggestionsAction, getSuggestedQuoteNumberAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
 import { saveWBPDraftAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
@@ -33,8 +33,16 @@ const WbpItemRow = memo(({
     aiEnabled: boolean,
     onUpdate: (index: number, field: string, value: any) => void,
     onRemove: (index: number) => void,
-    onSplit: (index: number) => void
+    onSplit: (index: number) => void,
+    onMoveUp: (index: number) => void,
+    onMoveDown: (index: number) => void,
+    onDragStart: (e: React.DragEvent, index: number) => void,
+    onDragEnter: (e: React.DragEvent, index: number) => void,
+    onDragEnd: (e: React.DragEvent) => void,
+    isDragOver: boolean
 }) => {
+    const [isDraggable, setIsDraggable] = useState(false);
+
     // Local stable handlers to bind the index
     const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         onUpdate(index, 'description', e.target.value)
@@ -68,10 +76,32 @@ const WbpItemRow = memo(({
         onRemove(index)
     }, [index, onRemove])
 
+    const handleMoveUp = useCallback(() => {
+        onMoveUp(index)
+    }, [index, onMoveUp])
+
+    const handleMoveDown = useCallback(() => {
+        onMoveDown(index)
+    }, [index, onMoveDown])
+
     return (
-        <tr className="hover:bg-white/[0.02] transition-colors group border-b border-white/5 md:border-none">
+        <tr 
+            draggable={isDraggable}
+            onDragStart={(e) => onDragStart(e, index)}
+            onDragEnter={(e) => onDragEnter(e, index)}
+            onDragOver={(e) => e.preventDefault()}
+            onDragEnd={onDragEnd}
+            className={`hover:bg-white/[0.02] transition-colors group border-b border-white/5 md:border-none ${isDragOver ? 'border-t-2 border-t-primary' : ''}`}
+        >
             <td className="px-4 md:px-8 py-4 md:py-6 space-y-3 block md:table-cell">
-                <div className="flex gap-4">
+                <div className="flex gap-2 md:gap-4">
+                    <div 
+                        className="pt-2 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-primary transition-colors flex items-start"
+                        onMouseEnter={() => setIsDraggable(true)}
+                        onMouseLeave={() => setIsDraggable(false)}
+                    >
+                        <GripVertical className="h-5 w-5" />
+                    </div>
                     <div className="flex-1 relative">
                         <Textarea
                             value={item.description}
@@ -148,14 +178,33 @@ const WbpItemRow = memo(({
                 <Label className="text-[9px] font-black uppercase text-primary italic mb-1 block md:hidden">Total</Label>
                 {formatCurrency(item.quantity * item.unitPrice)}
             </td>
-            <td className="px-4 py-3 md:py-6 align-top pt-4 md:pt-8 block md:table-cell text-right md:text-left">
+            <td className="px-4 py-3 md:py-6 align-top pt-4 md:pt-8 block md:table-cell text-right md:text-left whitespace-nowrap">
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-red-500 hover:bg-red-500/10 transition-colors opacity-100"
-                    onClick={handleRemove}
+                    className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+                    onClick={handleMoveUp}
+                    title="Move Up"
                 >
-                    <Trash2 className="h-5 w-5" />
+                    <ArrowUp className="h-4 w-4" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+                    onClick={handleMoveDown}
+                    title="Move Down"
+                >
+                    <ArrowDown className="h-4 w-4" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-red-500 hover:bg-red-500/10 transition-colors opacity-100 ml-1"
+                    onClick={handleRemove}
+                    title="Delete Item"
+                >
+                    <Trash2 className="h-4 w-4" />
                 </Button>
             </td>
         </tr>
@@ -195,6 +244,9 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const [submitted, setSubmitted] = useState(false)
     const [lastQuoteId, setLastQuoteId] = useState<string | null>(null)
     const [lastQuoteNumber, setLastQuoteNumber] = useState<string | null>(null)
+
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
     const STORAGE_KEY = `wbp-draft-${wbpId}`
 
@@ -388,6 +440,63 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             return next
         })
     }, [])
+
+    const moveItemUp = useCallback((index: number) => {
+        if (index === 0) return;
+        setItems((prev: any[]) => {
+            const next = [...prev]
+            const temp = next[index - 1]
+            next[index - 1] = next[index]
+            next[index] = temp
+            // Adopt area of new neighbor
+            next[index - 1].area = temp.area
+            return next
+        })
+    }, [])
+
+    const moveItemDown = useCallback((index: number) => {
+        setItems((prev: any[]) => {
+            if (index === prev.length - 1) return prev;
+            const next = [...prev]
+            const temp = next[index + 1]
+            next[index + 1] = next[index]
+            next[index] = temp
+            // Adopt area of new neighbor
+            next[index + 1].area = temp.area
+            return next
+        })
+    }, [])
+
+    const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
+        setDraggedIndex(index)
+        e.dataTransfer.effectAllowed = 'move'
+    }, [])
+
+    const handleDragEnter = useCallback((e: React.DragEvent, index: number) => {
+        e.preventDefault()
+        setDragOverIndex(index)
+    }, [])
+
+    const handleDragEnd = useCallback((e: React.DragEvent) => {
+        if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+            setItems((prev: any[]) => {
+                const newItems = [...prev]
+                const itemToMove = { ...newItems[draggedIndex] }
+
+                // Adopt the area of the destination
+                const destItem = newItems[dragOverIndex]
+                if (destItem) {
+                    itemToMove.area = destItem.area
+                }
+
+                newItems.splice(draggedIndex, 1)
+                newItems.splice(dragOverIndex, 0, itemToMove)
+                return newItems
+            })
+        }
+        setDraggedIndex(null)
+        setDragOverIndex(null)
+    }, [draggedIndex, dragOverIndex])
 
     const addFromCatalog = useCallback((catalogItem: any) => {
         setItems((prev: any[]) => {
@@ -817,6 +926,12 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                         onUpdate={updateItem}
                                                         onRemove={removeItem}
                                                         onSplit={splitItem}
+                                                        onMoveUp={moveItemUp}
+                                                        onMoveDown={moveItemDown}
+                                                        onDragStart={handleDragStart}
+                                                        onDragEnter={handleDragEnter}
+                                                        onDragEnd={handleDragEnd}
+                                                        isDragOver={dragOverIndex === item.originalIndex}
                                                     />
                                                 )
                                             })}

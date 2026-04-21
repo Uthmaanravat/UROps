@@ -227,11 +227,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.text(new Date(invoice.date).toLocaleDateString('en-GB'), 36, detailY);
         detailY += 6;
 
-        if (invoice.project?.name) {
-            const projectLines = doc.splitTextToSize(invoice.project.name, 45);
+        const combinedProjectRef = reference || invoice.project?.name;
+        if (combinedProjectRef) {
+            const projectLines = doc.splitTextToSize(combinedProjectRef, 45);
             doc.setTextColor(100, 116, 139); // slate-500
             doc.setFont("helvetica", "normal");
-            doc.text("Project:", 14, detailY);
+            doc.text("Project/Ref:", 14, detailY);
             doc.setTextColor(30, 41, 59);
             doc.setFont("helvetica", "bold");
             doc.text(projectLines, 36, detailY);
@@ -264,16 +265,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             doc.text(statusText, 36, detailY);
             doc.setTextColor(30, 41, 59); // Reset
             detailY += 6;
-        }
-
-        if (reference) {
-            const refLines = doc.splitTextToSize(reference, 45);
-            doc.setTextColor(100, 116, 139); // slate-500
-            doc.setFont("helvetica", "normal");
-            doc.text("Ref:", 14, detailY);
-            doc.setTextColor(30, 41, 59);
-            doc.text(refLines, 36, detailY);
-            detailY += (refLines.length * 4.5);
         }
 
         // Column 2: Bill To
@@ -420,10 +411,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
         // Check if footer components will fit on current page
         const pageHeight = doc.internal.pageSize.getHeight();
-        const footerEstimate = 60; // Estimated height for summary + notes + banking
         let currentY = finalY;
 
-        if (currentY + footerEstimate > pageHeight - 15) {
+        if (currentY + 25 > pageHeight - 15) {
             doc.addPage();
             currentY = 25; // Reset to top of new page
         }
@@ -566,8 +556,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
             currentRow++;
 
-            worksheet.getCell(`A${currentRow}`).value = 'PROJECT:';
-            worksheet.getCell(`B${currentRow}`).value = invoice.project?.name || 'N/A';
+            worksheet.getCell(`A${currentRow}`).value = 'PROJECT/REF:';
+            worksheet.getCell(`B${currentRow}`).value = invoice.reference || invoice.project?.name || 'N/A';
             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
             currentRow++;
 
