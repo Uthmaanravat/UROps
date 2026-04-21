@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -40,7 +40,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [commercialStatus, setCommercialStatus] = useState<any>(invoice.project?.commercialStatus || "AWAITING_PO");
     const [showStatusOnQuote, setShowStatusOnQuote] = useState(false);
 
-    // Add new Item Handler
     const handleAddItem = () => {
         const newItem = {
             id: `new-${Date.now()}`,
@@ -56,6 +55,61 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     const handleDeleteItem = (id: string) => {
         setItems(prev => prev.filter(item => item.id !== id));
+    };
+
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+    const moveItemUp = (index: number) => {
+        if (index === 0) return;
+        setItems(prev => {
+            const next = [...prev];
+            const temp = next[index - 1];
+            next[index - 1] = next[index];
+            next[index] = temp;
+            next[index - 1].area = temp.area;
+            return next;
+        });
+    };
+
+    const moveItemDown = (index: number) => {
+        if (index === items.length - 1) return;
+        setItems(prev => {
+            const next = [...prev];
+            const temp = next[index + 1];
+            next[index + 1] = next[index];
+            next[index] = temp;
+            next[index + 1].area = temp.area;
+            return next;
+        });
+    };
+
+    const handleDragStart = (e: React.DragEvent, index: number) => {
+        setDraggedIndex(index);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragEnter = (e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        setDragOverIndex(index);
+    };
+
+    const handleDragEnd = () => {
+        if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+            setItems(prev => {
+                const newItems = [...prev];
+                const itemToMove = { ...newItems[draggedIndex] };
+                const destItem = newItems[dragOverIndex];
+                if (destItem) {
+                    itemToMove.area = destItem.area;
+                }
+                newItems.splice(draggedIndex, 1);
+                newItems.splice(dragOverIndex, 0, itemToMove);
+                return newItems;
+            });
+        }
+        setDraggedIndex(null);
+        setDragOverIndex(null);
     };
 
     const [recipientEmails, setRecipientEmails] = useState(invoice.client.email || "");
@@ -1147,10 +1201,25 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 </div>
                                             </td>
                                         </tr>
-                                            {group.items.map((item: any, iIdx: number) => (
-                                                <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors border-b border-white/[0.02]">
-                                                    <td className="py-2.5 text-center align-top">
-                                                        <span className="text-[10px] font-black text-gray-600">{globalStartIndex + iIdx + 1}</span>
+                                            {group.items.map((item: any, iIdx: number) => {
+                                                const originalIndex = item.originalIndex;
+                                                return (
+                                                <tr 
+                                                    key={item.id} 
+                                                    draggable={isPricingMode}
+                                                    onDragStart={(e) => handleDragStart(e, originalIndex)}
+                                                    onDragEnter={(e) => handleDragEnter(e, originalIndex)}
+                                                    onDragOver={(e) => e.preventDefault()}
+                                                    onDragEnd={handleDragEnd}
+                                                    className={`group hover:bg-white/[0.02] transition-colors border-b border-white/[0.02] ${dragOverIndex === originalIndex ? 'border-t-2 border-t-primary' : ''}`}
+                                                >
+                                                    <td className="py-2.5 text-center align-top relative">
+                                                        {isPricingMode && (
+                                                            <div className="absolute left-0 top-3 text-white/20 hover:text-primary cursor-grab active:cursor-grabbing">
+                                                                <GripVertical className="h-4 w-4" />
+                                                            </div>
+                                                        )}
+                                                        <span className="text-[10px] font-black text-gray-600 pl-4">{globalStartIndex + iIdx + 1}</span>
                                                     </td>
                                                     <td className="py-2.5 pr-8">
                                                         {isPricingMode ? (
@@ -1171,14 +1240,35 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                         placeholder="HEADING"
                                                                     />
                                                                 </div>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-red-500 hover:bg-red-500/10 self-center"
-                                                                    onClick={() => handleDeleteItem(item.id)}
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
+                                                                <div className="flex flex-col md:flex-row items-center gap-1 self-center">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-white/10"
+                                                                        onClick={() => moveItemUp(originalIndex)}
+                                                                        title="Move Up"
+                                                                    >
+                                                                        <ArrowUp className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-white/10"
+                                                                        onClick={() => moveItemDown(originalIndex)}
+                                                                        title="Move Down"
+                                                                    >
+                                                                        <ArrowDown className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-red-500 hover:bg-red-500/10"
+                                                                        onClick={() => handleDeleteItem(item.id)}
+                                                                        title="Delete Item"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
                                                             </div>
                                                         ) : (
                                                             <div className="text-[13px] md:text-sm font-bold text-white tracking-tight leading-snug">{item.description}</div>
