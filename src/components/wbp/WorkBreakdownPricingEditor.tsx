@@ -25,7 +25,13 @@ const WbpItemRow = memo(({
     aiEnabled,
     onUpdate,
     onRemove,
-    onSplit
+    onSplit,
+    onMoveUp,
+    onMoveDown,
+    onDragStart,
+    onDragEnter,
+    onDragEnd,
+    isDragOver
 }: {
     item: any,
     index: number,

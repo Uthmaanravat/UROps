@@ -1313,7 +1313,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                         {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                            )
+                                        })}
                                         </Fragment>
                                     );
                                 });
