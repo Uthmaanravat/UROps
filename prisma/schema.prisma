@@ -49,6 +49,7 @@ model CompanySettings {
   phone             String?
   email             String?
   website           String?
+  slogan            String?
   logoUrl           String?
   taxId             String?
   bankDetails       String?

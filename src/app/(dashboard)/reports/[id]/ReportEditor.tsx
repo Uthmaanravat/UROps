@@ -245,8 +245,8 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                         <Input value={metadata.weather || ""} onChange={e => setMetadata({...metadata, weather: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Clear, 18°C" />
                     </div>
                     <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Drone Used</Label>
-                        <Input value={metadata.droneUsed || ""} onChange={e => setMetadata({...metadata, droneUsed: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. DJI Mavic 3" />
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Equipment Used</Label>
+                        <Input value={metadata.equipmentUsed || ""} onChange={e => setMetadata({...metadata, equipmentUsed: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. DJI Mavic 3" />
                     </div>
                     <div className="space-y-2">
                         <Label className="text-[10px] font-black uppercase text-muted-foreground">Total Images</Label>
@@ -259,6 +259,18 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                     <div className="space-y-2">
                         <Label className="text-[10px] font-black uppercase text-muted-foreground">Pilot Name</Label>
                         <Input value={metadata.pilotName || ""} onChange={e => setMetadata({...metadata, pilotName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
+                    </div>
+                    <div className="space-y-2 flex items-center gap-2 col-span-full mt-2">
+                        <input 
+                            type="checkbox" 
+                            id="showFooterText"
+                            checked={metadata.showFooterText !== false} 
+                            onChange={e => setMetadata({...metadata, showFooterText: e.target.checked})} 
+                            className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-0" 
+                        />
+                        <Label htmlFor="showFooterText" className="text-xs font-bold text-muted-foreground cursor-pointer">
+                            Show "Professional Inspection Services" in PDF footer
+                        </Label>
                     </div>
                     <div className="space-y-2 col-span-full">
                         <Label className="text-[10px] font-black uppercase text-muted-foreground">Property Overview Image</Label>

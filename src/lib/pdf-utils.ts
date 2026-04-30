@@ -263,15 +263,15 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
-    if (company.slogan || company.domain) {
-        doc.text((company.slogan || company.domain).toUpperCase(), nameX, 32);
+    if (company.slogan) {
+        doc.text(company.slogan.toUpperCase(), nameX, 32);
     }
 
     // Right side text
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("DRONE INSPECTION REPORT", 196, 22, { align: 'right' });
+    doc.text("INSPECTION REPORT", 196, 22, { align: 'right' });
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -372,6 +372,12 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     
     const iconBaseY = currentY + 63;
     
+    // Format weather
+    let weatherString = metadata.weather || "";
+    if (!isNaN(Number(weatherString)) && weatherString.trim() !== "") {
+        weatherString += "°C";
+    }
+    
     // Col 1
     doc.setFont("helvetica", "bold");
     doc.text("INSPECTION DATE", 92, iconBaseY);
@@ -380,9 +386,9 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     
     // Col 2
     doc.setFont("helvetica", "bold");
-    doc.text("DRONE USED", 120, iconBaseY);
+    doc.text("EQUIPMENT USED", 120, iconBaseY);
     doc.setFont("helvetica", "normal");
-    doc.text(metadata.droneUsed || "-", 120, iconBaseY + 5);
+    doc.text(metadata.equipmentUsed || "-", 120, iconBaseY + 5);
     
     // Col 3
     doc.setFont("helvetica", "bold");
@@ -504,7 +510,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         
         if (currentY > 260) {
             // Footer on current page
-            addFooter(doc, company);
+            addFooter(doc, company, metadata);
             doc.addPage();
             currentY = 20;
             // Redraw Header
@@ -585,12 +591,12 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.text("Note: This report is based on visual data captured and does not replace a physical inspection.", 14, currentY);
 
     // Footer on last page
-    addFooter(doc, company);
+    addFooter(doc, company, metadata);
 
     return doc;
 }
 
-function addFooter(doc: jsPDF, company: any) {
+function addFooter(doc: jsPDF, company: any, metadata?: any) {
     doc.setFillColor(15, 23, 42);
     doc.rect(0, 285, 210, 12, 'F');
     doc.setTextColor(255, 255, 255);
@@ -613,8 +619,11 @@ function addFooter(doc: jsPDF, company: any) {
     doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
     doc.text(company.name.toUpperCase(), 196, 290, { align: 'right' });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6);
-    doc.setTextColor(148, 163, 184);
-    doc.text("Professional Inspection Services", 196, 294, { align: 'right' });
+    
+    if (metadata?.showFooterText !== false) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(148, 163, 184);
+        doc.text("Professional Inspection Services", 196, 294, { align: 'right' });
+    }
 }

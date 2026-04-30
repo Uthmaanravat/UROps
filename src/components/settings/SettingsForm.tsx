@@ -36,6 +36,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         phone: initialSettings?.phone || "",
         email: initialSettings?.email || "",
         website: initialSettings?.website || "",
+        slogan: initialSettings?.slogan || "",
         logoUrl: initialSettings?.logoUrl || "",
         taxId: initialSettings?.taxId || "",
         bankDetails: initialSettings?.bankDetails || "",
@@ -174,6 +175,16 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                     name="website"
                                     value={formData.website}
                                     onChange={handleChange}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="slogan">Company Slogan</Label>
+                                <Input
+                                    id="slogan"
+                                    name="slogan"
+                                    value={formData.slogan}
+                                    onChange={handleChange}
+                                    placeholder="e.g. SEE MORE. KNOW MORE. SOLVE MORE."
                                 />
                             </div>
                         </div>
