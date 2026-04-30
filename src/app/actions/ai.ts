@@ -38,8 +38,7 @@ export async function transcribeAudio(formData: FormData) {
             if (!openai) {
                 return { success: false, error: "OpenAI client not initialized." }
             }
-
-            const fileForOpenAI = await OpenAI.toFile(buffer, file.name, { type: file.type });
+            const fileForOpenAI = await OpenAI.toFile(buffer, file.name);
 
             const transcription = await openai.audio.transcriptions.create({
                 file: fileForOpenAI,

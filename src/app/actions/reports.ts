@@ -45,6 +45,8 @@ export async function createReport(data: {
     projectId?: string
     companyId: string
     date?: Date
+    type?: string
+    metadata?: any
 }) {
     try {
         const report = await prisma.report.create({
@@ -54,7 +56,9 @@ export async function createReport(data: {
                 clientId: data.clientId,
                 projectId: data.projectId,
                 companyId: data.companyId,
-                date: data.date || new Date()
+                date: data.date || new Date(),
+                type: data.type || "BASIC",
+                metadata: data.metadata || null
             }
         })
         revalidatePath("/reports")
@@ -83,6 +87,9 @@ export async function addReportItem(data: {
     description: string
     title?: string
     imageUrl?: string
+    location?: string
+    severity?: string
+    recommendation?: string
 }) {
     try {
         const item = await prisma.reportItem.create({
@@ -90,7 +97,10 @@ export async function addReportItem(data: {
                 reportId: data.reportId,
                 description: data.description,
                 title: data.title,
-                imageUrl: data.imageUrl
+                imageUrl: data.imageUrl,
+                location: data.location,
+                severity: data.severity,
+                recommendation: data.recommendation
             }
         })
         revalidatePath(`/reports/${data.reportId}`)
@@ -127,3 +137,18 @@ export async function updateReportConclusion(reportId: string, conclusion: strin
         return { success: false, error: "Failed to update conclusion" }
     }
 }
+
+export async function updateReportMetadata(reportId: string, type: string, metadata: any) {
+    try {
+        await prisma.report.update({
+            where: { id: reportId },
+            data: { type, metadata }
+        })
+        revalidatePath(`/reports/${reportId}`)
+        return { success: true }
+    } catch (error) {
+        console.error("Failed to update report metadata:", error)
+        return { success: false, error: "Failed to update report metadata" }
+    }
+}
+

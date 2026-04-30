@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Trash2, Loader2, Image as ImageIcon, Camera, FileDown, ArrowLeft, MoreVertical } from "lucide-react"
-import { addReportItem, deleteReportItem, updateReportConclusion } from "@/app/actions/reports"
+import { Plus, Trash2, Loader2, Image as ImageIcon, Camera, FileDown, ArrowLeft, Settings } from "lucide-react"
+import { addReportItem, deleteReportItem, updateReportConclusion, updateReportMetadata } from "@/app/actions/reports"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { drawReportPdf } from "@/lib/pdf-utils"
@@ -26,10 +26,15 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isSavingConclusion, setIsSavingConclusion] = useState(false)
     const [conclusion, setConclusion] = useState(report.conclusion || "")
+    const [reportType, setReportType] = useState(report.type || "BASIC")
+    const [metadata, setMetadata] = useState<any>(report.metadata || {})
     
     // New Item Form State
     const [itemTitle, setItemTitle] = useState("")
     const [itemDescription, setItemDescription] = useState("")
+    const [itemLocation, setItemLocation] = useState("")
+    const [itemSeverity, setItemSeverity] = useState("LOW")
+    const [itemRecommendation, setItemRecommendation] = useState("")
     const [itemImage, setItemImage] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -82,12 +87,18 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                 reportId: report.id,
                 title: itemTitle || undefined,
                 description: itemDescription,
-                imageUrl: itemImage || undefined
+                imageUrl: itemImage || undefined,
+                location: itemLocation || undefined,
+                severity: reportType === "ADVANCED" ? itemSeverity : undefined,
+                recommendation: reportType === "ADVANCED" ? itemRecommendation : undefined
             })
             
             if (result.success) {
                 setItemTitle("")
                 setItemDescription("")
+                setItemLocation("")
+                setItemSeverity("LOW")
+                setItemRecommendation("")
                 setItemImage(null)
                 if (fileInputRef.current) fileInputRef.current.value = ""
                 // Keep form open so user can add more items rapidly
@@ -120,6 +131,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
         setIsSavingConclusion(true)
         try {
             await updateReportConclusion(report.id, conclusion)
+            await updateReportMetadata(report.id, reportType, metadata)
             router.refresh()
         } catch (error) {
             console.error(error)
@@ -213,6 +225,44 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                 </div>
             )}
 
+            {/* Advanced Settings */}
+            {reportType === "ADVANCED" && (
+                <Card className="bg-card border-white/5 shadow-inner p-4 rounded-2xl grid md:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-300">
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Property Address</Label>
+                        <Input value={metadata.propertyAddress || ""} onChange={e => setMetadata({...metadata, propertyAddress: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. 12 Greenway Close" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Property Type</Label>
+                        <Input value={metadata.propertyType || ""} onChange={e => setMetadata({...metadata, propertyType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Residential" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Inspection Type</Label>
+                        <Input value={metadata.inspectionType || ""} onChange={e => setMetadata({...metadata, inspectionType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Roof Inspection" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Weather Conditions</Label>
+                        <Input value={metadata.weather || ""} onChange={e => setMetadata({...metadata, weather: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Clear, 18°C" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Drone Used</Label>
+                        <Input value={metadata.droneUsed || ""} onChange={e => setMetadata({...metadata, droneUsed: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. DJI Mavic 3" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Total Images</Label>
+                        <Input type="number" value={metadata.totalImages || ""} onChange={e => setMetadata({...metadata, totalImages: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 87" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Flight Time (min)</Label>
+                        <Input type="number" value={metadata.flightTime || ""} onChange={e => setMetadata({...metadata, flightTime: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 24" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Pilot Name</Label>
+                        <Input value={metadata.pilotName || ""} onChange={e => setMetadata({...metadata, pilotName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
+                    </div>
+                </Card>
+            )}
+
             {/* List of Items */}
             <div className="grid gap-8">
                 {report.items.length > 0 ? (
@@ -237,9 +287,28 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
+                                        {reportType === "ADVANCED" && (
+                                            <div className="grid grid-cols-2 gap-4 text-xs font-medium pb-2 border-b border-white/5">
+                                                <div><span className="text-muted-foreground/50 uppercase text-[9px] block">Location</span> {item.location || "-"}</div>
+                                                <div>
+                                                    <span className="text-muted-foreground/50 uppercase text-[9px] block">Severity</span> 
+                                                    <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", 
+                                                        item.severity === 'HIGH' ? 'bg-red-500/20 text-red-500' : 
+                                                        item.severity === 'MEDIUM' ? 'bg-orange-500/20 text-orange-500' : 
+                                                        'bg-blue-500/20 text-blue-500'
+                                                    )}>{item.severity || "LOW"}</span>
+                                                </div>
+                                            </div>
+                                        )}
                                         <p className="text-muted-foreground font-medium leading-relaxed whitespace-pre-wrap">
                                             {item.description}
                                         </p>
+                                        {reportType === "ADVANCED" && item.recommendation && (
+                                            <div className="bg-primary/5 border border-primary/10 rounded p-3 text-xs">
+                                                <span className="text-primary font-bold uppercase tracking-wider text-[10px] block mb-1">Recommendation</span>
+                                                {item.recommendation}
+                                            </div>
+                                        )}
                                         <div className="pt-4 flex items-center gap-2 text-[9px] font-black text-muted-foreground/30 uppercase tracking-widest">
                                             <Camera className="h-3 w-3" />
                                             <span>Captured {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -302,6 +371,41 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                             className="bg-white/5 border-white/10 uppercase font-black tracking-tight h-12"
                                         />
                                     </div>
+                                    {reportType === "ADVANCED" && (
+                                        <>
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Location</Label>
+                                                <Input 
+                                                    placeholder="e.g. Front Roof Slope" 
+                                                    value={itemLocation}
+                                                    onChange={(e) => setItemLocation(e.target.value)}
+                                                    className="bg-white/5 border-white/10 font-bold h-12"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Severity</Label>
+                                                <select
+                                                    value={itemSeverity}
+                                                    onChange={(e) => setItemSeverity(e.target.value)}
+                                                    className="flex h-12 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                                >
+                                                    <option value="LOW">LOW</option>
+                                                    <option value="MEDIUM">MEDIUM</option>
+                                                    <option value="HIGH">HIGH</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Recommendation</Label>
+                                                <Textarea 
+                                                    placeholder="e.g. Replace damaged tile to prevent water ingress."
+                                                    value={itemRecommendation}
+                                                    onChange={(e) => setItemRecommendation(e.target.value)}
+                                                    rows={3}
+                                                    className="bg-white/5 border-white/10 font-medium"
+                                                />
+                                            </div>
+                                        </>
+                                    )}
                                     <div className="space-y-2">
                                         <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">What was done? (Description)</Label>
                                         <Textarea 
@@ -382,11 +486,34 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
 
             {/* Conclusion Section */}
             <Card className="bg-card border-white/5 rounded-2xl shadow-xl overflow-hidden">
-                <CardHeader className="bg-white/[0.02] border-b border-white/5 py-5">
-                    <CardTitle className="text-sm font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
-                        <FileDown className="h-4 w-4 text-primary" /> Report Conclusion
-                    </CardTitle>
-                    <CardDescription className="text-xs text-muted-foreground">Summarize your findings or recommendations. This appears at the bottom of the PDF export.</CardDescription>
+                <CardHeader className="bg-white/[0.02] border-b border-white/5 py-5 flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="text-sm font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
+                            <FileDown className="h-4 w-4 text-primary" /> Report Settings & Conclusion
+                        </CardTitle>
+                        <CardDescription className="text-xs text-muted-foreground">Summarize your findings or recommendations. This appears at the bottom of the PDF export.</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <Label className="text-xs font-bold text-muted-foreground">Report Type:</Label>
+                        <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setReportType("BASIC")}
+                                className={cn("text-[10px] uppercase font-black tracking-widest", reportType === "BASIC" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+                            >
+                                Basic
+                            </Button>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setReportType("ADVANCED")}
+                                className={cn("text-[10px] uppercase font-black tracking-widest", reportType === "ADVANCED" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+                            >
+                                Advanced
+                            </Button>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent className="p-6 space-y-4">
                     <Textarea
