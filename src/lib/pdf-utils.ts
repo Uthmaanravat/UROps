@@ -424,7 +424,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    const summaryLines = doc.splitTextToSize(report.description || report.conclusion || "A drone inspection was conducted to assess the condition. Several areas of concern were identified. Please refer to the findings section for detailed observations.", 85);
+    const summaryLines = doc.splitTextToSize(report.description || report.conclusion || "An inspection was conducted to assess the condition. Several areas of concern were identified. Please refer to the findings section for detailed observations.", 85);
     doc.text(summaryLines, 18, currentY + 14);
 
     // Key Findings Box
