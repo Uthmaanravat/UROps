@@ -263,7 +263,9 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
-    doc.text("SEE MORE. KNOW MORE. SOLVE MORE.", nameX, 32);
+    if (company.slogan || company.domain) {
+        doc.text((company.slogan || company.domain).toUpperCase(), nameX, 32);
+    }
 
     // Right side text
     doc.setTextColor(30, 41, 59);
@@ -335,14 +337,29 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     addPropField("Inspection Type:", metadata.inspectionType || "");
     addPropField("Weather Conditions:", metadata.weather || "");
 
-    // Large grey placeholder or first item photo
-    doc.setFillColor(226, 232, 240);
-    doc.roundedRect(84, currentY, 112, 53, 2, 2, 'F');
-    // If there's an image in the first item, show it here? No, let's just use the placeholder color.
-    doc.setTextColor(148, 163, 184);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("PROPERTY OVERVIEW IMAGE", 140, currentY + 28, { align: 'center' });
+    // Large property overview photo
+    if (metadata.propertyImage) {
+        try {
+            let format = 'JPEG';
+            if (metadata.propertyImage.startsWith('data:image/png')) format = 'PNG';
+            doc.addImage(metadata.propertyImage, format, 84, currentY, 112, 53, undefined, 'FAST');
+            
+            // Subtle border around image
+            doc.setDrawColor(226, 232, 240);
+            doc.roundedRect(84, currentY, 112, 53, 2, 2, 'S');
+        } catch (e) {
+            doc.setFillColor(226, 232, 240);
+            doc.roundedRect(84, currentY, 112, 53, 2, 2, 'F');
+        }
+    } else {
+        // Grey placeholder
+        doc.setFillColor(226, 232, 240);
+        doc.roundedRect(84, currentY, 112, 53, 2, 2, 'F');
+        doc.setTextColor(148, 163, 184);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text("PROPERTY OVERVIEW IMAGE", 140, currentY + 28, { align: 'center' });
+    }
 
     // Icons Bar
     doc.setDrawColor(226, 232, 240);

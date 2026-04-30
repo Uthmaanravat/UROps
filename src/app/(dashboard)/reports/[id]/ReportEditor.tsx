@@ -260,6 +260,56 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                         <Label className="text-[10px] font-black uppercase text-muted-foreground">Pilot Name</Label>
                         <Input value={metadata.pilotName || ""} onChange={e => setMetadata({...metadata, pilotName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
                     </div>
+                    <div className="space-y-2 col-span-full">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Property Overview Image</Label>
+                        <div className="flex items-center gap-4">
+                            {metadata.propertyImage && (
+                                <img src={metadata.propertyImage} alt="Property Overview" className="h-16 w-16 object-cover rounded-md border border-white/10" />
+                            )}
+                            <div className="flex-1">
+                                <input 
+                                    type="file" 
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => {
+                                            const img = new Image();
+                                            img.onload = () => {
+                                                const canvas = document.createElement('canvas');
+                                                let width = img.width;
+                                                let height = img.height;
+                                                const maxDim = 1024;
+                                                if (width > maxDim || height > maxDim) {
+                                                    if (width > height) { height *= maxDim / width; width = maxDim; } 
+                                                    else { width *= maxDim / height; height = maxDim; }
+                                                }
+                                                canvas.width = width;
+                                                canvas.height = height;
+                                                const ctx = canvas.getContext('2d');
+                                                ctx?.drawImage(img, 0, 0, width, height);
+                                                setMetadata({...metadata, propertyImage: canvas.toDataURL('image/jpeg', 0.7)});
+                                            };
+                                            img.src = reader.result as string;
+                                        };
+                                        reader.readAsDataURL(file);
+                                    }}
+                                    className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white/5 file:text-white hover:file:bg-white/10 cursor-pointer"
+                                />
+                            </div>
+                            {metadata.propertyImage && (
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => setMetadata({...metadata, propertyImage: null})}
+                                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl"
+                                >
+                                    Clear Image
+                                </Button>
+                            )}
+                        </div>
+                    </div>
                 </Card>
             )}
 
