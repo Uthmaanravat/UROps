@@ -145,8 +145,8 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
         setIsExporting(true)
         try {
             const doc = new jsPDF()
-            // Pass conclusion into the report object for PDF rendering
-            await drawReportPdf(doc, company, { ...report, conclusion })
+            // Pass live state into the report object for PDF rendering
+            await drawReportPdf(doc, company, { ...report, conclusion, type: reportType, metadata })
             doc.save(`Report_${report.number.toString().padStart(3, '0')}_${report.title.replace(/\s+/g, '_')}.pdf`)
         } catch (error) {
             console.error("PDF Export failed:", error)
