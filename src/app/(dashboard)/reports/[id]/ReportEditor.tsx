@@ -269,7 +269,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                             className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-0" 
                         />
                         <Label htmlFor="showFooterText" className="text-xs font-bold text-muted-foreground cursor-pointer">
-                            Show "Professional Inspection Services" in PDF footer
+                            Show &quot;Professional Inspection Services&quot; in PDF footer
                         </Label>
                     </div>
                     <div className="space-y-2 col-span-full">
