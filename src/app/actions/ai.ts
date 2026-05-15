@@ -39,7 +39,7 @@ export async function transcribeAudio(formData: FormData) {
             let mimeType = file.type || "audio/webm";
             if (!mimeType.includes('/')) mimeType = "audio/" + mimeType;
 
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
             const result = await model.generateContent([
                 "You are a professional transcription assistant. Please accurately transcribe the following audio. Return ONLY the transcribed text without any conversational filler, markdown formatting, or surrounding quotes.",
                 {
@@ -130,7 +130,7 @@ export async function parseScopeOfWork(text: string) {
             return { success: false, error: "Gemini API Key is missing. AI parsing unavailable." }
         }
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", generationConfig: { responseMimeType: "application/json" } });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", generationConfig: { responseMimeType: "application/json" } });
         const prompt = `You are an expert project manager for a maintenance and construction company. 
         Your task is to take a transcribed voice note and parse it into a structured Scope of Work (SOW).
         Identify individual tasks, descriptions, and any mentioned quantities or materials.
@@ -164,7 +164,7 @@ export async function extractPricingFromText(text: string) {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", generationConfig: { responseMimeType: "application/json" } });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", generationConfig: { responseMimeType: "application/json" } });
         const prompt = `You are a specialized data extractor for construction and maintenance quotations.
         Your goal is to extract EVERY SINGLE individual line item and their typical unit prices.
         Do not skip any items. If a quotation has 20 items, extract all 20.
