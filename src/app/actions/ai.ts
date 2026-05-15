@@ -10,8 +10,8 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
 }) : null;
 
 export async function transcribeAudio(formData: FormData) {
-    if (!process.env.OPENAI_API_KEY) {
-        return { success: false, error: "OpenAI API key is missing." }
+    if (!genAI) {
+        return { success: false, error: "Gemini API key is missing." }
     }
 
     const file = formData.get("file") as File
@@ -26,7 +26,7 @@ export async function transcribeAudio(formData: FormData) {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         const attemptStartTime = Date.now();
         try {
-            console.log(`Transcribing file with OpenAI Whisper (Attempt ${attempt + 1}/${maxRetries + 1}):`, {
+            console.log(`Transcribing file with Gemini (Attempt ${attempt + 1}/${maxRetries + 1}):`, {
                 name: file.name,
                 size: file.size,
                 type: file.type
@@ -34,27 +34,32 @@ export async function transcribeAudio(formData: FormData) {
 
             const arrayBuffer = await file.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
+            
+            // Default to audio/webm if type is missing or not fully specified
+            let mimeType = file.type || "audio/webm";
+            if (!mimeType.includes('/')) mimeType = "audio/" + mimeType;
 
-            if (!openai) {
-                return { success: false, error: "OpenAI client not initialized." }
-            }
-            const fileForOpenAI = await OpenAI.toFile(buffer, file.name);
-
-            const transcription = await openai.audio.transcriptions.create({
-                file: fileForOpenAI,
-                model: "whisper-1",
-            });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const result = await model.generateContent([
+                "You are a professional transcription assistant. Please accurately transcribe the following audio. Return ONLY the transcribed text without any conversational filler, markdown formatting, or surrounding quotes.",
+                {
+                    inlineData: {
+                        mimeType: mimeType,
+                        data: buffer.toString("base64")
+                    }
+                }
+            ]);
 
             const duration = Date.now() - attemptStartTime;
             console.log(`Transcription successful in ${duration}ms (Attempt ${attempt + 1})`);
 
-            return { success: true, text: transcription.text }
+            return { success: true, text: result.response.text() }
         } catch (error: any) {
             lastError = error;
             const duration = Date.now() - attemptStartTime;
             console.error(`Attempt ${attempt + 1} failed after ${duration}ms:`, error.message);
 
-            const isNetworkError = error.code === 'ECONNRESET' || error.message?.includes('ECONNRESET') || error instanceof OpenAI.APIConnectionError;
+            const isNetworkError = error.code === 'ECONNRESET' || error.message?.includes('ECONNRESET');
 
             if (!isNetworkError || attempt === maxRetries) {
                 break;
@@ -69,13 +74,6 @@ export async function transcribeAudio(formData: FormData) {
 
     const totalDuration = Date.now() - totalStartTime;
     console.error(`All transcription attempts failed after ${totalDuration}ms`);
-
-    if (lastError?.code === 'ECONNRESET' || lastError?.message?.includes('ECONNRESET')) {
-        return {
-            success: false,
-            error: "Connection to transcription service timed out. Please try again."
-        }
-    }
 
     return { success: false, error: lastError?.message || "Failed to transcribe audio" }
 }

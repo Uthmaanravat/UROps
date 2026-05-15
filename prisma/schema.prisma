@@ -28,6 +28,8 @@ model Company {
   users          User[]
   workBreakdowns WorkBreakdownPricing[]
   reports        Report[]
+  statements     Statement[]
+  transactions   Transaction[]
 }
 
 model User {
@@ -63,6 +65,7 @@ model CompanySettings {
   company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   lastQuoteNumber   Int      @default(0)
   lastInvoiceNumber Int      @default(0)
+  lastStatementNumber Int    @default(0)
 }
 
 model Client {
@@ -89,6 +92,7 @@ model Client {
   projects           Project[]
   submissionLogs     SubmissionLog[]
   reports            Report[]
+  statements         Statement[]
 }
 
 model Project {
@@ -228,6 +232,20 @@ model Invoice {
   wbp            WorkBreakdownPricing? @relation(fields: [wbpId], references: [id])
   items          InvoiceItem[]
   payments       Payment[]
+}
+
+model Statement {
+  id             String   @id @default(uuid())
+  number         Int      @default(autoincrement())
+  statementNumber String?
+  date           DateTime @default(now())
+  clientId       String
+  totalDue       Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  companyId      String
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model InvoiceItem {
@@ -398,4 +416,23 @@ enum CommercialStatus {
   PO_RECEIVED
   EMERGENCY_WORK
   REACTIVE_WORK
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  companyId   String
+  date        DateTime
+  description String
+  amount      Float           // Absolute value
+  type        TransactionType // INCOME, EXPENSE
+  category    String?
+  source      String?         // E.g., 'Bank Upload', 'Manual'
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
 }

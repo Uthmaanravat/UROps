@@ -355,3 +355,41 @@ export async function deleteInvoiceAction(id: string) {
     revalidatePath("/invoices")
     redirect("/invoices")
 }
+
+export async function createStatementAction(clientId: string, totalDue: number) {
+    const companyId = await ensureAuth()
+    
+    const lastStatement = await prisma.statement.findFirst({
+        where: { companyId },
+        orderBy: { number: 'desc' }
+    });
+
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId }
+    });
+
+    if (!settings) throw new Error("Company settings not found");
+
+    const nextNumber = Math.max(settings.lastStatementNumber || 0, lastStatement?.number || 0) + 1;
+    const year = new Date().getFullYear();
+    const statementNumber = `STM-${year}-${nextNumber.toString().padStart(3, '0')}`;
+
+    await prisma.companySettings.update({
+        where: { companyId },
+        data: { lastStatementNumber: nextNumber }
+    });
+
+    const statement = await prisma.statement.create({
+        data: {
+            companyId,
+            clientId,
+            number: nextNumber,
+            statementNumber,
+            totalDue,
+            date: new Date()
+        }
+    });
+
+    revalidatePath(`/clients/${clientId}`);
+    return statementNumber;
+}

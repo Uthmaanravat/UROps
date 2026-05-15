@@ -9,6 +9,7 @@ import ExcelJS from "exceljs"
 import { saveAs } from "file-saver"
 import { useState } from "react"
 import { formatCurrency } from "@/lib/utils"
+import { createStatementAction } from "@/app/(dashboard)/invoices/actions"
 
 export function ClientStatementButton({ client, settings }: { client: any, settings?: any }) {
     const [loading, setLoading] = useState(false)
@@ -27,10 +28,30 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
     const generateStatement = async () => {
         setLoading(true)
         try {
+            // Calculate Total Due and create statement record first
+            let totalDue = 0
+            const unpaidInvoices = client.invoices
+                .filter((i: any) =>
+                    i.type === 'INVOICE' &&
+                    i.status !== 'PAID' &&
+                    i.status !== 'CANCELLED'
+                )
+                .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            unpaidInvoices.forEach((i: any) => {
+                const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
+                const outstanding = i.total - paid
+                if (outstanding > 0.01) {
+                    totalDue += outstanding
+                }
+            })
+
+            const statementNumber = await createStatementAction(client.id, totalDue);
+
             const doc = new jsPDF()
 
             // Header (Shared)
-            const nextY = await drawPdfHeader(doc, company, 'STATEMENT OF ACCOUNT', '');
+            const nextY = await drawPdfHeader(doc, company, 'STATEMENT OF ACCOUNT', statementNumber);
 
             // 3-Column Document Details Grid
             const gridY = nextY;
@@ -44,10 +65,17 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             doc.setFontSize(9);
             doc.setTextColor(100, 116, 139); // slate-500
             doc.setFont("helvetica", "normal");
-            doc.text("Date:", 14, gridY + 6);
+            doc.text("Statement #:", 14, gridY + 6);
             doc.setTextColor(30, 41, 59);
             doc.setFont("helvetica", "bold");
-            doc.text(new Date().toLocaleDateString('en-GB'), 30, gridY + 6);
+            doc.text(statementNumber, 38, gridY + 6);
+
+            doc.setTextColor(100, 116, 139); // slate-500
+            doc.setFont("helvetica", "normal");
+            doc.text("Date:", 14, gridY + 11);
+            doc.setTextColor(30, 41, 59);
+            doc.setFont("helvetica", "bold");
+            doc.text(new Date().toLocaleDateString('en-GB'), 38, gridY + 11);
 
             // Column 2: Bill To
             doc.setFontSize(8);
@@ -116,22 +144,13 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             doc.text("OUTSTANDING INVOICES", 14, headerY)
 
             const rows: any[] = []
-            let totalDue = 0
-
-            const unpaidInvoices = client.invoices
-                .filter((i: any) =>
-                    i.type === 'INVOICE' &&
-                    i.status !== 'PAID' &&
-                    i.status !== 'CANCELLED'
-                )
-                .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
+            let processedTotalDue = 0; // Using processedTotalDue to verify calculation matches
             unpaidInvoices.forEach((i: any) => {
                 const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
                 const outstanding = i.total - paid
 
                 if (outstanding > 0.01) {
-                    totalDue += outstanding
+                    processedTotalDue += outstanding
                     // Logic to ensure we show the correct formatted number
                     const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
 
@@ -180,7 +199,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
 
 
-            doc.save(`Statement_${client.name}_${new Date().toISOString().split('T')[0]}.pdf`)
+            doc.save(`Statement_${statementNumber}_${client.name.replace(/[^a-z0-9]/gi, '_')}.pdf`)
         } catch (e) {
             console.error(e)
             alert("Failed to generate statement")
@@ -192,6 +211,23 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
     const generateExcelStatement = async () => {
         setLoading(true)
         try {
+            // Calculate Total Due and create statement record first
+            let totalDue = 0
+            const unpaidInvoices = client.invoices.filter((i: any) =>
+                i.type === 'INVOICE' &&
+                i.status !== 'PAID' &&
+                i.status !== 'CANCELLED'
+            )
+            unpaidInvoices.forEach((i: any) => {
+                const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
+                const outstanding = i.total - paid
+                if (outstanding > 0.01) {
+                    totalDue += outstanding
+                }
+            })
+            
+            const statementNumber = await createStatementAction(client.id, totalDue);
+
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Statement');
 
@@ -239,6 +275,12 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             titleCell.value = 'STATEMENT OF ACCOUNT';
             titleCell.font = { name: 'Arial', bold: true, size: 20, color: { argb: 'FF14141E' } };
             titleCell.alignment = { horizontal: 'right', vertical: 'middle' };
+            
+            worksheet.mergeCells('D5:E5');
+            const numCell = worksheet.getCell('D5');
+            numCell.value = `Statement #: ${statementNumber}`;
+            numCell.font = { name: 'Arial', bold: true, size: 10, color: { argb: 'FF64748B' } };
+            numCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
             // 4. Metadata
             let currentRow = 8;
@@ -261,6 +303,11 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             
             // Details
             let detailsRow = startDataRow;
+            worksheet.getCell(`A${detailsRow}`).value = 'Statement #:';
+            worksheet.getCell(`A${detailsRow}`).font = { color: { argb: 'FF64748B' } };
+            worksheet.getCell(`B${detailsRow}`).value = statementNumber;
+            worksheet.getCell(`B${detailsRow}`).font = { bold: true };
+            detailsRow++;
             worksheet.getCell(`A${detailsRow}`).value = 'Date Issued:';
             worksheet.getCell(`A${detailsRow}`).font = { color: { argb: 'FF64748B' } };
             worksheet.getCell(`B${detailsRow}`).value = new Date().toLocaleDateString('en-GB');
@@ -347,12 +394,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             });
 
             // 6. Table Body
-            let totalDue = 0;
-            const unpaidInvoices = client.invoices.filter((i: any) =>
-                i.type === 'INVOICE' &&
-                i.status !== 'PAID' &&
-                i.status !== 'CANCELLED'
-            )
+            let processedExcelTotalDue = 0;
 
             currentRow++;
             unpaidInvoices.forEach((i: any) => {
@@ -360,7 +402,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 const outstanding = i.total - paid
 
                 if (outstanding > 0.01) {
-                    totalDue += outstanding
+                    processedExcelTotalDue += outstanding
                     const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
 
                     const row = worksheet.getRow(currentRow);
@@ -413,7 +455,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
             // Write and Save
             const buffer = await workbook.xlsx.writeBuffer();
-            saveAs(new Blob([buffer]), `Statement_${client.name}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            saveAs(new Blob([buffer]), `Statement_${statementNumber}_${client.name.replace(/[^a-z0-9]/gi, '_')}.xlsx`);
 
         } catch (e) {
             console.error(e)

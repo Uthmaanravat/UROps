@@ -26,6 +26,9 @@ export default async function ClientPage({ params }: { params: { id: string } })
             },
             interactions: {
                 orderBy: { date: 'desc' }
+            },
+            statements: {
+                orderBy: { date: 'desc' }
             }
         }
     });
@@ -65,6 +68,14 @@ export default async function ClientPage({ params }: { params: { id: string } })
             title: i.type,
             description: i.content,
             read: i.read
+        })),
+        ...client.statements.map((s: any) => ({
+            id: s.id,
+            type: 'STATEMENT',
+            date: new Date(s.date),
+            title: s.statementNumber || `Statement #${s.number}`,
+            amount: s.totalDue,
+            status: "SENT"
         }))
     ].sort((a: any, b: any) => b.date.getTime() - a.date.getTime());
 
@@ -159,6 +170,16 @@ export default async function ClientPage({ params }: { params: { id: string } })
                                             <Link href={`/invoices/${invoice.id}`}>
                                                 <Button variant="ghost" size="sm">View</Button>
                                             </Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {client.statements.map((statement: any) => (
+                                    <tr key={statement.id} className="border-b transition-colors hover:bg-muted/50">
+                                        <td className="p-4 align-middle">{new Date(statement.date).toLocaleDateString()}</td>
+                                        <td className="p-4 align-middle">{statement.statementNumber || `STM-${new Date(statement.date).getFullYear()}-${String(statement.number).padStart(3, '0')}`} <br /><span className="text-xs text-muted-foreground">STATEMENT</span></td>
+                                        <td className="p-4 align-middle font-medium">{formatCurrency(statement.totalDue)}</td>
+                                        <td className="p-4 align-middle text-right">
+                                            {/* Could add a view button for statement if we have a viewer, else just list it */}
                                         </td>
                                     </tr>
                                 ))}
