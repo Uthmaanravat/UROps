@@ -22,16 +22,15 @@ export async function processBankStatementAction(formData: FormData) {
     try {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
+        const base64Data = buffer.toString("base64");
         
-        let textContent = "";
-        
+        let mimeType = "text/plain";
         if (file.name.toLowerCase().endsWith('.pdf')) {
-            const pdfData = await pdfParse(buffer);
-            textContent = pdfData.text;
-        } else if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.txt')) {
-            textContent = buffer.toString('utf-8');
-        } else {
-            return { success: false, error: "Unsupported file format. Please upload PDF or CSV." };
+            mimeType = "application/pdf";
+        } else if (file.name.toLowerCase().endsWith('.csv')) {
+            mimeType = "text/csv";
+        } else if (file.name.toLowerCase().endsWith('.xlsx')) {
+            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
         }
 
         const model = genAI.getGenerativeModel({ 
@@ -40,22 +39,25 @@ export async function processBankStatementAction(formData: FormData) {
         });
 
         const prompt = `You are an expert AI accounting assistant.
-        I am providing you with the text content of a bank statement or expense report.
-        Extract all financial transactions from it.
+        I am providing you with a bank statement, expense report, or transaction list file.
+        Please carefully extract all financial transactions from it.
         For each transaction, provide:
         - date: ISO format YYYY-MM-DD
-        - description: clean and concise description
+        - description: clean and concise description of the vendor/transaction
         - amount: positive number (absolute value)
         - type: "INCOME" or "EXPENSE"
         - category: one of ["Salaries/Wages", "Materials", "Equipment", "Fuel/Transport", "Subcontractors", "Office/Admin", "Utilities", "Miscellaneous"]
 
+        Analyze the document carefully. 
         Return the result as a JSON object with a key 'transactions' containing an array of these objects.
-
-        Text content:
-        ${textContent.substring(0, 30000)} // Limit to avoid exceeding tokens
+        If the file has no recognizable transactions, return {"transactions": []}.
         `;
 
-        const result = await model.generateContent(prompt);
+        const result = await model.generateContent([
+            prompt,
+            { inlineData: { data: base64Data, mimeType } }
+        ]);
+
         const textResponse = result.response.text();
         const parsed = JSON.parse(textResponse);
         const transactions = parsed.transactions || [];

@@ -1,13 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
-import { Plus, LayoutGrid, List, Calendar as CalendarIcon, ArrowRight, Briefcase } from "lucide-react"
+import { Plus, LayoutGrid, List, Calendar as CalendarIcon, ArrowRight, Briefcase, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { DeleteButton } from "@/components/ui/DeleteButton"
-import { deleteProject } from "@/app/(dashboard)/projects/actions"
+import { deleteProject, updateProjectStatus, updateProjectCommercialStatus } from "@/app/(dashboard)/projects/actions"
 
 const columns = [
     { id: 'LEAD', title: 'Lead / Planning', statuses: ['LEAD', 'PLANNING'] },
@@ -17,8 +18,48 @@ const columns = [
     { id: 'HOLD', title: 'On Hold / Cancelled', statuses: ['ON_HOLD', 'CANCELLED'] },
 ];
 
-export function ProjectDashboardClient({ projects }: { projects: any[] }) {
+export function ProjectDashboardClient({ projects: initialProjects }: { projects: any[] }) {
     const [view, setView] = useState<'KANBAN' | 'LIST' | 'TIMELINE'>('KANBAN')
+    const [projects, setProjects] = useState(initialProjects)
+    const [isPending, startTransition] = useTransition()
+    const router = useRouter()
+
+    const handleDragStart = (e: React.DragEvent, projectId: string) => {
+        e.dataTransfer.setData('projectId', projectId)
+    }
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+    }
+
+    const handleDrop = async (e: React.DragEvent, statusId: string) => {
+        e.preventDefault()
+        const projectId = e.dataTransfer.getData('projectId')
+        
+        // Find the first mapped actual DB status for the column group
+        const targetDbStatus = columns.find(c => c.id === statusId)?.statuses[0]
+        if (!targetDbStatus) return
+
+        // Optimistic update
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: targetDbStatus } : p))
+
+        startTransition(async () => {
+            await updateProjectStatus(projectId, targetDbStatus)
+            router.refresh()
+        })
+    }
+
+    const handleStatusChange = async (projectId: string, field: 'status' | 'commercialStatus', value: string) => {
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, [field]: value } : p))
+        startTransition(async () => {
+            if (field === 'status') {
+                await updateProjectStatus(projectId, value)
+            } else {
+                await updateProjectCommercialStatus(projectId, value)
+            }
+            router.refresh()
+        })
+    }
 
     // Calculations
     const activeProjects = projects.filter(p => !['COMPLETED', 'PAID', 'CANCELLED'].includes(p.status));
@@ -101,7 +142,12 @@ export function ProjectDashboardClient({ projects }: { projects: any[] }) {
                     {columns.map(col => {
                         const colProjects = projects.filter(p => col.statuses.includes(p.status));
                         return (
-                            <div key={col.id} className="min-w-[320px] w-[320px] shrink-0 snap-start">
+                            <div 
+                                key={col.id} 
+                                className="min-w-[320px] w-[320px] shrink-0 snap-start"
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => handleDrop(e, col.id)}
+                            >
                                 <div className="bg-[#0A0A12] border border-white/5 rounded-2xl p-4 flex flex-col h-full">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="font-black text-sm uppercase tracking-widest text-primary/80">{col.title}</h3>
@@ -118,7 +164,12 @@ export function ProjectDashboardClient({ projects }: { projects: any[] }) {
                                                 : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0);
 
                                             return (
-                                                <div key={project.id} className="bg-[#14141E] border border-white/5 p-4 rounded-xl shadow-lg hover:border-primary/30 transition-colors group cursor-pointer relative overflow-hidden">
+                                                <div 
+                                                    key={project.id} 
+                                                    draggable
+                                                    onDragStart={(e) => handleDragStart(e, project.id)}
+                                                    className="bg-[#14141E] border border-white/5 p-4 rounded-xl shadow-lg hover:border-primary/30 transition-colors group cursor-grab active:cursor-grabbing relative overflow-hidden"
+                                                >
                                                     <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 group-hover:bg-primary transition-colors" />
                                                     <div className="pl-2">
                                                         <div className="flex justify-between items-start mb-1">
@@ -185,20 +236,39 @@ export function ProjectDashboardClient({ projects }: { projects: any[] }) {
                                             </td>
                                             <td className="p-4 align-middle text-muted-foreground font-medium">{project.client.name}</td>
                                             <td className="p-4 align-middle">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20">
-                                                    {project.status.replace('_', ' ')}
-                                                </span>
+                                                <select
+                                                    value={project.status}
+                                                    onChange={(e) => handleStatusChange(project.id, 'status', e.target.value)}
+                                                    className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded cursor-pointer outline-none focus:ring-2 focus:ring-primary/50"
+                                                >
+                                                    <option value="LEAD" className="bg-[#14141E] text-white">LEAD</option>
+                                                    <option value="PLANNING" className="bg-[#14141E] text-white">PLANNING</option>
+                                                    <option value="SOW" className="bg-[#14141E] text-white">SCOPE</option>
+                                                    <option value="QUOTED" className="bg-[#14141E] text-white">QUOTED</option>
+                                                    <option value="SCHEDULED" className="bg-[#14141E] text-white">SCHEDULED</option>
+                                                    <option value="IN_PROGRESS" className="bg-[#14141E] text-white">IN PROGRESS</option>
+                                                    <option value="COMPLETED" className="bg-[#14141E] text-white">COMPLETED</option>
+                                                    <option value="INVOICED" className="bg-[#14141E] text-white">INVOICED</option>
+                                                    <option value="PAID" className="bg-[#14141E] text-white">PAID</option>
+                                                    <option value="ON_HOLD" className="bg-[#14141E] text-white">ON HOLD</option>
+                                                    <option value="CANCELLED" className="bg-[#14141E] text-white">CANCELLED</option>
+                                                </select>
                                             </td>
                                             <td className="p-4 align-middle">
-                                                <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest
-                                                    ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white shadow-lg' :
-                                                    project.commercialStatus === 'REACTIVE_WORK' ? 'bg-orange-500 text-white shadow-lg' :
+                                                <select
+                                                    value={project.commercialStatus}
+                                                    onChange={(e) => handleStatusChange(project.id, 'commercialStatus', e.target.value)}
+                                                    className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest cursor-pointer outline-none focus:ring-2 focus:ring-primary/50
+                                                    ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                                                    project.commercialStatus === 'REACTIVE_WORK' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
                                                     project.commercialStatus === 'PO_RECEIVED' ? 'bg-primary/20 text-primary border border-primary/40' :
-                                                    'bg-amber-500/20 text-amber-500 border border-amber-500/30'}`}>
-                                                    {project.commercialStatus === 'EMERGENCY_WORK' ? '🚨 EMERGENCY' :
-                                                    project.commercialStatus === 'REACTIVE_WORK' ? '⚡ REACTIVE' :
-                                                    project.commercialStatus === 'PO_RECEIVED' ? '✅ PO RECEIVED' : '⏳ AWAITING PO'}
-                                                </span>
+                                                    'bg-amber-500/20 text-amber-500 border border-amber-500/30'}`}
+                                                >
+                                                    <option value="AWAITING_PO" className="bg-[#14141E] text-white">⏳ AWAITING PO</option>
+                                                    <option value="PO_RECEIVED" className="bg-[#14141E] text-white">✅ PO RECEIVED</option>
+                                                    <option value="REACTIVE_WORK" className="bg-[#14141E] text-white">⚡ REACTIVE</option>
+                                                    <option value="EMERGENCY_WORK" className="bg-[#14141E] text-white">🚨 EMERGENCY</option>
+                                                </select>
                                             </td>
                                             <td className="p-4 align-middle text-right font-black text-white">
                                                 {formatCurrency(totalWorth)}
