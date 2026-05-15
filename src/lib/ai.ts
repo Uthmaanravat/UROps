@@ -7,7 +7,7 @@ export async function parseScopeToItems(scopeText: string) {
     throw new Error("Missing Gemini API Key. AI parsing unavailable.")
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest", generationConfig: { responseMimeType: "application/json" } });
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest", generationConfig: { responseMimeType: "application/json" } });
         const prompt = `You are a professional estimator for a building maintenance company.
 
 Your task is to analyze a scope of work and break it down into billable line items.
