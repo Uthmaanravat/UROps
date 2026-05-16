@@ -6,11 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatCurrency } from "@/lib/utils"
-import { Upload, Plus, TrendingUp, TrendingDown, DollarSign, Brain, Loader2, ArrowUpRight, ArrowDownRight, Briefcase } from "lucide-react"
+import { Upload, Plus, TrendingUp, TrendingDown, DollarSign, Brain, Loader2, ArrowUpRight, ArrowDownRight, Briefcase, Activity, Calendar, AlertCircle } from "lucide-react"
 import { processBankStatementAction, addManualTransactionAction } from "@/app/(dashboard)/financial-dashboard/actions"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Badge } from "@/components/ui/badge"
 
-export function FinancialDashboardClient({ invoices, transactions }: { invoices: any[], transactions: any[] }) {
+const COLORS = ['#10b981', '#f43f5e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+export function FinancialDashboardClient({ invoices, transactions, projects = [] }: { invoices: any[], transactions: any[], projects?: any[] }) {
     const [isUploading, setIsUploading] = useState(false)
     const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
     const [uploadError, setUploadError] = useState<string | null>(null)
@@ -22,6 +26,9 @@ export function FinancialDashboardClient({ invoices, transactions }: { invoices:
     const [amount, setAmount] = useState("")
     const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE')
     const [category, setCategory] = useState("Materials")
+
+    // Drill Down States
+    const [drillDownType, setDrillDownType] = useState<string | null>(null);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -60,7 +67,6 @@ export function FinancialDashboardClient({ invoices, transactions }: { invoices:
                 type,
                 category
             });
-            // Reset form
             setDescription("");
             setAmount("");
         } catch (error) {
@@ -78,6 +84,13 @@ export function FinancialDashboardClient({ invoices, transactions }: { invoices:
     const totalInvoiced = invoices.reduce((acc, inv) => acc + inv.total, 0);
     const totalPaid = invoices.reduce((acc, inv) => acc + inv.payments.reduce((pAcc: number, p: any) => pAcc + p.amount, 0), 0);
     const outstandingInvoices = totalInvoiced - totalPaid;
+    
+    const unpaidInvoices = invoices.filter(inv => {
+        const paid = inv.payments.reduce((acc: number, p: any) => acc + p.amount, 0);
+        return paid < inv.total && inv.status !== 'CANCELLED' && inv.status !== 'DRAFT';
+    });
+
+    const activeProjectsList = projects.filter(p => !['COMPLETED', 'PAID', 'CANCELLED'].includes(p.status));
 
     // From Transactions
     const currentMonthTransactions = transactions.filter(t => {
@@ -99,8 +112,7 @@ export function FinancialDashboardClient({ invoices, transactions }: { invoices:
         return acc;
     }, {});
 
-    const sortedCategories = Object.entries(expenseCategories).sort((a, b) => b[1] - a[1]);
-    const maxCategoryAmount = sortedCategories.length > 0 ? sortedCategories[0][1] : 1;
+    const pieChartData = Object.entries(expenseCategories).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
     // Monthly Trend (Last 6 Months)
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -121,87 +133,84 @@ export function FinancialDashboardClient({ invoices, transactions }: { invoices:
             return td.getMonth() === m && td.getFullYear() === y && t.type === 'EXPENSE';
         }).reduce((acc, t) => acc + t.amount, 0);
 
-        trendData.push({ month: months[m], income: mIncome, expense: mExpense });
+        trendData.push({ month: months[m], Income: mIncome, Expenses: mExpense, Profit: mIncome - mExpense });
     }
 
-    const maxTrendAmount = Math.max(...trendData.flatMap(d => [d.income, d.expense]), 1);
+    // Custom Tooltip for Charts
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-[#0f0f1a]/90 border border-white/10 p-3 rounded-lg shadow-xl backdrop-blur-md">
+                    <p className="text-white font-black text-xs mb-2 uppercase tracking-widest">{label}</p>
+                    {payload.map((entry: any, index: number) => (
+                        <div key={index} className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                            <span className="text-muted-foreground">{entry.name}:</span>
+                            <span className="font-bold text-white">{formatCurrency(entry.value)}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+        return null;
+    };
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-20">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-black tracking-tight text-primary uppercase">Financial Insights</h1>
-                    <p className="text-muted-foreground text-sm font-medium">Business analytics & accounting preparation</p>
+                    <h1 className="text-3xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">Financial Command Center</h1>
+                    <p className="text-muted-foreground text-sm font-medium tracking-wide">Live business analytics & operations tracking</p>
                 </div>
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <Dialog>
                         <DialogTrigger asChild>
-                            <Button variant="outline" className="flex-1 md:flex-none border-primary/20 hover:border-primary/50 text-white font-bold">
+                            <Button variant="outline" className="flex-1 md:flex-none border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 text-white font-bold backdrop-blur-sm">
                                 <Plus className="mr-2 h-4 w-4" /> Add Record
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px] border-primary/20 bg-[#0F0F1A]">
+                        <DialogContent className="sm:max-w-[425px] border-primary/20 bg-[#0F0F1A]/95 backdrop-blur-xl">
                             <DialogHeader>
                                 <DialogTitle className="text-xl font-black uppercase text-primary">Add Transaction</DialogTitle>
                                 <DialogDescription>Manual entry for income or expense.</DialogDescription>
                             </DialogHeader>
                             <form onSubmit={handleAddTransaction} className="space-y-4 pt-4">
+                                {/* Form fields remain same as original */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label>Type</Label>
-                                        <select
-                                            value={type}
-                                            onChange={(e) => setType(e.target.value as 'INCOME' | 'EXPENSE')}
-                                            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
+                                        <select value={type} onChange={(e) => setType(e.target.value as 'INCOME' | 'EXPENSE')} className="flex h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
                                             <option value="INCOME">Income</option>
                                             <option value="EXPENSE">Expense</option>
                                         </select>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Date</Label>
-                                        <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-transparent" />
+                                        <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white/5 border-white/10 text-white" />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Description</Label>
-                                    <Input placeholder="e.g. Paint Supplies" value={description} onChange={e => setDescription(e.target.value)} required className="bg-transparent" />
+                                    <Input placeholder="e.g. Paint Supplies" value={description} onChange={e => setDescription(e.target.value)} required className="bg-white/5 border-white/10 text-white" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label>Amount (R)</Label>
-                                        <Input type="number" step="0.01" min="0" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} required className="bg-transparent font-black" />
+                                        <Input type="number" step="0.01" min="0" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} required className="bg-white/5 border-white/10 font-black text-white" />
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Category</Label>
-                                        <select
-                                            value={category}
-                                            onChange={(e) => setCategory(e.target.value)}
-                                            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background"
-                                        >
+                                        <select value={category} onChange={(e) => setCategory(e.target.value)} className="flex h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
                                             {type === 'EXPENSE' ? (
-                                                <>
-                                                    <option value="Materials">Materials</option>
-                                                    <option value="Salaries/Wages">Salaries/Wages</option>
-                                                    <option value="Subcontractors">Subcontractors</option>
-                                                    <option value="Equipment">Equipment</option>
-                                                    <option value="Fuel/Transport">Fuel/Transport</option>
-                                                    <option value="Office/Admin">Office/Admin</option>
-                                                    <option value="Utilities">Utilities</option>
-                                                    <option value="Miscellaneous">Miscellaneous</option>
-                                                </>
+                                                <><option value="Materials">Materials</option><option value="Salaries/Wages">Salaries/Wages</option><option value="Subcontractors">Subcontractors</option><option value="Equipment">Equipment</option><option value="Fuel/Transport">Fuel/Transport</option><option value="Office/Admin">Office/Admin</option><option value="Utilities">Utilities</option><option value="Miscellaneous">Miscellaneous</option></>
                                             ) : (
-                                                <>
-                                                    <option value="Project Revenue">Project Revenue</option>
-                                                    <option value="Consulting">Consulting</option>
-                                                    <option value="Other Income">Other Income</option>
-                                                </>
+                                                <><option value="Project Revenue">Project Revenue</option><option value="Consulting">Consulting</option><option value="Other Income">Other Income</option></>
                                             )}
                                         </select>
                                     </div>
                                 </div>
                                 <DialogFooter>
-                                    <Button type="submit" disabled={isAddingTransaction} className="w-full bg-primary text-black font-black hover:bg-primary/90 mt-4">
+                                    <Button type="submit" disabled={isAddingTransaction} className="w-full bg-primary text-black font-black hover:bg-primary/90 mt-4 shadow-[0_0_20px_rgba(163,230,53,0.3)]">
                                         {isAddingTransaction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                                         Save Transaction
                                     </Button>
@@ -210,15 +219,9 @@ export function FinancialDashboardClient({ invoices, transactions }: { invoices:
                         </DialogContent>
                     </Dialog>
 
-                    <div className="relative flex-1 md:flex-none">
-                        <input
-                            type="file"
-                            accept=".pdf,.csv,.txt"
-                            onChange={handleFileUpload}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            disabled={isUploading}
-                        />
-                        <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-[0_0_15px_rgba(163,230,53,0.3)]">
+                    <div className="relative flex-1 md:flex-none group">
+                        <input type="file" accept=".pdf,.csv,.txt,.xlsx" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" disabled={isUploading} />
+                        <Button className="w-full bg-gradient-to-r from-primary to-emerald-400 text-black hover:opacity-90 font-black shadow-[0_0_20px_rgba(163,230,53,0.4)] transition-all group-hover:scale-105">
                             {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
                             AI Statement Upload
                         </Button>
@@ -227,209 +230,263 @@ export function FinancialDashboardClient({ invoices, transactions }: { invoices:
             </div>
 
             {/* AI Warning / Messages */}
-            {uploadError && (
-                <div className="bg-red-500/10 border border-red-500/50 text-red-500 px-4 py-3 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2">
-                    ❌ {uploadError}
-                </div>
-            )}
-            {uploadSuccess && (
-                <div className="bg-primary/10 border border-primary/50 text-primary px-4 py-3 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2">
-                    ✅ {uploadSuccess}
-                </div>
-            )}
-            
-            <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-4 py-3 rounded-xl text-xs font-medium flex items-start gap-3">
-                <Brain className="h-5 w-5 shrink-0 mt-0.5" />
-                <p><strong>Disclaimer:</strong> This dashboard is an AI-assisted tool for internal business tracking and preparation. It does NOT replace a licensed accountant or official tax software. Verify all auto-categorized transactions.</p>
-            </div>
+            {uploadError && <div className="bg-red-500/10 border border-red-500/50 text-red-500 px-4 py-3 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2">❌ {uploadError}</div>}
+            {uploadSuccess && <div className="bg-primary/10 border border-primary/50 text-primary px-4 py-3 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2">✅ {uploadSuccess}</div>}
 
-            {/* KPI Cards */}
+            {/* INTERACTIVE KPI CARDS */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="bg-[#14141E] border-white/5 shadow-xl hover:border-primary/30 transition-colors">
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl hover:border-emerald-500/50 hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all cursor-pointer group" onClick={() => setDrillDownType('REVENUE')}>
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Monthly Revenue</CardTitle>
-                        <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-emerald-400 transition-colors">Monthly Revenue</CardTitle>
+                        <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover:bg-emerald-500/20 transition-colors">
                             <TrendingUp className="h-4 w-4 text-emerald-500" />
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-black text-white">{formatCurrency(monthlyRevenue)}</div>
-                        <p className="text-xs text-muted-foreground mt-1">This month</p>
+                        <div className="text-3xl font-black text-white tracking-tight">{formatCurrency(monthlyRevenue)}</div>
+                        <div className="flex items-center text-[10px] text-emerald-400 font-bold mt-1 uppercase tracking-wider">
+                            <Activity className="h-3 w-3 mr-1" /> View Breakdown
+                        </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-[#14141E] border-white/5 shadow-xl hover:border-primary/30 transition-colors">
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(239,68,68,0.15)] transition-all cursor-pointer group" onClick={() => setDrillDownType('EXPENSES')}>
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Monthly Expenses</CardTitle>
-                        <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-red-400 transition-colors">Monthly Expenses</CardTitle>
+                        <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:bg-red-500/20 transition-colors">
                             <TrendingDown className="h-4 w-4 text-red-500" />
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-black text-white">{formatCurrency(monthlyExpenses)}</div>
-                        <p className="text-xs text-muted-foreground mt-1">This month</p>
+                        <div className="text-3xl font-black text-white tracking-tight">{formatCurrency(monthlyExpenses)}</div>
+                        <div className="flex items-center text-[10px] text-red-400 font-bold mt-1 uppercase tracking-wider">
+                            <Activity className="h-3 w-3 mr-1" /> Expense Analysis
+                        </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-[#14141E] border-white/5 shadow-xl hover:border-primary/30 transition-colors relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
-                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-bold text-primary uppercase tracking-widest">Net Profit</CardTitle>
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                <Card className="bg-gradient-to-br from-[#1A1A2E] to-[#14141E] border border-primary/20 shadow-[0_0_30px_rgba(163,230,53,0.1)] relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent opacity-50" />
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 relative z-10">
+                        <CardTitle className="text-[11px] font-black text-primary uppercase tracking-widest">Net Profit Margin</CardTitle>
+                        <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center border border-primary/40 shadow-[0_0_15px_rgba(163,230,53,0.3)]">
                             <DollarSign className="h-4 w-4 text-primary" />
                         </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className={`text-3xl font-black drop-shadow-md ${netProfit >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                    <CardContent className="relative z-10">
+                        <div className={`text-3xl font-black tracking-tight ${netProfit >= 0 ? 'text-white' : 'text-red-500'}`}>
                             {formatCurrency(netProfit)}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">This month</p>
+                        <p className="text-[10px] text-primary/70 font-bold mt-1 uppercase tracking-wider">This Month</p>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-[#14141E] border-white/5 shadow-xl hover:border-primary/30 transition-colors">
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl hover:border-orange-500/50 hover:shadow-[0_0_30px_rgba(249,115,22,0.15)] transition-all cursor-pointer group" onClick={() => setDrillDownType('OUTSTANDING')}>
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Outstanding</CardTitle>
-                        <div className="h-8 w-8 rounded-full bg-orange-500/10 flex items-center justify-center border border-orange-500/20">
-                            <Briefcase className="h-4 w-4 text-orange-500" />
+                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-orange-400 transition-colors">Outstanding Payments</CardTitle>
+                        <div className="h-8 w-8 rounded-full bg-orange-500/10 flex items-center justify-center border border-orange-500/20 group-hover:bg-orange-500/20 transition-colors">
+                            <AlertCircle className="h-4 w-4 text-orange-500" />
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-black text-white">{formatCurrency(outstandingInvoices)}</div>
-                        <p className="text-xs text-muted-foreground mt-1">From Unpaid Invoices</p>
+                        <div className="text-3xl font-black text-white tracking-tight">{formatCurrency(outstandingInvoices)}</div>
+                        <div className="flex items-center text-[10px] text-orange-400 font-bold mt-1 uppercase tracking-wider">
+                            <Activity className="h-3 w-3 mr-1" /> View {unpaidInvoices.length} Unpaid Invoices
+                        </div>
+                    </CardContent>
+                </Card>
+                
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl hover:border-blue-500/50 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all cursor-pointer group lg:col-span-2" onClick={() => setDrillDownType('PROJECTS')}>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-blue-400 transition-colors">Active Projects Overview</CardTitle>
+                        <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 group-hover:bg-blue-500/20 transition-colors">
+                            <Briefcase className="h-4 w-4 text-blue-500" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-end gap-4">
+                            <div className="text-3xl font-black text-white tracking-tight">{activeProjectsList.length}</div>
+                            <div className="flex items-center text-[10px] text-blue-400 font-bold mb-1 uppercase tracking-wider bg-blue-500/10 px-2 py-1 rounded">
+                                Live Projects Tracking
+                            </div>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mt-3">
+                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((activeProjectsList.length / 20) * 100, 100)}%`}} />
+                        </div>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-3">
                 {/* Visual Trend Chart */}
-                <Card className="bg-[#14141E] border-white/5 shadow-2xl col-span-1 md:col-span-2 lg:col-span-1">
-                    <CardHeader>
-                        <CardTitle className="uppercase tracking-widest text-primary/80 text-sm font-black">6-Month Trend</CardTitle>
-                        <CardDescription>Income vs Expenses</CardDescription>
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl md:col-span-2">
+                    <CardHeader className="border-b border-white/5 pb-4">
+                        <CardTitle className="uppercase tracking-widest text-white text-sm font-black flex items-center gap-2">
+                            <Activity className="h-4 w-4 text-primary" /> Performance Over Time
+                        </CardTitle>
+                        <CardDescription className="text-muted-foreground/70 font-medium">Income, Expenses, and Profit margins over the last 6 months</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div className="h-64 flex items-end gap-2 sm:gap-4 pt-4">
-                            {trendData.map((d, i) => (
-                                <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                                    <div className="flex gap-1 w-full justify-center h-[200px] items-end relative">
-                                        {/* Income Bar */}
-                                        <div 
-                                            className="w-1/3 bg-emerald-500/80 rounded-t-sm hover:bg-emerald-400 transition-all relative"
-                                            style={{ height: `${Math.max((d.income / maxTrendAmount) * 100, 2)}%` }}
-                                        >
-                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] px-2 py-1 rounded font-bold pointer-events-none z-10 whitespace-nowrap border border-white/10">
-                                                +{formatCurrency(d.income)}
-                                            </div>
-                                        </div>
-                                        {/* Expense Bar */}
-                                        <div 
-                                            className="w-1/3 bg-red-500/80 rounded-t-sm hover:bg-red-400 transition-all relative"
-                                            style={{ height: `${Math.max((d.expense / maxTrendAmount) * 100, 2)}%` }}
-                                        >
-                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] px-2 py-1 rounded font-bold pointer-events-none z-10 whitespace-nowrap border border-white/10">
-                                                -{formatCurrency(d.expense)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{d.month}</span>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex justify-center gap-6 mt-4 pt-4 border-t border-white/5">
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 bg-emerald-500/80 rounded-sm" />
-                                <span className="text-xs font-bold text-muted-foreground">Income</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 bg-red-500/80 rounded-sm" />
-                                <span className="text-xs font-bold text-muted-foreground">Expenses</span>
-                            </div>
+                    <CardContent className="pt-6">
+                        <div className="h-[350px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                    <XAxis dataKey="month" stroke="#ffffff50" fontSize={10} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="#ffffff50" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `R${value/1000}k`} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{fill: '#ffffff05'}} />
+                                    <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '20px' }} iconType="circle" />
+                                    <Bar dataKey="Income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                    <Bar dataKey="Expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Expense Categories Breakdown */}
-                <Card className="bg-[#14141E] border-white/5 shadow-2xl">
-                    <CardHeader>
-                        <CardTitle className="uppercase tracking-widest text-primary/80 text-sm font-black">Expense Breakdown</CardTitle>
-                        <CardDescription>By Category (All Time)</CardDescription>
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl">
+                    <CardHeader className="border-b border-white/5 pb-4">
+                        <CardTitle className="uppercase tracking-widest text-white text-sm font-black flex items-center gap-2">
+                            <PieChart className="h-4 w-4 text-primary" /> Expense Distribution
+                        </CardTitle>
+                        <CardDescription className="text-muted-foreground/70 font-medium">All Time Breakdown</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4 max-h-[280px] overflow-y-auto pr-2 scrollbar-thin">
-                            {sortedCategories.length === 0 ? (
-                                <p className="text-center text-sm text-muted-foreground py-10 italic">No expenses recorded yet.</p>
-                            ) : (
-                                sortedCategories.map(([cat, amt]) => {
-                                    const percentage = (amt / totalExpenses) * 100;
-                                    return (
-                                        <div key={cat} className="space-y-2 group">
-                                            <div className="flex justify-between text-xs font-bold">
-                                                <span className="text-white group-hover:text-primary transition-colors">{cat}</span>
-                                                <div className="flex gap-3">
-                                                    <span className="text-muted-foreground">{percentage.toFixed(1)}%</span>
-                                                    <span className="text-white">{formatCurrency(amt)}</span>
-                                                </div>
-                                            </div>
-                                            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                                                <div 
-                                                    className="h-full bg-primary/70 rounded-full group-hover:bg-primary transition-all duration-500" 
-                                                    style={{ width: `${percentage}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    )
-                                })
-                            )}
+                    <CardContent className="pt-6 flex flex-col items-center">
+                        <div className="h-[200px] w-full mb-4">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={pieChartData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
+                                        {pieChartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip content={<CustomTooltip />} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="w-full space-y-3 max-h-[150px] overflow-y-auto pr-2 scrollbar-thin">
+                            {pieChartData.map((entry, index) => (
+                                <div key={entry.name} className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                                        <span className="text-white font-medium truncate max-w-[120px]">{entry.name}</span>
+                                    </div>
+                                    <span className="font-bold text-muted-foreground">{formatCurrency(entry.value)}</span>
+                                </div>
+                            ))}
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Recent Transactions Table */}
-            <Card className="bg-[#14141E] border-white/5 shadow-2xl">
-                <CardHeader>
-                    <CardTitle className="uppercase tracking-widest text-primary/80 text-sm font-black">Recent Transactions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="[&_tr]:border-b border-white/10">
-                                <tr className="border-b transition-colors hover:bg-muted/50 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
-                                    <th className="h-10 px-4 align-middle">Date</th>
-                                    <th className="h-10 px-4 align-middle">Description</th>
-                                    <th className="h-10 px-4 align-middle">Category</th>
-                                    <th className="h-10 px-4 align-middle">Source</th>
-                                    <th className="h-10 px-4 align-middle text-right">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {transactions.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={5} className="p-8 text-center text-muted-foreground italic">No transactions found. Upload a bank statement or add manually.</td>
-                                    </tr>
-                                ) : (
-                                    transactions.slice(0, 15).map((t) => (
-                                        <tr key={t.id} className="border-b border-white/5 transition-colors hover:bg-white/[0.02]">
-                                            <td className="p-3 align-middle text-muted-foreground">{new Date(t.date).toLocaleDateString()}</td>
-                                            <td className="p-3 align-middle font-medium text-white">{t.description}</td>
-                                            <td className="p-3 align-middle">
-                                                <span className="bg-white/5 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-primary/80">
-                                                    {t.category || "Misc"}
-                                                </span>
-                                            </td>
-                                            <td className="p-3 align-middle text-muted-foreground text-xs">{t.source}</td>
-                                            <td className={`p-3 align-middle text-right font-black ${t.type === 'INCOME' ? 'text-emerald-500' : 'text-white'}`}>
-                                                {t.type === 'INCOME' ? '+' : '-'}{formatCurrency(t.amount)}
-                                            </td>
+            {/* Drill Down Dialog */}
+            <Dialog open={drillDownType !== null} onOpenChange={(open) => !open && setDrillDownType(null)}>
+                <DialogContent className="max-w-4xl border-white/10 bg-[#0F0F1A]/95 backdrop-blur-2xl shadow-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
+                            {drillDownType === 'OUTSTANDING' && <><AlertCircle className="text-orange-500" /> Outstanding Payments</>}
+                            {drillDownType === 'REVENUE' && <><TrendingUp className="text-emerald-500" /> Revenue Breakdown</>}
+                            {drillDownType === 'EXPENSES' && <><TrendingDown className="text-red-500" /> Expense Analysis</>}
+                            {drillDownType === 'PROJECTS' && <><Briefcase className="text-blue-500" /> Active Projects</>}
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="mt-4">
+                        {drillDownType === 'OUTSTANDING' && (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Total Outstanding</p>
+                                        <p className="text-2xl font-black text-orange-500">{formatCurrency(outstandingInvoices)}</p>
+                                    </div>
+                                    <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Unpaid Invoices</p>
+                                        <p className="text-2xl font-black text-white">{unpaidInvoices.length}</p>
+                                    </div>
+                                </div>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="[&_tr]:border-b border-white/10">
+                                        <tr className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+                                            <th className="py-3 px-4">Client</th>
+                                            <th className="py-3 px-4">Invoice #</th>
+                                            <th className="py-3 px-4">Date</th>
+                                            <th className="py-3 px-4 text-right">Owes</th>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                                    </thead>
+                                    <tbody>
+                                        {unpaidInvoices.map(inv => {
+                                            const paid = inv.payments.reduce((acc: number, p: any) => acc + p.amount, 0);
+                                            const owes = inv.total - paid;
+                                            return (
+                                                <tr key={inv.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                                                    <td className="py-3 px-4 font-bold text-white">{inv.client?.name || 'Unknown'}</td>
+                                                    <td className="py-3 px-4 text-muted-foreground">#{inv.number}</td>
+                                                    <td className="py-3 px-4 text-muted-foreground">{new Date(inv.date).toLocaleDateString()}</td>
+                                                    <td className="py-3 px-4 text-right font-black text-orange-400">{formatCurrency(owes)}</td>
+                                                </tr>
+                                            )
+                                        })}
+                                        {unpaidInvoices.length === 0 && <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">No outstanding invoices.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {drillDownType === 'PROJECTS' && (
+                            <div className="space-y-4">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="[&_tr]:border-b border-white/10">
+                                        <tr className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+                                            <th className="py-3 px-4">Project</th>
+                                            <th className="py-3 px-4">Client</th>
+                                            <th className="py-3 px-4">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {activeProjectsList.map(p => (
+                                            <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                                                <td className="py-3 px-4 font-bold text-white">{p.name}</td>
+                                                <td className="py-3 px-4 text-muted-foreground">{p.client?.name}</td>
+                                                <td className="py-3 px-4">
+                                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20">{p.status.replace('_', ' ')}</Badge>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* Implement REVENUE and EXPENSES breakdown similarly if needed, or point to existing tables */}
+                        {(drillDownType === 'REVENUE' || drillDownType === 'EXPENSES') && (
+                            <div className="space-y-4">
+                                <p className="text-muted-foreground text-sm">Showing transactions for the current month.</p>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="[&_tr]:border-b border-white/10">
+                                        <tr className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+                                            <th className="py-3 px-4">Date</th>
+                                            <th className="py-3 px-4">Description</th>
+                                            <th className="py-3 px-4">Category</th>
+                                            <th className="py-3 px-4 text-right">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {currentMonthTransactions.filter(t => drillDownType === 'REVENUE' ? t.type === 'INCOME' : t.type === 'EXPENSE').map(t => (
+                                            <tr key={t.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                                                <td className="py-3 px-4 text-muted-foreground">{new Date(t.date).toLocaleDateString()}</td>
+                                                <td className="py-3 px-4 font-medium text-white">{t.description}</td>
+                                                <td className="py-3 px-4"><Badge variant="outline" className="bg-white/5 border-white/10">{t.category}</Badge></td>
+                                                <td className={`py-3 px-4 text-right font-black ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(t.amount)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
-                </CardContent>
-            </Card>
+                </DialogContent>
+            </Dialog>
+
         </div>
     )
 }

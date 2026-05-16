@@ -17,7 +17,7 @@ export default async function FinancialDashboardPage() {
 
     const invoices = await prisma.invoice.findMany({
         where: { companyId, type: 'INVOICE' },
-        include: { payments: true }
+        include: { payments: true, client: true, project: true }
     });
 
     const transactions = await prisma.transaction.findMany({
@@ -25,10 +25,16 @@ export default async function FinancialDashboardPage() {
         orderBy: { date: 'desc' }
     });
 
+    const projects = await prisma.project.findMany({
+        where: { companyId },
+        include: { client: true }
+    });
+
     return (
         <FinancialDashboardClient 
             invoices={invoices} 
-            transactions={transactions} 
+            transactions={transactions}
+            projects={projects}
         />
     );
 }

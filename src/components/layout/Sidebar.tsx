@@ -2,182 +2,119 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, FileText, FileCheck, CreditCard, Brain, LayoutDashboard, Briefcase, Calendar, Settings, Mic, ClipboardList, ClipboardCheck, LineChart } from "lucide-react";
+import { Users, FileText, FileCheck, CreditCard, Brain, LayoutDashboard, Briefcase, Calendar, Settings, Mic, ClipboardList, ClipboardCheck, LineChart, ChevronDown, ChevronRight, Activity, DollarSign, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as React from "react";
-import { getSidebarNotifications } from "@/app/(dashboard)/notification-actions";
+import { useState } from "react";
 
-const items = [
+const navigation = [
     {
-        title: "Admin Dashboard",
-        href: "/dashboard",
+        title: "Dashboard",
         icon: LayoutDashboard,
-        roles: ["ADMIN"]
+        roles: ["ADMIN"],
+        items: [
+            { title: "Command Center", href: "/dashboard" },
+            { title: "Financial Insights", href: "/financial-dashboard" },
+            { title: "AI Knowledge", href: "/knowledge" },
+        ]
     },
     {
-        title: "PM Dashboard",
-        href: "/manager",
-        icon: Mic,
-        roles: ["ADMIN", "MANAGER"]
-    },
-    {
-        title: "CRM",
-        href: "/clients",
-        icon: Users,
+        title: "Operations",
+        icon: Activity,
+        items: [
+            { title: "PM Dashboard", href: "/manager", roles: ["ADMIN", "MANAGER"] },
+            { title: "CRM & Clients", href: "/clients" },
+            { title: "Reports", href: "/reports" },
+        ]
     },
     {
         title: "Projects",
-        href: "/projects",
         icon: Briefcase,
+        items: [
+            { title: "Operations Board", href: "/projects" },
+            { title: "Scope of Work", href: "/work-breakdown-pricing" },
+        ]
     },
     {
-        title: "Work Breakdown & Pricing",
-        href: "/work-breakdown-pricing",
-        icon: ClipboardList,
+        title: "Financials",
+        icon: DollarSign,
+        items: [
+            { title: "Quotations", href: "/invoices?type=QUOTE" },
+            { title: "Invoices", href: "/invoices?type=INVOICE" },
+            { title: "Payments", href: "/payments" },
+        ]
     },
     {
-        title: "Quotations",
-        href: "/invoices?type=QUOTE",
-        icon: FileText,
-    },
-    {
-        title: "Invoices",
-        href: "/invoices?type=INVOICE",
-        icon: FileCheck,
-    },
-    {
-        title: "Payments",
-        href: "/payments",
-        icon: CreditCard,
-    },
-    {
-        title: "Financial Insights",
-        href: "/financial-dashboard",
-        icon: LineChart,
-        roles: ["ADMIN"]
-    },
-    {
-        title: "Reports",
-        href: "/reports",
-        icon: ClipboardCheck,
-    },
-    {
-        title: "AI Knowledge",
-        href: "/knowledge",
-        icon: Brain,
-    },
-    {
-        title: "Settings",
-        href: "/settings",
+        title: "System",
         icon: Settings,
-    },
-];
-
-function NavItem({
-    item,
-    isActive,
-    role,
-    handleItemClick,
-    notificationCount
-}: {
-    item: any,
-    isActive: boolean,
-    role: string,
-    handleItemClick: () => void,
-    notificationCount: number
-}) {
-    const Icon = item.icon;
-
-    let displayTitle = item.title;
-    if (item.title === 'Work Breakdown & Pricing' && role === 'MANAGER') {
-        displayTitle = 'Scope of Work';
+        items: [
+            { title: "Settings", href: "/settings" }
+        ]
     }
-
-    const showDot = notificationCount > 0 && role === 'ADMIN';
-
-    return (
-        <Link
-            href={item.href}
-            onClick={handleItemClick}
-            className={cn(
-                "group flex items-center justify-between rounded-xl px-4 py-2 md:py-2.5 text-[12px] md:text-[13px] font-bold transition-all duration-300 relative overflow-hidden",
-                isActive
-                    ? "bg-primary/10 text-primary border border-primary/20"
-                    : "text-muted-foreground/70 hover:bg-white/[0.03] hover:text-white"
-            )}
-        >
-            {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full shadow-[0_0_10px_#8cff3380]" />
-            )}
-            <div className="flex items-center min-w-0 flex-1">
-                <Icon className={cn("mr-3 h-3.5 w-3.5 md:h-4 md:w-4 shrink-0 transition-colors", isActive ? "text-primary" : "group-hover:text-primary")} />
-                <span className="truncate">{displayTitle}</span>
-            </div>
-            {showDot && (
-                <div className="flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-[9px] font-black text-white px-1 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse border border-white/10 shrink-0 ml-2">
-                    {notificationCount}
-                </div>
-            )}
-        </Link>
-    );
-}
+];
 
 export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onItemClick?: () => void }) {
     const pathname = usePathname();
-    const [notifications, setNotifications] = React.useState<Record<string, number>>({});
+    const [openGroups, setOpenGroups] = useState<string[]>(navigation.map(n => n.title));
 
-    const fetchNotifications = async () => {
-        // Temporarily disabled to debug Vercel crash
-        return;
+    const toggleGroup = (title: string) => {
+        setOpenGroups(prev => prev.includes(title) ? prev.filter(g => g !== title) : [...prev, title]);
     }
 
-    React.useEffect(() => {
-        // fetchNotifications();
-        // const interval = setInterval(fetchNotifications, 60000);
-
-        // const handleVisibility = () => {
-        //     if (document.visibilityState === 'visible') fetchNotifications();
-        // };
-        // document.addEventListener('visibilitychange', handleVisibility);
-
-        // return () => {
-        //     clearInterval(interval);
-        //     document.removeEventListener('visibilitychange', handleVisibility);
-        // };
-    }, []);
-
-    const handleItemClick = () => {
-        if (onItemClick) onItemClick();
-    };
-
     return (
+        <div className="flex-1 overflow-y-auto scrollbar-hide px-3 py-4 space-y-6">
+            {navigation.map((group) => {
+                if (group.roles && !group.roles.includes(role)) return null;
 
-        <div className="flex-1 overflow-y-auto scrollbar-hide px-2">
-            <nav className="grid items-start gap-1">
-                {items.map((item, index) => {
-                    // @ts-ignore
-                    if (item.roles && !item.roles.includes(role)) {
-                        return null;
-                    }
-                    if (role === 'MANAGER' && (item.title === 'AI Knowledge' || item.title === 'Settings')) {
-                        return null;
-                    }
+                const GroupIcon = group.icon;
+                const isOpen = openGroups.includes(group.title);
 
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                    const notificationCount = notifications[item.title] || 0;
+                return (
+                    <div key={group.title} className="space-y-1">
+                        <button 
+                            onClick={() => toggleGroup(group.title)}
+                            className="w-full flex items-center justify-between px-2 py-1 text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-white transition-colors"
+                        >
+                            <div className="flex items-center gap-2">
+                                <GroupIcon className="h-3.5 w-3.5" />
+                                {group.title}
+                            </div>
+                            {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                        </button>
+                        
+                        {isOpen && (
+                            <div className="mt-2 space-y-1 pl-2">
+                                {group.items.map((item) => {
+                                    // @ts-ignore
+                                    if (item.roles && !item.roles.includes(role)) return null;
+                                    if (role === 'MANAGER' && (item.title === 'AI Knowledge' || item.title === 'Settings')) return null;
 
-                    return (
-                        <NavItem
-                            key={index}
-                            item={item}
-                            isActive={isActive}
-                            role={role}
-                            handleItemClick={handleItemClick}
-                            notificationCount={notificationCount}
-                        />
-                    );
-                })}
-            </nav>
+                                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+
+                                    return (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            onClick={onItemClick}
+                                            className={cn(
+                                                "group flex items-center justify-between rounded-xl px-3 py-2 text-[13px] font-bold transition-all duration-300 relative overflow-hidden",
+                                                isActive
+                                                    ? "bg-primary/10 text-primary shadow-[inset_0_0_20px_rgba(163,230,53,0.05)] border border-primary/20"
+                                                    : "text-muted-foreground/70 hover:bg-white/5 hover:text-white"
+                                            )}
+                                        >
+                                            {isActive && (
+                                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full shadow-[0_0_10px_#8cff3380]" />
+                                            )}
+                                            <span className="truncate">{item.title}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
         </div>
     );
 }
