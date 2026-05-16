@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatCurrency } from "@/lib/utils"
-import { Upload, Plus, TrendingUp, TrendingDown, DollarSign, Brain, Loader2, ArrowUpRight, ArrowDownRight, Briefcase, Activity, Calendar, AlertCircle } from "lucide-react"
+import { Upload, Plus, TrendingUp, TrendingDown, DollarSign, Brain, Loader2, ArrowUpRight, ArrowDownRight, Briefcase, Activity, Calendar, AlertCircle, PieChart as PieChartIcon } from "lucide-react"
 import { processBankStatementAction, addManualTransactionAction } from "@/app/(dashboard)/financial-dashboard/actions"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -81,12 +81,12 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
     const currentYear = new Date().getFullYear();
 
     // From Invoices
-    const totalInvoiced = invoices.reduce((acc, inv) => acc + inv.total, 0);
-    const totalPaid = invoices.reduce((acc, inv) => acc + inv.payments.reduce((pAcc: number, p: any) => pAcc + p.amount, 0), 0);
+    const totalInvoiced = invoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0);
+    const totalPaid = invoices.reduce((acc, inv) => acc + (inv.payments?.reduce((pAcc: number, p: any) => pAcc + (Number(p.amount) || 0), 0) || 0), 0);
     const outstandingInvoices = totalInvoiced - totalPaid;
     
     const unpaidInvoices = invoices.filter(inv => {
-        const paid = inv.payments.reduce((acc: number, p: any) => acc + p.amount, 0);
+        const paid = inv.payments?.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0) || 0;
         return paid < inv.total && inv.status !== 'CANCELLED' && inv.status !== 'DRAFT';
     });
 
@@ -98,17 +98,17 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
 
-    const monthlyRevenue = currentMonthTransactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
-    const monthlyExpenses = currentMonthTransactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
+    const monthlyRevenue = currentMonthTransactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const monthlyExpenses = currentMonthTransactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
     const netProfit = monthlyRevenue - monthlyExpenses;
 
-    const totalRevenue = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
-    const totalExpenses = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
+    const totalRevenue = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const totalExpenses = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
     // Expense Categories
     const expenseCategories = transactions.filter(t => t.type === 'EXPENSE').reduce((acc: Record<string, number>, t) => {
         const cat = t.category || 'Miscellaneous';
-        acc[cat] = (acc[cat] || 0) + t.amount;
+        acc[cat] = (acc[cat] || 0) + (Number(t.amount) || 0);
         return acc;
     }, {});
 
@@ -126,12 +126,12 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
         const mIncome = transactions.filter(t => {
             const td = new Date(t.date);
             return td.getMonth() === m && td.getFullYear() === y && t.type === 'INCOME';
-        }).reduce((acc, t) => acc + t.amount, 0);
+        }).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
         const mExpense = transactions.filter(t => {
             const td = new Date(t.date);
             return td.getMonth() === m && td.getFullYear() === y && t.type === 'EXPENSE';
-        }).reduce((acc, t) => acc + t.amount, 0);
+        }).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
         trendData.push({ month: months[m], Income: mIncome, Expenses: mExpense, Profit: mIncome - mExpense });
     }
@@ -146,7 +146,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                         <div key={index} className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
                             <span className="text-muted-foreground">{entry.name}:</span>
-                            <span className="font-bold text-white">{formatCurrency(entry.value)}</span>
+                            <span className="font-bold text-white">{formatCurrency(Number(entry.value) || 0)}</span>
                         </div>
                     ))}
                 </div>
@@ -175,7 +175,6 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                 <DialogDescription>Manual entry for income or expense.</DialogDescription>
                             </DialogHeader>
                             <form onSubmit={handleAddTransaction} className="space-y-4 pt-4">
-                                {/* Form fields remain same as original */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label>Type</Label>
@@ -318,7 +317,6 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
             </div>
 
             <div className="grid gap-6 md:grid-cols-3">
-                {/* Visual Trend Chart */}
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl md:col-span-2">
                     <CardHeader className="border-b border-white/5 pb-4">
                         <CardTitle className="uppercase tracking-widest text-white text-sm font-black flex items-center gap-2">
@@ -343,11 +341,10 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                     </CardContent>
                 </Card>
 
-                {/* Expense Categories Breakdown */}
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl">
                     <CardHeader className="border-b border-white/5 pb-4">
                         <CardTitle className="uppercase tracking-widest text-white text-sm font-black flex items-center gap-2">
-                            <PieChart className="h-4 w-4 text-primary" /> Expense Distribution
+                            <PieChartIcon className="h-4 w-4 text-primary" /> Expense Distribution
                         </CardTitle>
                         <CardDescription className="text-muted-foreground/70 font-medium">All Time Breakdown</CardDescription>
                     </CardHeader>
@@ -371,7 +368,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                                         <span className="text-white font-medium truncate max-w-[120px]">{entry.name}</span>
                                     </div>
-                                    <span className="font-bold text-muted-foreground">{formatCurrency(entry.value)}</span>
+                                    <span className="font-bold text-muted-foreground">{formatCurrency(Number(entry.value) || 0)}</span>
                                 </div>
                             ))}
                         </div>
@@ -415,7 +412,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                     </thead>
                                     <tbody>
                                         {unpaidInvoices.map(inv => {
-                                            const paid = inv.payments.reduce((acc: number, p: any) => acc + p.amount, 0);
+                                            const paid = inv.payments?.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0) || 0;
                                             const owes = inv.total - paid;
                                             return (
                                                 <tr key={inv.id} className="border-b border-white/5 hover:bg-white/[0.02]">
@@ -457,7 +454,6 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                             </div>
                         )}
 
-                        {/* Implement REVENUE and EXPENSES breakdown similarly if needed, or point to existing tables */}
                         {(drillDownType === 'REVENUE' || drillDownType === 'EXPENSES') && (
                             <div className="space-y-4">
                                 <p className="text-muted-foreground text-sm">Showing transactions for the current month.</p>
@@ -476,7 +472,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                                 <td className="py-3 px-4 text-muted-foreground">{new Date(t.date).toLocaleDateString()}</td>
                                                 <td className="py-3 px-4 font-medium text-white">{t.description}</td>
                                                 <td className="py-3 px-4"><Badge variant="outline" className="bg-white/5 border-white/10">{t.category}</Badge></td>
-                                                <td className={`py-3 px-4 text-right font-black ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(t.amount)}</td>
+                                                <td className={`py-3 px-4 text-right font-black ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(Number(t.amount) || 0)}</td>
                                             </tr>
                                         ))}
                                     </tbody>

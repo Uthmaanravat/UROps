@@ -70,7 +70,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
         const totalWorth = latestInvoice
             ? latestInvoice.total
             : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0);
-        return acc + totalWorth;
+        return acc + (Number(totalWorth) || 0);
     }, 0);
 
     const emergencyProjects = activeProjects.filter(p => p.commercialStatus === 'EMERGENCY_WORK');
@@ -202,7 +202,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                                                             {project.commercialStatus === 'AWAITING_PO' && <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[9px] py-0">Waiting PO</Badge>}
                                                             {project.commercialStatus === 'EMERGENCY_WORK' && <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/20 text-[9px] py-0">Urgent</Badge>}
                                                         </div>
-                                                        <span className="text-xs font-black text-emerald-400">{formatCurrency(totalWorth)}</span>
+                                                        <span className="text-xs font-black text-emerald-400">{formatCurrency(Number(totalWorth) || 0)}</span>
                                                     </div>
                                                 </div>
                                             )
@@ -305,14 +305,14 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                                             </td>
                                             <td className="p-4 align-middle">
                                                 <select value={project.commercialStatus} onChange={(e) => handleStatusChange(project.id, 'commercialStatus', e.target.value)} className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest cursor-pointer outline-none focus:ring-2 focus:ring-primary/50 ${project.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : project.commercialStatus === 'REACTIVE_WORK' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : project.commercialStatus === 'PO_RECEIVED' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-500 border border-amber-500/30'}`}>
-                                                    <option value="AWAITING_PO" className="bg-[#14141E] text-white">⏳ AWAITING PO</option>
+                                                    <option value="AWAITING_PO" className="bg-[#14141E] text-white">⌛ AWAITING PO</option>
                                                     <option value="PO_RECEIVED" className="bg-[#14141E] text-white">✅ PO RECEIVED</option>
                                                     <option value="REACTIVE_WORK" className="bg-[#14141E] text-white">⚡ REACTIVE</option>
                                                     <option value="EMERGENCY_WORK" className="bg-[#14141E] text-white">🚨 EMERGENCY</option>
                                                 </select>
                                             </td>
                                             <td className="p-4 align-middle text-right font-black text-emerald-400">
-                                                {formatCurrency(totalWorth)}
+                                                {formatCurrency(Number(totalWorth) || 0)}
                                             </td>
                                             <td className="p-4 align-middle text-right">
                                                 <div className="flex justify-end gap-2">
