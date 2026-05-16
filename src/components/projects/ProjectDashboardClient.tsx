@@ -11,21 +11,30 @@ import { DeleteButton } from "@/components/ui/DeleteButton"
 import { deleteProject, updateProjectStatus, updateProjectCommercialStatus } from "@/app/(dashboard)/projects/actions"
 import { Badge } from "@/components/ui/badge"
 
-const columns = [
-    { id: 'APPROVAL', title: 'Waiting Approval', statuses: ['SOW', 'SOW_SUBMITTED', 'QUOTED', 'LEAD'], color: 'border-blue-500/30 bg-blue-500/5' },
-    { id: 'SCHEDULED', title: 'Scheduled', statuses: ['PLANNING', 'SCHEDULED'], color: 'border-purple-500/30 bg-purple-500/5' },
-    { id: 'IN_PROGRESS', title: 'In Progress', statuses: ['IN_PROGRESS'], color: 'border-emerald-500/30 bg-emerald-500/5' },
-    { id: 'HOLD', title: 'On Hold', statuses: ['ON_HOLD'], color: 'border-orange-500/30 bg-orange-500/5' },
-    { id: 'COMPLETED', title: 'Completed', statuses: ['COMPLETED'], color: 'border-teal-500/30 bg-teal-500/5' },
-    { id: 'AWAITING_PAYMENT', title: 'Awaiting Payment', statuses: ['INVOICED'], color: 'border-red-500/30 bg-red-500/5' },
-    { id: 'PAID', title: 'Paid & Archived', statuses: ['PAID', 'CANCELLED'], color: 'border-white/10 bg-white/5' },
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Eye, EyeOff, Filter, ChevronDown, Zap, ShieldAlert, Clock3 } from "lucide-react"
+
+const ALL_COLUMNS = [
+    { id: 'APPROVAL', title: 'Waiting Approval', statuses: ['SOW', 'SOW_SUBMITTED', 'QUOTED', 'LEAD'], color: 'border-blue-500/30 bg-blue-500/5', icon: Clock3 },
+    { id: 'SCHEDULED', title: 'Scheduled', statuses: ['PLANNING', 'SCHEDULED'], color: 'border-purple-500/30 bg-purple-500/5', icon: CalendarIcon },
+    { id: 'IN_PROGRESS', title: 'In Progress', statuses: ['IN_PROGRESS'], color: 'border-emerald-500/30 bg-emerald-500/5', icon: Zap },
+    { id: 'HOLD', title: 'On Hold', statuses: ['ON_HOLD'], color: 'border-orange-500/30 bg-orange-500/5', icon: AlertCircle },
+    { id: 'COMPLETED', title: 'Completed', statuses: ['COMPLETED'], color: 'border-teal-500/30 bg-teal-500/5', icon: CheckCircle2 },
+    { id: 'AWAITING_PAYMENT', title: 'Awaiting Payment', statuses: ['INVOICED'], color: 'border-red-500/30 bg-red-500/5', icon: DollarSign },
+    { id: 'PAID', title: 'Paid & Archived', statuses: ['PAID', 'CANCELLED'], color: 'border-white/10 bg-white/5', icon: Briefcase },
 ];
 
 export function ProjectDashboardClient({ projects: initialProjects }: { projects: any[] }) {
     const [view, setView] = useState<'KANBAN' | 'LIST' | 'GANTT'>('KANBAN')
     const [projects, setProjects] = useState(initialProjects)
+    const [visibleColumns, setVisibleColumns] = useState<string[]>(ALL_COLUMNS.map(c => c.id).filter(id => id !== 'PAID'))
+    const [topFocus, setTopFocus] = useState<'EMERGENCY' | 'WAITING_PO' | 'ACTIVE' | 'NONE'>('EMERGENCY')
     const [isPending, startTransition] = useTransition()
     const router = useRouter()
+
+    const columns = ALL_COLUMNS.filter(col => visibleColumns.includes(col.id));
 
     const handleDragStart = (e: React.DragEvent, projectId: string) => {
         e.dataTransfer.setData('projectId', projectId)
@@ -84,16 +93,33 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                 </div>
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <div className="bg-[#14141E]/80 backdrop-blur-md p-1 rounded-xl flex gap-1 border border-white/10 shadow-xl">
-                        <Button variant={view === 'KANBAN' ? 'default' : 'ghost'} size="sm" onClick={() => setView('KANBAN')} className={view === 'KANBAN' ? 'bg-primary text-black hover:bg-primary/90 font-black' : 'text-muted-foreground font-bold hover:text-white'}>
-                            <LayoutGrid className="h-4 w-4 mr-2" /> Kanban
-                        </Button>
-                        <Button variant={view === 'GANTT' ? 'default' : 'ghost'} size="sm" onClick={() => setView('GANTT')} className={view === 'GANTT' ? 'bg-primary text-black hover:bg-primary/90 font-black' : 'text-muted-foreground font-bold hover:text-white'}>
-                            <BarChartHorizontal className="h-4 w-4 mr-2" /> Gantt
-                        </Button>
-                        <Button variant={view === 'LIST' ? 'default' : 'ghost'} size="sm" onClick={() => setView('LIST')} className={view === 'LIST' ? 'bg-primary text-black hover:bg-primary/90 font-black' : 'text-muted-foreground font-bold hover:text-white'}>
-                            <List className="h-4 w-4 mr-2" /> List
-                        </Button>
-                    </div>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="bg-[#14141E]/80 border-white/10 text-white hover:bg-white/5 font-bold">
+                                <Eye className="h-4 w-4 mr-2" /> Columns
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 bg-[#0F0F1A] border-white/10 p-2 shadow-2xl">
+                            <div className="space-y-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1">Toggle Columns</p>
+                                {ALL_COLUMNS.map(col => (
+                                    <div key={col.id} className="flex items-center space-x-2 px-2 py-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer" onClick={() => {
+                                        setVisibleColumns(prev => 
+                                            prev.includes(col.id) ? prev.filter(id => id !== col.id) : [...prev, col.id]
+                                        )
+                                    }}>
+                                        <Checkbox 
+                                            id={`col-${col.id}`} 
+                                            checked={visibleColumns.includes(col.id)}
+                                            className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:text-black"
+                                        />
+                                        <Label htmlFor={`col-${col.id}`} className="text-xs font-bold text-white cursor-pointer flex-1">{col.title}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
                     <Link href="/projects/new">
                         <Button className="bg-white text-black font-black hover:bg-gray-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
                             <Plus className="mr-2 h-4 w-4" /> New Project
@@ -104,7 +130,10 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
 
             {/* KPI Summary */}
             <div className="grid gap-4 md:grid-cols-4">
-                <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl hover:border-primary/30 transition-all cursor-pointer">
+                <Card 
+                    className={`bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl transition-all cursor-pointer ${topFocus === 'ACTIVE' ? 'ring-2 ring-primary border-primary/50' : 'hover:border-primary/30'}`}
+                    onClick={() => setTopFocus(prev => prev === 'ACTIVE' ? 'NONE' : 'ACTIVE')}
+                >
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                         <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Active Pipeline</CardTitle>
                         <Briefcase className="h-4 w-4 text-primary" />
@@ -122,7 +151,10 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                         <div className="text-3xl font-black text-emerald-400">{formatCurrency(totalPipelineValue)}</div>
                     </CardContent>
                 </Card>
-                <Card className="bg-[#14141E]/80 backdrop-blur-md border-red-500/20 shadow-2xl hover:border-red-500/50 transition-all cursor-pointer">
+                <Card 
+                    className={`bg-[#14141E]/80 backdrop-blur-md border-red-500/20 shadow-2xl transition-all cursor-pointer ${topFocus === 'EMERGENCY' ? 'ring-2 ring-red-500 border-red-500/50' : 'hover:border-red-500/50'}`}
+                    onClick={() => setTopFocus(prev => prev === 'EMERGENCY' ? 'NONE' : 'EMERGENCY')}
+                >
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                         <CardTitle className="text-[11px] font-black text-red-400 uppercase tracking-widest">Emergency Jobs</CardTitle>
                         <AlertCircle className="h-4 w-4 text-red-500" />
@@ -131,7 +163,10 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                         <div className="text-3xl font-black text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">{emergencyProjects.length}</div>
                     </CardContent>
                 </Card>
-                <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl hover:border-orange-500/30 transition-all cursor-pointer">
+                <Card 
+                    className={`bg-[#14141E]/80 backdrop-blur-md border-orange-500/20 shadow-2xl transition-all cursor-pointer ${topFocus === 'WAITING_PO' ? 'ring-2 ring-orange-500 border-orange-500/50' : 'hover:border-orange-500/30'}`}
+                    onClick={() => setTopFocus(prev => prev === 'WAITING_PO' ? 'NONE' : 'WAITING_PO')}
+                >
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                         <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Awaiting PO</CardTitle>
                         <Clock className="h-4 w-4 text-orange-500" />
@@ -141,6 +176,61 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Top Focus Section */}
+            {topFocus !== 'NONE' && (
+                <div className="bg-[#1A1A2E]/50 border border-white/5 rounded-3xl p-6 shadow-3xl">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl ${topFocus === 'EMERGENCY' ? 'bg-red-500/20 text-red-500' : topFocus === 'WAITING_PO' ? 'bg-orange-500/20 text-orange-500' : 'bg-primary/20 text-primary'}`}>
+                                {topFocus === 'EMERGENCY' ? <ShieldAlert className="h-6 w-6" /> : topFocus === 'WAITING_PO' ? <Clock3 className="h-6 w-6" /> : <Zap className="h-6 w-6" />}
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-white uppercase tracking-tight">
+                                    {topFocus === 'EMERGENCY' ? 'Emergency Operations' : topFocus === 'WAITING_PO' ? 'Pending PO Approval' : 'Priority Active Work'}
+                                </h2>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Immediate Attention Required</p>
+                            </div>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setTopFocus('NONE')} className="text-muted-foreground hover:text-white">Dismiss</Button>
+                    </div>
+
+                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                        {(topFocus === 'EMERGENCY' ? emergencyProjects : 
+                          topFocus === 'WAITING_PO' ? projects.filter(p => p.commercialStatus === 'AWAITING_PO') : 
+                          activeProjects.slice(0, 5)
+                        ).map(project => {
+                            const latestInvoice = project.invoices?.[0];
+                            const latestWbp = project.workBreakdowns?.[0];
+                            const totalWorth = latestInvoice ? latestInvoice.total : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0);
+                            
+                            return (
+                                <Link key={project.id} href={`/projects/${project.id}`} className="min-w-[300px] bg-[#0F0F1A] border border-white/10 p-5 rounded-2xl hover:border-primary/50 transition-all group">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <Badge className={`${topFocus === 'EMERGENCY' ? 'bg-red-500 text-white' : 'bg-primary text-black'} font-black text-[9px] uppercase`}>
+                                            {project.status.replace('_', ' ')}
+                                        </Badge>
+                                        <span className="text-xs font-black text-emerald-400">{formatCurrency(Number(totalWorth) || 0)}</span>
+                                    </div>
+                                    <h4 className="font-black text-white text-base leading-tight mb-1 line-clamp-1 group-hover:text-primary transition-colors">{project.name}</h4>
+                                    <p className="text-[10px] uppercase font-bold text-muted-foreground">{project.client.name}</p>
+                                    <div className="mt-4 flex items-center gap-2">
+                                        <div className="h-1.5 flex-1 bg-white/5 rounded-full overflow-hidden">
+                                            <div className="h-full bg-primary" style={{ width: '65%' }} />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-muted-foreground">65%</span>
+                                    </div>
+                                </Link>
+                            )
+                        })}
+                        {(topFocus === 'EMERGENCY' ? emergencyProjects : topFocus === 'WAITING_PO' ? projects.filter(p => p.commercialStatus === 'AWAITING_PO') : activeProjects).length === 0 && (
+                            <div className="flex-1 text-center py-10 border-2 border-dashed border-white/5 rounded-2xl">
+                                <p className="text-sm text-muted-foreground font-black uppercase tracking-widest">No items in this category</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* KANBAN VIEW */}
             {view === 'KANBAN' && (
