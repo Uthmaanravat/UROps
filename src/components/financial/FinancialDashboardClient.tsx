@@ -30,6 +30,9 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
     // Drill Down States
     const [drillDownType, setDrillDownType] = useState<string | null>(null);
 
+    // Time Period State
+    const [timePeriod, setTimePeriod] = useState<'3M' | '6M' | '1Y' | 'ALL'>('3M');
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -93,14 +96,21 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
     const activeProjectsList = projects.filter(p => !['COMPLETED', 'PAID', 'CANCELLED'].includes(p.status));
 
     // From Transactions
-    const currentMonthTransactions = transactions.filter(t => {
+    const now = new Date();
+    const filteredTransactions = transactions.filter(t => {
+        if (timePeriod === 'ALL') return true;
         const d = new Date(t.date);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        const diffTime = Math.abs(now.getTime() - d.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (timePeriod === '3M') return diffDays <= 90;
+        if (timePeriod === '6M') return diffDays <= 180;
+        if (timePeriod === '1Y') return diffDays <= 365;
+        return true;
     });
 
-    const monthlyRevenue = currentMonthTransactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    const monthlyExpenses = currentMonthTransactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    const netProfit = monthlyRevenue - monthlyExpenses;
+    const periodRevenue = filteredTransactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const periodExpenses = filteredTransactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const netProfit = periodRevenue - periodExpenses;
 
     const totalRevenue = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
     const totalExpenses = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
@@ -162,14 +172,22 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                     <h1 className="text-3xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">Financial Command Center</h1>
                     <p className="text-muted-foreground text-sm font-medium tracking-wide">Live business analytics & operations tracking</p>
                 </div>
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                    <Dialog>
-                        <DialogTrigger asChild>
-                            <Button variant="outline" className="flex-1 md:flex-none border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 text-white font-bold backdrop-blur-sm">
-                                <Plus className="mr-2 h-4 w-4" /> Add Record
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px] border-primary/20 bg-[#0F0F1A]/95 backdrop-blur-xl">
+                <div className="flex flex-col items-end gap-4 w-full md:w-auto">
+                    <div className="flex bg-white/5 p-1 rounded-lg border border-white/10 self-start md:self-end">
+                        {(['3M', '6M', '1Y', 'ALL'] as const).map(p => (
+                            <button key={p} onClick={() => setTimePeriod(p)} className={`px-4 py-1.5 text-xs font-bold uppercase rounded-md transition-all ${timePeriod === p ? 'bg-primary text-black shadow-lg' : 'text-muted-foreground hover:text-white hover:bg-white/5'}`}>
+                                {p === '3M' ? '3 Months' : p === '6M' ? '6 Months' : p === '1Y' ? '1 Year' : 'All Time'}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" className="flex-1 md:flex-none border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 text-white font-bold backdrop-blur-sm">
+                                    <Plus className="mr-2 h-4 w-4" /> Add Record
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[425px] border-primary/20 bg-[#0F0F1A]/95 backdrop-blur-xl">
                             <DialogHeader>
                                 <DialogTitle className="text-xl font-black uppercase text-primary">Add Transaction</DialogTitle>
                                 <DialogDescription>Manual entry for income or expense.</DialogDescription>
@@ -226,6 +244,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                         </Button>
                     </div>
                 </div>
+                </div>
             </div>
 
             {/* AI Warning / Messages */}
@@ -236,13 +255,13 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl hover:border-emerald-500/50 hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all cursor-pointer group" onClick={() => setDrillDownType('REVENUE')}>
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-emerald-400 transition-colors">Monthly Revenue</CardTitle>
+                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-emerald-400 transition-colors">Period Revenue</CardTitle>
                         <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover:bg-emerald-500/20 transition-colors">
                             <TrendingUp className="h-4 w-4 text-emerald-500" />
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-black text-white tracking-tight">{formatCurrency(monthlyRevenue)}</div>
+                        <div className="text-3xl font-black text-white tracking-tight">{formatCurrency(periodRevenue)}</div>
                         <div className="flex items-center text-[10px] text-emerald-400 font-bold mt-1 uppercase tracking-wider">
                             <Activity className="h-3 w-3 mr-1" /> View Breakdown
                         </div>
@@ -251,13 +270,13 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
 
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(239,68,68,0.15)] transition-all cursor-pointer group" onClick={() => setDrillDownType('EXPENSES')}>
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-red-400 transition-colors">Monthly Expenses</CardTitle>
+                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-red-400 transition-colors">Period Expenses</CardTitle>
                         <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:bg-red-500/20 transition-colors">
                             <TrendingDown className="h-4 w-4 text-red-500" />
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-black text-white tracking-tight">{formatCurrency(monthlyExpenses)}</div>
+                        <div className="text-3xl font-black text-white tracking-tight">{formatCurrency(periodExpenses)}</div>
                         <div className="flex items-center text-[10px] text-red-400 font-bold mt-1 uppercase tracking-wider">
                             <Activity className="h-3 w-3 mr-1" /> Expense Analysis
                         </div>
@@ -276,7 +295,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                         <div className={`text-3xl font-black tracking-tight ${netProfit >= 0 ? 'text-white' : 'text-red-500'}`}>
                             {formatCurrency(netProfit)}
                         </div>
-                        <p className="text-[10px] text-primary/70 font-bold mt-1 uppercase tracking-wider">This Month</p>
+                        <p className="text-[10px] text-primary/70 font-bold mt-1 uppercase tracking-wider">Selected Period</p>
                     </CardContent>
                 </Card>
 
@@ -456,7 +475,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
 
                         {(drillDownType === 'REVENUE' || drillDownType === 'EXPENSES') && (
                             <div className="space-y-4">
-                                <p className="text-muted-foreground text-sm">Showing transactions for the current month.</p>
+                                <p className="text-muted-foreground text-sm">Showing transactions for the selected period ({timePeriod === '3M' ? '3 Months' : timePeriod === '6M' ? '6 Months' : timePeriod === '1Y' ? '1 Year' : 'All Time'}).</p>
                                 <table className="w-full text-sm text-left">
                                     <thead className="[&_tr]:border-b border-white/10">
                                         <tr className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
@@ -467,7 +486,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {currentMonthTransactions.filter(t => drillDownType === 'REVENUE' ? t.type === 'INCOME' : t.type === 'EXPENSE').map(t => (
+                                        {filteredTransactions.filter(t => drillDownType === 'REVENUE' ? t.type === 'INCOME' : t.type === 'EXPENSE').map(t => (
                                             <tr key={t.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                                                 <td className="py-3 px-4 text-muted-foreground">{new Date(t.date).toLocaleDateString()}</td>
                                                 <td className="py-3 px-4 font-medium text-white">{t.description}</td>

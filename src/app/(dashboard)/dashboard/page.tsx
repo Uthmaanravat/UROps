@@ -20,7 +20,8 @@ export default async function DashboardPage() {
             sowCount,
             quoteCount,
             invoicedCount,
-            paidCount
+            paidCount,
+            transactions
         ] = await Promise.all([
             prisma.client.count({ where: { companyId } }),
             prisma.invoice.count({ where: { companyId } }),
@@ -65,7 +66,11 @@ export default async function DashboardPage() {
             (prisma as any).scopeOfWork?.count({ where: { companyId } }) || 0,
             prisma.invoice.count({ where: { companyId, type: 'QUOTE' } }),
             prisma.invoice.count({ where: { companyId, type: 'INVOICE', status: { notIn: ['DRAFT', 'CANCELLED'] } } }),
-            prisma.invoice.count({ where: { companyId, status: 'PAID' } })
+            prisma.invoice.count({ where: { companyId, status: 'PAID' } }),
+            prisma.transaction.findMany({
+                where: { companyId },
+                orderBy: { date: 'desc' }
+            })
         ]);
 
         let unpaidTotal = 0;
@@ -79,6 +84,69 @@ export default async function DashboardPage() {
                 unpaidInvoices.push({ ...inv, balance });
             }
         });
+
+        // Calculate Trend Data (last 6 months)
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const trendData = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const m = d.getMonth();
+            const y = d.getFullYear();
+
+            const mIncome = (transactions || []).filter((t: any) => {
+                const td = new Date(t.date);
+                return td.getMonth() === m && td.getFullYear() === y && t.type === 'INCOME';
+            }).reduce((acc: number, t: any) => acc + (Number(t.amount) || 0), 0);
+
+            const mExpense = (transactions || []).filter((t: any) => {
+                const td = new Date(t.date);
+                return td.getMonth() === m && td.getFullYear() === y && t.type === 'EXPENSE';
+            }).reduce((acc: number, t: any) => acc + (Number(t.amount) || 0), 0);
+
+            trendData.push({ month: months[m], Income: mIncome, Expenses: mExpense, Profit: mIncome - mExpense });
+        }
+
+        // Calculate Top 5 Suppliers by Spend
+        const expenseTransactions = (transactions || []).filter((t: any) => t.type === 'EXPENSE');
+        const supplierSpendMap: { [key: string]: { totalSpend: number; categoryDistribution: { [cat: string]: number }; transactions: any[] } } = {};
+        
+        let totalAllExpenses = 0;
+        expenseTransactions.forEach((t: any) => {
+            const name = t.description.trim() || 'Unknown Supplier';
+            if (!supplierSpendMap[name]) {
+                supplierSpendMap[name] = { totalSpend: 0, categoryDistribution: {}, transactions: [] };
+            }
+            const amount = Number(t.amount) || 0;
+            supplierSpendMap[name].totalSpend += amount;
+            totalAllExpenses += amount;
+            
+            supplierSpendMap[name].transactions.push({
+                id: t.id,
+                date: t.date,
+                description: t.description,
+                category: t.category,
+                amount: amount
+            });
+            
+            const cat = t.category || 'Miscellaneous';
+            supplierSpendMap[name].categoryDistribution[cat] = (supplierSpendMap[name].categoryDistribution[cat] || 0) + amount;
+        });
+
+        const topSuppliers = Object.entries(supplierSpendMap)
+            .map(([name, info]) => {
+                const dominantCategory = Object.entries(info.categoryDistribution)
+                    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Miscellaneous';
+                return {
+                    name,
+                    spend: info.totalSpend,
+                    category: dominantCategory,
+                    percentage: totalAllExpenses > 0 ? (info.totalSpend / totalAllExpenses) * 100 : 0,
+                    transactions: info.transactions.slice(0, 10)
+                };
+            })
+            .sort((a, b) => b.spend - a.spend)
+            .slice(0, 5);
 
         // Serialize data for client component
         const dashboardData = JSON.parse(JSON.stringify({
@@ -98,7 +166,9 @@ export default async function DashboardPage() {
                 quotation: quoteCount,
                 invoice: invoicedCount,
                 payment: paidCount
-            }
+            },
+            trendData,
+            topSuppliers
         }));
 
         return <DashboardClient data={dashboardData} />;

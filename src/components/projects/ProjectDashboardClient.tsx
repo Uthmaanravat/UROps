@@ -47,7 +47,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
     const handleDrop = async (e: React.DragEvent, statusId: string) => {
         e.preventDefault()
         const projectId = e.dataTransfer.getData('projectId')
-        
+
         const targetDbStatus = columns.find(c => c.id === statusId)?.statuses[0]
         if (!targetDbStatus) return
 
@@ -93,45 +93,45 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                 </div>
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <div className="bg-[#14141E]/80 backdrop-blur-md p-1 rounded-xl flex gap-1 border border-white/10 shadow-xl">
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="bg-[#14141E]/80 border-white/10 text-white hover:bg-white/5 font-bold">
-                                <Eye className="h-4 w-4 mr-2" /> Columns
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 bg-[#0F0F1A] border-white/10 p-2 shadow-2xl">
-                            <div className="space-y-2">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1">Toggle Columns</p>
-                                {ALL_COLUMNS.map(col => (
-                                    <div key={col.id} className="flex items-center space-x-2 px-2 py-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer" onClick={() => {
-                                        setVisibleColumns(prev => 
-                                            prev.includes(col.id) ? prev.filter(id => id !== col.id) : [...prev, col.id]
-                                        )
-                                    }}>
-                                        <Checkbox 
-                                            id={`col-${col.id}`} 
-                                            checked={visibleColumns.includes(col.id)}
-                                            className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:text-black"
-                                        />
-                                        <Label htmlFor={`col-${col.id}`} className="text-xs font-bold text-white cursor-pointer flex-1">{col.title}</Label>
-                                    </div>
-                                ))}
-                            </div>
-                        </PopoverContent>
-                    </Popover>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" size="sm" className="bg-[#14141E]/80 border-white/10 text-white hover:bg-white/5 font-bold">
+                                    <Eye className="h-4 w-4 mr-2" /> Columns
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-56 bg-[#0F0F1A] border-white/10 p-2 shadow-2xl">
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1">Toggle Columns</p>
+                                    {ALL_COLUMNS.map(col => (
+                                        <div key={col.id} className="flex items-center space-x-2 px-2 py-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer" onClick={() => {
+                                            setVisibleColumns(prev =>
+                                                prev.includes(col.id) ? prev.filter(id => id !== col.id) : [...prev, col.id]
+                                            )
+                                        }}>
+                                            <Checkbox
+                                                id={`col-${col.id}`}
+                                                checked={visibleColumns.includes(col.id)}
+                                                className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:text-black"
+                                            />
+                                            <Label htmlFor={`col-${col.id}`} className="text-xs font-bold text-white cursor-pointer flex-1">{col.title}</Label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
 
-                    <Link href="/projects/new">
-                        <Button className="bg-white text-black font-black hover:bg-gray-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
-                            <Plus className="mr-2 h-4 w-4" /> New Project
-                        </Button>
-                    </Link>
+                        <Link href="/projects/new">
+                            <Button className="bg-white text-black font-black hover:bg-gray-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+                                <Plus className="mr-2 h-4 w-4" /> New Project
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
             </div>
-        </div>
 
             {/* KPI Summary */}
             <div className="grid gap-4 md:grid-cols-4">
-                <Card 
+                <Card
                     className={`bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl transition-all cursor-pointer ${topFocus === 'ACTIVE' ? 'ring-2 ring-primary border-primary/50' : 'hover:border-primary/30'}`}
                     onClick={() => setTopFocus(prev => prev === 'ACTIVE' ? 'NONE' : 'ACTIVE')}
                 >
@@ -152,7 +152,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                         <div className="text-3xl font-black text-emerald-400">{formatCurrency(totalPipelineValue)}</div>
                     </CardContent>
                 </Card>
-                <Card 
+                <Card
                     className={`bg-[#14141E]/80 backdrop-blur-md border-red-500/20 shadow-2xl transition-all cursor-pointer ${topFocus === 'EMERGENCY' ? 'ring-2 ring-red-500 border-red-500/50' : 'hover:border-red-500/50'}`}
                     onClick={() => setTopFocus(prev => prev === 'EMERGENCY' ? 'NONE' : 'EMERGENCY')}
                 >
@@ -164,7 +164,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                         <div className="text-3xl font-black text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">{emergencyProjects.length}</div>
                     </CardContent>
                 </Card>
-                <Card 
+                <Card
                     className={`bg-[#14141E]/80 backdrop-blur-md border-orange-500/20 shadow-2xl transition-all cursor-pointer ${topFocus === 'WAITING_PO' ? 'ring-2 ring-orange-500 border-orange-500/50' : 'hover:border-orange-500/30'}`}
                     onClick={() => setTopFocus(prev => prev === 'WAITING_PO' ? 'NONE' : 'WAITING_PO')}
                 >
@@ -197,14 +197,14 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                     </div>
 
                     <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                        {(topFocus === 'EMERGENCY' ? emergencyProjects : 
-                          topFocus === 'WAITING_PO' ? projects.filter(p => p.commercialStatus === 'AWAITING_PO') : 
-                          activeProjects.slice(0, 5)
+                        {(topFocus === 'EMERGENCY' ? emergencyProjects :
+                            topFocus === 'WAITING_PO' ? projects.filter(p => p.commercialStatus === 'AWAITING_PO') :
+                                activeProjects.slice(0, 5)
                         ).map(project => {
                             const latestInvoice = project.invoices?.[0];
                             const latestWbp = project.workBreakdowns?.[0];
                             const totalWorth = latestInvoice ? latestInvoice.total : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0);
-                            
+
                             return (
                                 <Link key={project.id} href={`/projects/${project.id}`} className="min-w-[300px] bg-[#0F0F1A] border border-white/10 p-5 rounded-2xl hover:border-primary/50 transition-all group">
                                     <div className="flex justify-between items-start mb-4">
@@ -255,7 +255,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
 
                                             return (
                                                 <div key={project.id} draggable onDragStart={(e) => handleDragStart(e, project.id)} className="bg-[#0F0F1A] border border-white/10 p-4 rounded-xl shadow-xl hover:border-primary/50 transition-all group cursor-grab active:cursor-grabbing relative overflow-hidden flex flex-col">
-                                                    
+
                                                     {project.commercialStatus === 'EMERGENCY_WORK' && (
                                                         <div className="absolute top-0 inset-x-0 h-1 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
                                                     )}
@@ -265,12 +265,12 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                                                             <h4 className="font-black text-white text-sm leading-tight line-clamp-2">{project.name}</h4>
                                                         </Link>
                                                         <div className="relative">
-                                                            <select 
-                                                                className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" 
+                                                            <select
+                                                                className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
                                                                 value=""
                                                                 onChange={(e) => {
                                                                     const [field, val] = e.target.value.split(':');
-                                                                    if (field && val) handleStatusChange(project.id, field as 'status'|'commercialStatus', val);
+                                                                    if (field && val) handleStatusChange(project.id, field as 'status' | 'commercialStatus', val);
                                                                 }}
                                                             >
                                                                 <option value="" disabled>Actions...</option>
@@ -285,9 +285,9 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                                                             </Button>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <p className="text-[10px] uppercase font-bold text-muted-foreground mb-4">{project.client.name}</p>
-                                                    
+
                                                     <div className="mt-auto flex items-center justify-between pt-3 border-t border-white/5">
                                                         <div className="flex flex-col gap-1">
                                                             {project.commercialStatus === 'AWAITING_PO' && <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[9px] py-0">Waiting PO</Badge>}
@@ -325,7 +325,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                         <div className="space-y-4">
                             {activeProjects.map((p, idx) => {
                                 // Mock duration for visual effect since we might not have dates
-                                const startCol = (idx % 3) * 2 + 4; 
+                                const startCol = (idx % 3) * 2 + 4;
                                 const spanCol = (idx % 2) + 2;
                                 return (
                                     <div key={p.id} className="grid grid-cols-12 gap-2 items-center group">
@@ -334,7 +334,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                                             <p className="text-[10px] text-muted-foreground">{p.client.name}</p>
                                         </div>
                                         <div className="col-span-8 relative h-8 rounded-lg bg-white/5">
-                                            <div 
+                                            <div
                                                 className={`absolute inset-y-1 rounded-md shadow-lg flex items-center px-3 text-[10px] font-black cursor-grab ${p.commercialStatus === 'EMERGENCY_WORK' ? 'bg-red-500 text-white' : 'bg-primary/80 text-black hover:bg-primary'}`}
                                                 style={{ left: `${(startCol - 4) * 12.5}%`, width: `${spanCol * 12.5}%` }}
                                             >

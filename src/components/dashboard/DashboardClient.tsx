@@ -1,9 +1,19 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import { 
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogFooter
+} from "@/components/ui/dialog"
 import { 
     Users, 
     FileText, 
@@ -18,7 +28,13 @@ import {
     Activity,
     DollarSign,
     Clock,
-    CheckCircle2
+    CheckCircle2,
+    Building2,
+    Mail,
+    Copy,
+    Check,
+    ChevronRight,
+    TrendingUp as TrendIcon
 } from "lucide-react"
 import Link from "next/link"
 import { 
@@ -33,7 +49,8 @@ import {
     Area,
     PieChart,
     Pie,
-    Cell
+    Cell,
+    Legend
 } from 'recharts'
 
 interface DashboardClientProps {
@@ -55,12 +72,17 @@ interface DashboardClientProps {
             invoice: number
             payment: number
         }
+        trendData?: any[]
+        topSuppliers?: any[]
     }
 }
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6'];
 
 export function DashboardClient({ data }: DashboardClientProps) {
+    const [selectedSupplier, setSelectedSupplier] = useState<any | null>(null);
+    const [copiedSupplierId, setCopiedSupplierId] = useState<string | null>(null);
+
     const {
         unpaidTotal,
         projectCount,
@@ -70,18 +92,34 @@ export function DashboardClient({ data }: DashboardClientProps) {
         pendingScopes,
         upcomingMeetings,
         recentInteractions,
-        recentInvoices
+        recentInvoices,
+        trendData = [],
+        topSuppliers = []
     } = data;
 
-    // Mock financial data for the chart (in a real app, this would come from the server)
-    const chartData = [
-        { name: 'Jan', revenue: 4000, expenses: 2400 },
-        { name: 'Feb', revenue: 3000, expenses: 1398 },
-        { name: 'Mar', revenue: 2000, expenses: 9800 },
-        { name: 'Apr', revenue: 2780, expenses: 3908 },
-        { name: 'May', revenue: 1890, expenses: 4800 },
-        { name: 'Jun', revenue: 2390, expenses: 3800 },
-    ];
+    const handleCopyText = (text: string, supplierName: string) => {
+        navigator.clipboard.writeText(text);
+        setCopiedSupplierId(supplierName);
+        setTimeout(() => setCopiedSupplierId(null), 2000);
+    };
+
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-[#0f0f1a]/95 border border-white/10 p-3 rounded-lg shadow-xl backdrop-blur-md">
+                    <p className="text-white font-black text-[10px] mb-2 uppercase tracking-widest">{label}</p>
+                    {payload.map((entry: any, index: number) => (
+                        <div key={index} className="flex items-center gap-2 text-xs font-bold">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || '#10b981' }} />
+                            <span className="text-muted-foreground">{entry.name}:</span>
+                            <span className="font-black text-white">{formatCurrency(Number(entry.value) || 0)}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+        return null;
+    };
 
     const invoiceStatusData = [
         { name: 'Paid', value: data.trackingCounts.payment },
@@ -169,45 +207,30 @@ export function DashboardClient({ data }: DashboardClientProps) {
             {/* Financial Performance Section */}
             <div className="grid gap-6 md:grid-cols-7">
                 <Card className="md:col-span-4 bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl">
-                    <CardHeader>
+                    <CardHeader className="border-b border-white/5 pb-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle className="text-lg font-black text-white uppercase tracking-tight">Revenue Insights</CardTitle>
-                                <CardDescription className="text-xs font-medium uppercase tracking-widest">Projected vs Actual Revenue</CardDescription>
+                                <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                    <Activity className="h-5 w-5 text-primary" /> Performance Over Time
+                                </CardTitle>
+                                <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Real-time Income vs Expenses (Last 6 Months)</CardDescription>
                             </div>
-                            <Button variant="outline" size="sm" className="bg-white/5 border-white/10 text-[10px] font-black uppercase">Export Report</Button>
+                            <Link href="/financial-dashboard">
+                                <Button variant="outline" size="sm" className="bg-white/5 border-white/10 text-[10px] font-black uppercase text-primary">Financial Command</Button>
+                            </Link>
                         </div>
                     </CardHeader>
-                    <CardContent className="h-[300px]">
+                    <CardContent className="pt-6 h-[270px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={chartData}>
-                                <defs>
-                                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                                    </linearGradient>
-                                </defs>
+                            <BarChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                                <XAxis 
-                                    dataKey="name" 
-                                    stroke="#ffffff40" 
-                                    fontSize={10} 
-                                    tickLine={false} 
-                                    axisLine={false}
-                                />
-                                <YAxis 
-                                    stroke="#ffffff40" 
-                                    fontSize={10} 
-                                    tickLine={false} 
-                                    axisLine={false}
-                                    tickFormatter={(value) => `R${value/1000}k`}
-                                />
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: '#0F0F1A', border: '1px solid #ffffff10', borderRadius: '12px' }}
-                                    itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
-                                />
-                                <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRev)" strokeWidth={3} />
-                            </AreaChart>
+                                <XAxis dataKey="month" stroke="#ffffff50" fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#ffffff50" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `R${value/1000}k`} />
+                                <Tooltip content={<CustomTooltip />} cursor={{fill: '#ffffff05'}} />
+                                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '10px' }} iconType="circle" />
+                                <Bar dataKey="Income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                                <Bar dataKey="Expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                            </BarChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
@@ -246,6 +269,78 @@ export function DashboardClient({ data }: DashboardClientProps) {
                                 </div>
                             ))}
                         </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="md:col-span-7 bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
+                        <Building2 className="h-24 w-24 text-white" />
+                    </div>
+                    <CardHeader className="border-b border-white/5 pb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div>
+                                <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                    <Building2 className="h-5 w-5 text-primary" /> Supplier Intelligence
+                                </CardTitle>
+                                <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Top 5 suppliers by expenditure & loyalty terms</CardDescription>
+                            </div>
+                            <Badge variant="outline" className="w-fit border-primary/20 bg-primary/5 text-primary text-[10px] font-black uppercase">
+                                Actionable Statement Reviews
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        {topSuppliers.length === 0 ? (
+                            <div className="text-center py-10">
+                                <p className="text-xs text-muted-foreground italic">No expense transactions recorded yet.</p>
+                                <Link href="/financial-dashboard" className="mt-4 inline-block">
+                                    <Button size="sm" className="bg-primary text-black font-black uppercase text-[10px]">Upload Statement</Button>
+                                </Link>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {topSuppliers.map((supplier: any) => {
+                                    const emailDraft = `Subject: Strategic Vendor Account Review - UROps\n\nDear ${supplier.name} Sales Team,\n\nI hope this email finds you well.\n\nWe are conducting our annual financial audit and strategic partner reviews. According to our internal records at UROps, our recent total expenditure with ${supplier.name} is ${formatCurrency(supplier.spend)}.\n\nGiven the scale of our partnership and our consistent payment history, we would love to discuss options to optimize our transaction structure. Specifically, we would like to explore:\n1. Preferred loyalty discount rates or volume rebates.\n2. Dedicated pricing tiers for upcoming bulk construction projects.\n3. Extended payment term opportunities.\n\nWe value our relationship and look forward to scaling our business with you in our next phase of projects. Please let us know when we can hop on a brief call to align on this.\n\nBest regards,\nOperations Manager\nUROps Management Team`;
+
+                                    return (
+                                        <div key={supplier.name} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/[0.08] hover:border-primary/20 transition-all gap-4 group">
+                                            <div className="flex-1 space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-black text-sm text-white group-hover:text-primary transition-colors">{supplier.name}</span>
+                                                    <Badge variant="outline" className="text-[8px] font-black uppercase px-2 py-0.5 bg-white/5 border-white/10 text-muted-foreground">
+                                                        {supplier.category}
+                                                    </Badge>
+                                                </div>
+                                                
+                                                <div className="space-y-1">
+                                                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full" style={{ width: `${supplier.percentage}%` }} />
+                                                    </div>
+                                                    <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground tracking-widest">
+                                                        <span>Expenditure Share</span>
+                                                        <span>{supplier.percentage.toFixed(1)}% of total expenses</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-4 shrink-0 justify-between sm:justify-end">
+                                                <div className="text-right">
+                                                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">Total Spent</span>
+                                                    <span className="text-lg font-black text-white">{formatCurrency(supplier.spend)}</span>
+                                                </div>
+                                                <Button 
+                                                    onClick={() => setSelectedSupplier({ ...supplier, emailDraft })}
+                                                    size="sm" 
+                                                    className="bg-white/5 hover:bg-primary hover:text-black border border-white/10 text-white text-[10px] font-black uppercase rounded-xl transition-all h-10 px-4 flex items-center gap-2 shadow-lg hover:shadow-primary/20"
+                                                >
+                                                    Review <ChevronRight className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -347,6 +442,92 @@ export function DashboardClient({ data }: DashboardClientProps) {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Supplier Statement & Partnership Review Dialog */}
+            <Dialog open={selectedSupplier !== null} onOpenChange={(open) => !open && setSelectedSupplier(null)}>
+                <DialogContent className="max-w-2xl border-white/10 bg-[#0F0F1A]/95 backdrop-blur-2xl shadow-2xl max-h-[85vh] overflow-y-auto rounded-3xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
+                            <Building2 className="text-primary h-6 w-6" /> Supplier Review
+                        </DialogTitle>
+                        <DialogDescription className="text-xs uppercase tracking-wider text-muted-foreground">
+                            Strategic partnership & rebate opportunities for {selectedSupplier?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedSupplier && (
+                        <div className="space-y-6 mt-4">
+                            {/* Summary Metrics */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest block mb-1">Cumulative Spend</span>
+                                    <span className="text-2xl font-black text-white">{formatCurrency(selectedSupplier.spend)}</span>
+                                </div>
+                                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest block mb-1">Dominant Category</span>
+                                    <span className="text-2xl font-black text-primary uppercase">{selectedSupplier.category}</span>
+                                </div>
+                            </div>
+
+                            {/* Recent Transactions List */}
+                            <div className="space-y-2">
+                                <h3 className="text-xs font-black text-white uppercase tracking-widest">Recent Transactions</h3>
+                                <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.02]">
+                                    <table className="w-full text-xs text-left">
+                                        <thead>
+                                            <tr className="border-b border-white/10 text-[9px] uppercase font-black text-muted-foreground bg-white/5">
+                                                <th className="py-3 px-4">Date</th>
+                                                <th className="py-3 px-4">Description</th>
+                                                <th className="py-3 px-4 text-right">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {selectedSupplier.transactions.map((t: any) => (
+                                                <tr key={t.id} className="border-b border-white/5 hover:bg-white/5">
+                                                    <td className="py-2.5 px-4 text-muted-foreground">{new Date(t.date).toLocaleDateString()}</td>
+                                                    <td className="py-2.5 px-4 font-bold text-white truncate max-w-[250px]">{t.description}</td>
+                                                    <td className="py-2.5 px-4 text-right font-black text-red-400">{formatCurrency(t.amount)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Email Draft Generation */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5">
+                                        <Mail className="h-4 w-4 text-primary" /> Loyalty Discount Request Draft
+                                    </h3>
+                                    <Button
+                                        onClick={() => handleCopyText(selectedSupplier.emailDraft, selectedSupplier.name)}
+                                        size="sm"
+                                        className="bg-primary hover:bg-primary/95 text-black font-black uppercase text-[9px] py-1 px-3.5 rounded-lg flex items-center gap-1 shadow-md shadow-primary/10 h-8"
+                                    >
+                                        {copiedSupplierId === selectedSupplier.name ? (
+                                            <><Check className="h-3.5 w-3.5" /> Copied!</>
+                                        ) : (
+                                            <><Copy className="h-3.5 w-3.5" /> Copy Message</>
+                                        )}
+                                    </Button>
+                                </div>
+                                <div className="bg-black/40 border border-white/5 rounded-2xl p-4 font-mono text-[11px] text-gray-300 leading-relaxed whitespace-pre-wrap max-h-[220px] overflow-y-auto scrollbar-thin">
+                                    {selectedSupplier.emailDraft}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="mt-4">
+                        <Button 
+                            onClick={() => setSelectedSupplier(null)} 
+                            className="w-full bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs rounded-xl h-11 border border-white/10"
+                        >
+                            Close Statement Review
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
