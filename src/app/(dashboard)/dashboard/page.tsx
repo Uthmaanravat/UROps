@@ -107,47 +107,6 @@ export default async function DashboardPage() {
             trendData.push({ month: months[m], Income: mIncome, Expenses: mExpense, Profit: mIncome - mExpense });
         }
 
-        // Calculate Top 5 Suppliers by Spend
-        const expenseTransactions = (transactions || []).filter((t: any) => t.type === 'EXPENSE');
-        const supplierSpendMap: { [key: string]: { totalSpend: number; categoryDistribution: { [cat: string]: number }; transactions: any[] } } = {};
-        
-        let totalAllExpenses = 0;
-        expenseTransactions.forEach((t: any) => {
-            const name = t.description.trim() || 'Unknown Supplier';
-            if (!supplierSpendMap[name]) {
-                supplierSpendMap[name] = { totalSpend: 0, categoryDistribution: {}, transactions: [] };
-            }
-            const amount = Number(t.amount) || 0;
-            supplierSpendMap[name].totalSpend += amount;
-            totalAllExpenses += amount;
-            
-            supplierSpendMap[name].transactions.push({
-                id: t.id,
-                date: t.date,
-                description: t.description,
-                category: t.category,
-                amount: amount
-            });
-            
-            const cat = t.category || 'Miscellaneous';
-            supplierSpendMap[name].categoryDistribution[cat] = (supplierSpendMap[name].categoryDistribution[cat] || 0) + amount;
-        });
-
-        const topSuppliers = Object.entries(supplierSpendMap)
-            .map(([name, info]) => {
-                const dominantCategory = Object.entries(info.categoryDistribution)
-                    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Miscellaneous';
-                return {
-                    name,
-                    spend: info.totalSpend,
-                    category: dominantCategory,
-                    percentage: totalAllExpenses > 0 ? (info.totalSpend / totalAllExpenses) * 100 : 0,
-                    transactions: info.transactions.slice(0, 10)
-                };
-            })
-            .sort((a, b) => b.spend - a.spend)
-            .slice(0, 5);
-
         // Serialize data for client component
         const dashboardData = JSON.parse(JSON.stringify({
             clientCount,
@@ -167,8 +126,7 @@ export default async function DashboardPage() {
                 invoice: invoicedCount,
                 payment: paidCount
             },
-            trendData,
-            topSuppliers
+            trendData
         }));
 
         return <DashboardClient data={dashboardData} />;

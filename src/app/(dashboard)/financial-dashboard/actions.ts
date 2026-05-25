@@ -19,6 +19,12 @@ export async function processBankStatementAction(formData: FormData) {
         return { success: false, error: "No file provided" };
     }
 
+    const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        include: { settings: true }
+    });
+    const businessName = company?.settings?.name || company?.name || "the business";
+
     try {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
@@ -39,8 +45,15 @@ export async function processBankStatementAction(formData: FormData) {
         });
 
         const prompt = `You are an expert AI accounting assistant.
-        I am providing you with a bank statement, expense report, or transaction list file.
+        I am providing you with a bank statement, expense report, or transaction list file for a business named "${businessName}".
         Please carefully extract all financial transactions from it.
+
+        CRITICAL INSTRUCTIONS FOR CLASSIFYING INCOME VS EXPENSE:
+        You must evaluate every transaction from the perspective of the account holder, "${businessName}".
+        - Money going OUT of the account (e.g., payments made TO a supplier, bank fees, debit orders, purchases, card swipes) MUST be marked as "EXPENSE".
+        - Money coming IN to the account (e.g., deposits, payments received FROM a client, credits) MUST be marked as "INCOME".
+        Do not assume the business name is UROps. The business name is exactly "${businessName}".
+
         For each transaction, provide:
         - date: ISO format YYYY-MM-DD
         - description: clean and concise description of the vendor/transaction

@@ -11,10 +11,11 @@ import { processBankStatementAction, addManualTransactionAction } from "@/app/(d
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Badge } from "@/components/ui/badge"
+import { Check, Copy, ChevronRight, Building2, Mail } from "lucide-react"
 
 const COLORS = ['#10b981', '#f43f5e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
-export function FinancialDashboardClient({ invoices, transactions, projects = [] }: { invoices: any[], transactions: any[], projects?: any[] }) {
+export function FinancialDashboardClient({ invoices, transactions, projects = [], businessName }: { invoices: any[], transactions: any[], projects?: any[], businessName?: string }) {
     const [isUploading, setIsUploading] = useState(false)
     const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
     const [uploadError, setUploadError] = useState<string | null>(null)
@@ -32,6 +33,16 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
 
     // Time Period State
     const [timePeriod, setTimePeriod] = useState<'3M' | '6M' | '1Y' | 'ALL'>('3M');
+
+    // Supplier Intelligence States
+    const [selectedSupplier, setSelectedSupplier] = useState<any | null>(null);
+    const [copiedSupplierId, setCopiedSupplierId] = useState<string | null>(null);
+
+    const handleCopyText = (text: string, supplierName: string) => {
+        navigator.clipboard.writeText(text);
+        setCopiedSupplierId(supplierName);
+        setTimeout(() => setCopiedSupplierId(null), 2000);
+    };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -114,6 +125,47 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
 
     const totalRevenue = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
     const totalExpenses = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+
+    // Calculate Top 5 Suppliers by Spend (Dynamic based on timePeriod)
+    const expenseTransactions = filteredTransactions.filter(t => t.type === 'EXPENSE');
+    const supplierSpendMap: { [key: string]: { totalSpend: number; categoryDistribution: { [cat: string]: number }; transactions: any[] } } = {};
+    
+    let totalAllExpenses = 0;
+    expenseTransactions.forEach((t: any) => {
+        const name = t.description.trim() || 'Unknown Supplier';
+        if (!supplierSpendMap[name]) {
+            supplierSpendMap[name] = { totalSpend: 0, categoryDistribution: {}, transactions: [] };
+        }
+        const amount = Number(t.amount) || 0;
+        supplierSpendMap[name].totalSpend += amount;
+        totalAllExpenses += amount;
+        
+        supplierSpendMap[name].transactions.push({
+            id: t.id,
+            date: t.date,
+            description: t.description,
+            category: t.category,
+            amount: amount
+        });
+        
+        const cat = t.category || 'Miscellaneous';
+        supplierSpendMap[name].categoryDistribution[cat] = (supplierSpendMap[name].categoryDistribution[cat] || 0) + amount;
+    });
+
+    const topSuppliers = Object.entries(supplierSpendMap)
+        .map(([name, info]) => {
+            const dominantCategory = Object.entries(info.categoryDistribution)
+                .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Miscellaneous';
+            return {
+                name,
+                spend: info.totalSpend,
+                category: dominantCategory,
+                percentage: totalAllExpenses > 0 ? (info.totalSpend / totalAllExpenses) * 100 : 0,
+                transactions: info.transactions.slice(0, 10)
+            };
+        })
+        .sort((a, b) => b.spend - a.spend)
+        .slice(0, 5);
 
     // Expense Categories
     const expenseCategories = transactions.filter(t => t.type === 'EXPENSE').reduce((acc: Record<string, number>, t) => {
@@ -395,6 +447,76 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                 </Card>
             </div>
 
+            {/* Supplier Intelligence */}
+            <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-4 opacity-5">
+                    <Building2 className="h-24 w-24 text-white" />
+                </div>
+                <CardHeader className="border-b border-white/5 pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                <Building2 className="h-5 w-5 text-primary" /> Supplier Intelligence
+                            </CardTitle>
+                            <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Top 5 suppliers by expenditure for the selected period</CardDescription>
+                        </div>
+                        <Badge variant="outline" className="w-fit border-primary/20 bg-primary/5 text-primary text-[10px] font-black uppercase">
+                            Actionable Statement Reviews
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-6">
+                    {topSuppliers.length === 0 ? (
+                        <div className="text-center py-10">
+                            <p className="text-xs text-muted-foreground italic">No expense transactions recorded in this period.</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                            {topSuppliers.map((supplier: any) => {
+                                const emailDraft = `Subject: Strategic Vendor Account Review - ${businessName || 'Our Company'}\n\nDear ${supplier.name} Sales Team,\n\nI hope this email finds you well.\n\nWe are conducting our financial audit and strategic partner reviews. According to our internal records at ${businessName || 'our company'}, our recent total expenditure with ${supplier.name} is ${formatCurrency(supplier.spend)}.\n\nGiven the scale of our partnership and our consistent payment history, we would love to discuss options to optimize our transaction structure. Specifically, we would like to explore:\n1. Preferred loyalty discount rates or volume rebates.\n2. Dedicated pricing tiers for upcoming bulk construction projects.\n3. Extended payment term opportunities.\n\nWe value our relationship and look forward to scaling our business with you in our next phase of projects. Please let us know when we can hop on a brief call to align on this.\n\nBest regards,\nOperations Manager\n${businessName || 'Management'} Team`;
+
+                                return (
+                                    <div key={supplier.name} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/[0.08] hover:border-primary/20 transition-all gap-4 group">
+                                        <div className="flex-1 space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-black text-sm text-white group-hover:text-primary transition-colors">{supplier.name}</span>
+                                                <Badge variant="outline" className="text-[8px] font-black uppercase px-2 py-0.5 bg-white/5 border-white/10 text-muted-foreground">
+                                                    {supplier.category}
+                                                </Badge>
+                                            </div>
+                                            
+                                            <div className="space-y-1">
+                                                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full" style={{ width: `${supplier.percentage}%` }} />
+                                                </div>
+                                                <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground tracking-widest">
+                                                    <span>Expenditure Share</span>
+                                                    <span>{supplier.percentage.toFixed(1)}% of total expenses</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-4 shrink-0 justify-between sm:justify-end">
+                                            <div className="text-right">
+                                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">Total Spent</span>
+                                                <span className="text-lg font-black text-white">{formatCurrency(supplier.spend)}</span>
+                                            </div>
+                                            <Button 
+                                                onClick={() => setSelectedSupplier({ ...supplier, emailDraft })}
+                                                size="sm" 
+                                                className="bg-white/5 hover:bg-primary hover:text-black border border-white/10 text-white text-[10px] font-black uppercase rounded-xl transition-all h-10 px-4 flex items-center gap-2 shadow-lg hover:shadow-primary/20"
+                                            >
+                                                Review <ChevronRight className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
             {/* Drill Down Dialog */}
             <Dialog open={drillDownType !== null} onOpenChange={(open) => !open && setDrillDownType(null)}>
                 <DialogContent className="max-w-4xl border-white/10 bg-[#0F0F1A]/95 backdrop-blur-2xl shadow-2xl max-h-[80vh] overflow-y-auto">
@@ -499,6 +621,92 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                             </div>
                         )}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Supplier Statement & Partnership Review Dialog */}
+            <Dialog open={selectedSupplier !== null} onOpenChange={(open) => !open && setSelectedSupplier(null)}>
+                <DialogContent className="max-w-2xl border-white/10 bg-[#0F0F1A]/95 backdrop-blur-2xl shadow-2xl max-h-[85vh] overflow-y-auto rounded-3xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
+                            <Building2 className="text-primary h-6 w-6" /> Supplier Review
+                        </DialogTitle>
+                        <DialogDescription className="text-xs uppercase tracking-wider text-muted-foreground">
+                            Strategic partnership & rebate opportunities for {selectedSupplier?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedSupplier && (
+                        <div className="space-y-6 mt-4">
+                            {/* Summary Metrics */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest block mb-1">Cumulative Spend</span>
+                                    <span className="text-2xl font-black text-white">{formatCurrency(selectedSupplier.spend)}</span>
+                                </div>
+                                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest block mb-1">Dominant Category</span>
+                                    <span className="text-2xl font-black text-primary uppercase">{selectedSupplier.category}</span>
+                                </div>
+                            </div>
+
+                            {/* Recent Transactions List */}
+                            <div className="space-y-2">
+                                <h3 className="text-xs font-black text-white uppercase tracking-widest">Recent Transactions</h3>
+                                <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.02]">
+                                    <table className="w-full text-xs text-left">
+                                        <thead>
+                                            <tr className="border-b border-white/10 text-[9px] uppercase font-black text-muted-foreground bg-white/5">
+                                                <th className="py-3 px-4">Date</th>
+                                                <th className="py-3 px-4">Description</th>
+                                                <th className="py-3 px-4 text-right">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {selectedSupplier.transactions.map((t: any) => (
+                                                <tr key={t.id} className="border-b border-white/5 hover:bg-white/5">
+                                                    <td className="py-2.5 px-4 text-muted-foreground">{new Date(t.date).toLocaleDateString()}</td>
+                                                    <td className="py-2.5 px-4 font-bold text-white truncate max-w-[250px]">{t.description}</td>
+                                                    <td className="py-2.5 px-4 text-right font-black text-red-400">{formatCurrency(t.amount)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Email Draft Generation */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5">
+                                        <Mail className="h-4 w-4 text-primary" /> Loyalty Discount Request Draft
+                                    </h3>
+                                    <Button
+                                        onClick={() => handleCopyText(selectedSupplier.emailDraft, selectedSupplier.name)}
+                                        size="sm"
+                                        className="bg-primary hover:bg-primary/95 text-black font-black uppercase text-[9px] py-1 px-3.5 rounded-lg flex items-center gap-1 shadow-md shadow-primary/10 h-8"
+                                    >
+                                        {copiedSupplierId === selectedSupplier.name ? (
+                                            <><Check className="h-3.5 w-3.5" /> Copied!</>
+                                        ) : (
+                                            <><Copy className="h-3.5 w-3.5" /> Copy Message</>
+                                        )}
+                                    </Button>
+                                </div>
+                                <div className="bg-black/40 border border-white/5 rounded-2xl p-4 font-mono text-[11px] text-gray-300 leading-relaxed whitespace-pre-wrap max-h-[220px] overflow-y-auto scrollbar-thin">
+                                    {selectedSupplier.emailDraft}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="mt-4">
+                        <Button 
+                            onClick={() => setSelectedSupplier(null)} 
+                            className="w-full bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs rounded-xl h-11 border border-white/10"
+                        >
+                            Close Statement Review
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

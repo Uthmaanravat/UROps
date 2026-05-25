@@ -8,12 +8,12 @@ export const dynamic = 'force-dynamic';
 export default async function FinancialDashboardPage() {
     const companyId = await ensureAuth();
     
-    // Validate role
-    const user = await prisma.user.findFirst({
-        where: { companyId } // Usually we get the userId from auth, but let's assume we can fetch it or just allow any authorized user.
+    const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        include: { settings: true }
     });
     
-    // In actual implementation, we might check if user.role === 'ADMIN'
+    const businessName = company?.settings?.name || company?.name || "Your Company";
 
     const invoices = await prisma.invoice.findMany({
         where: { companyId, type: 'INVOICE' },
@@ -35,6 +35,7 @@ export default async function FinancialDashboardPage() {
             invoices={invoices} 
             transactions={transactions}
             projects={projects}
+            businessName={businessName}
         />
     );
 }
