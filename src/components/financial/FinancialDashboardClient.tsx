@@ -126,19 +126,22 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
     const totalRevenue = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
     const totalExpenses = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
-    // Calculate Top 5 Suppliers by Spend (Dynamic based on timePeriod)
+    // Calculate Top 5 Suppliers by Frequency (Dynamic based on timePeriod)
     const expenseTransactions = filteredTransactions.filter(t => t.type === 'EXPENSE');
-    const supplierSpendMap: { [key: string]: { totalSpend: number; categoryDistribution: { [cat: string]: number }; transactions: any[] } } = {};
+    const supplierSpendMap: { [key: string]: { totalSpend: number; transactionCount: number; categoryDistribution: { [cat: string]: number }; transactions: any[] } } = {};
     
     let totalAllExpenses = 0;
+    let totalTransactionCount = 0;
     expenseTransactions.forEach((t: any) => {
         const name = t.description.trim() || 'Unknown Supplier';
         if (!supplierSpendMap[name]) {
-            supplierSpendMap[name] = { totalSpend: 0, categoryDistribution: {}, transactions: [] };
+            supplierSpendMap[name] = { totalSpend: 0, transactionCount: 0, categoryDistribution: {}, transactions: [] };
         }
         const amount = Number(t.amount) || 0;
         supplierSpendMap[name].totalSpend += amount;
+        supplierSpendMap[name].transactionCount += 1;
         totalAllExpenses += amount;
+        totalTransactionCount += 1;
         
         supplierSpendMap[name].transactions.push({
             id: t.id,
@@ -159,12 +162,14 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
             return {
                 name,
                 spend: info.totalSpend,
+                transactionCount: info.transactionCount,
                 category: dominantCategory,
                 percentage: totalAllExpenses > 0 ? (info.totalSpend / totalAllExpenses) * 100 : 0,
+                frequencyPercentage: totalTransactionCount > 0 ? (info.transactionCount / totalTransactionCount) * 100 : 0,
                 transactions: info.transactions.slice(0, 10)
             };
         })
-        .sort((a, b) => b.spend - a.spend)
+        .sort((a, b) => b.transactionCount - a.transactionCount)
         .slice(0, 5);
 
     // Expense Categories
@@ -458,7 +463,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                             <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
                                 <Building2 className="h-5 w-5 text-primary" /> Supplier Intelligence
                             </CardTitle>
-                            <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Top 5 suppliers by expenditure for the selected period</CardDescription>
+                            <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Top 5 most frequent suppliers for the selected period</CardDescription>
                         </div>
                         <Badge variant="outline" className="w-fit border-primary/20 bg-primary/5 text-primary text-[10px] font-black uppercase">
                             Actionable Statement Reviews
@@ -487,11 +492,11 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                             
                                             <div className="space-y-1">
                                                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full" style={{ width: `${supplier.percentage}%` }} />
+                                                    <div className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full" style={{ width: `${supplier.frequencyPercentage}%` }} />
                                                 </div>
                                                 <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground tracking-widest">
-                                                    <span>Expenditure Share</span>
-                                                    <span>{supplier.percentage.toFixed(1)}% of total expenses</span>
+                                                    <span>{supplier.transactionCount} Transactions</span>
+                                                    <span>{supplier.frequencyPercentage.toFixed(1)}% of all purchases</span>
                                                 </div>
                                             </div>
                                         </div>
