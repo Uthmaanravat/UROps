@@ -3,7 +3,7 @@ import { ensureAuth } from "@/lib/auth-actions"
 import { ReportEditor } from "./ReportEditor"
 import { redirect, notFound } from "next/navigation"
 
-export const dynamic = 'force-dynamic'
+
 
 export default async function ReportDetailPage({ params }: { params: { id: string } }) {
     const companyId = await ensureAuth()
@@ -38,9 +38,13 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
         vatNumber: settings?.taxId || "" // Fixed mapping from schema taxId
     }
 
+    const serializedReport = JSON.parse(JSON.stringify(report));
+    // Ensure items is an array to avoid undefined issues in client component
+    serializedReport.items = serializedReport.items || [];
+
     return (
         <div className="max-w-5xl mx-auto py-6">
-            <ReportEditor report={report} company={company} />
+            <ReportEditor report={serializedReport} company={company} />
         </div>
     )
 }
