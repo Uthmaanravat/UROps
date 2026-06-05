@@ -18,6 +18,7 @@ export async function createInvoiceAction(data: {
     projectName?: string // New field
     type?: 'QUOTE' | 'INVOICE'
     paymentNotes?: string
+    firstPaymentPercentage?: number
 }) {
     const companyId = await ensureAuth()
     const year = new Date().getFullYear();
@@ -98,6 +99,7 @@ export async function createInvoiceAction(data: {
             quoteNumber: formattedQuoteNumber,
             reference: data.reference,
             paymentNotes: data.paymentNotes,
+            firstPaymentPercentage: data.firstPaymentPercentage,
             items: {
                 create: data.items.map(item => ({
                     description: item.description,
@@ -174,7 +176,7 @@ export async function getInvoiceSequenceAction() {
     return `INV-${year}-${nextNumber.toString().padStart(3, '0')}`;
 }
 
-export async function convertToInvoiceAction(id: string, clientPoNumber?: string) {
+export async function convertToInvoiceAction(id: string, clientPoNumber?: string, firstPaymentPercentage?: number) {
     const companyId = await ensureAuth()
 
     // 1. Get the original quote details
@@ -220,6 +222,7 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             quoteNumber: formattedInvoiceNumber, // This is the label for the NEW invoice
             reference: quote.reference,
             clientPoNumber: clientPoNumber || null,
+            firstPaymentPercentage: firstPaymentPercentage !== undefined ? firstPaymentPercentage : quote.firstPaymentPercentage,
             date: new Date(), // Current date for the invoice
             items: {
                 create: [{

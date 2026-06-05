@@ -97,12 +97,23 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
     // From Invoices
     const totalInvoiced = invoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0);
     const totalPaid = invoices.reduce((acc, inv) => acc + (inv.payments?.reduce((pAcc: number, p: any) => pAcc + (Number(p.amount) || 0), 0) || 0), 0);
-    const outstandingInvoices = totalInvoiced - totalPaid;
     
     const unpaidInvoices = invoices.filter(inv => {
         const paid = inv.payments?.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0) || 0;
         return paid < inv.total && inv.status !== 'CANCELLED' && inv.status !== 'DRAFT';
     });
+
+    const outstandingInvoices = unpaidInvoices.reduce((acc, inv) => {
+        const paid = inv.payments?.reduce((pAcc: number, p: any) => pAcc + (Number(p.amount) || 0), 0) || 0;
+        let balance = inv.total - paid;
+        if (inv.firstPaymentPercentage && inv.firstPaymentPercentage > 0 && inv.firstPaymentPercentage < 100) {
+            const firstPaymentAmount = inv.total * (inv.firstPaymentPercentage / 100);
+            if (paid < firstPaymentAmount) {
+                balance = firstPaymentAmount - paid;
+            }
+        }
+        return acc + balance;
+    }, 0);
 
     const activeProjectsList = projects.filter(p => !['COMPLETED', 'PAID', 'CANCELLED'].includes(p.status));
 
@@ -590,7 +601,13 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                     <tbody>
                                         {unpaidInvoices.map(inv => {
                                             const paid = inv.payments?.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0) || 0;
-                                            const owes = inv.total - paid;
+                                            let owes = inv.total - paid;
+                                            if (inv.firstPaymentPercentage && inv.firstPaymentPercentage > 0 && inv.firstPaymentPercentage < 100) {
+                                                const firstPaymentAmount = inv.total * (inv.firstPaymentPercentage / 100);
+                                                if (paid < firstPaymentAmount) {
+                                                    owes = firstPaymentAmount - paid;
+                                                }
+                                            }
                                             return (
                                                 <tr key={inv.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                                                     <td className="py-3 px-4 font-bold text-white">{inv.client?.name || 'Unknown'}</td>

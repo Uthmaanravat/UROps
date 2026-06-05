@@ -61,7 +61,7 @@ export default async function DashboardPage() {
             }),
             prisma.invoice.findMany({
                 where: { companyId, type: 'INVOICE', status: { notIn: ['PAID', 'CANCELLED'] } },
-                select: { total: true, payments: { select: { amount: true } }, quoteNumber: true, date: true, id: true, number: true }
+                select: { total: true, payments: { select: { amount: true } }, quoteNumber: true, date: true, id: true, number: true, firstPaymentPercentage: true }
             }),
             (prisma as any).scopeOfWork?.count({ where: { companyId } }) || 0,
             prisma.invoice.count({ where: { companyId, type: 'QUOTE' } }),
@@ -78,8 +78,15 @@ export default async function DashboardPage() {
         
         (allUnpaidInvoices || []).forEach(inv => {
             const paid = (inv.payments || []).reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
-            if (paid < (inv.total || 0)) {
-                const balance = (inv.total || 0) - paid;
+            const totalVal = inv.total || 0;
+            if (paid < totalVal) {
+                let balance = totalVal - paid;
+                if (inv.firstPaymentPercentage && inv.firstPaymentPercentage > 0 && inv.firstPaymentPercentage < 100) {
+                    const firstPaymentAmount = totalVal * (inv.firstPaymentPercentage / 100);
+                    if (paid < firstPaymentAmount) {
+                        balance = firstPaymentAmount - paid;
+                    }
+                }
                 unpaidTotal += balance;
                 unpaidInvoices.push({ ...inv, balance });
             }

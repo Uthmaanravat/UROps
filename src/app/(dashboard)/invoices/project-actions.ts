@@ -32,7 +32,7 @@ export async function updateInvoiceProjectAction(invoiceId: string, projectId: s
     revalidatePath("/projects")
 }
 
-export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string }) {
+export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string, firstPaymentPercentage?: number | null }) {
     const companyId = await ensureAuth()
 
     let nextNumber: number | undefined;
@@ -55,7 +55,8 @@ export async function updateInvoiceDetailsAction(invoiceId: string, data: { site
             reference: data.reference,
             quoteNumber: data.quoteNumber,
             number: nextNumber,
-            date: data.date ? new Date(data.date) : undefined
+            date: data.date ? new Date(data.date) : undefined,
+            firstPaymentPercentage: data.firstPaymentPercentage !== undefined ? data.firstPaymentPercentage : undefined
         },
         include: { project: true }
     })

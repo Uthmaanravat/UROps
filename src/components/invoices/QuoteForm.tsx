@@ -47,8 +47,34 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [reference, setReference] = useState("")
     const [projectName, setProjectName] = useState("")
     const [isProjectNameManual, setIsProjectNameManual] = useState(false)
-    const [paymentNotes, setPaymentNotes] = useState("50% deposit required before project commences.")
+    const [paymentNotes, setPaymentNotes] = useState("")
     const [showPaymentNotes, setShowPaymentNotes] = useState(true)
+    const [firstPaymentOption, setFirstPaymentOption] = useState<string>("none")
+    const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>("")
+
+    const handleFirstPaymentOptionChange = (val: string) => {
+        setFirstPaymentOption(val);
+        if (val === "none") {
+            setPaymentNotes("");
+        } else if (val === "20") {
+            setPaymentNotes("20% deposit required before project commences.");
+        } else if (val === "50") {
+            setPaymentNotes("50% deposit required before project commences.");
+        } else if (val === "75") {
+            setPaymentNotes("75% deposit required before project commences.");
+        } else if (val === "custom") {
+            setPaymentNotes("50% deposit required before project commences.");
+            setCustomFirstPaymentPercentage("50");
+        }
+    };
+
+    const handleCustomPercentageChange = (pct: string) => {
+        setCustomFirstPaymentPercentage(pct);
+        const parsed = parseFloat(pct);
+        if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+            setPaymentNotes(`${parsed}% deposit required before project commences.`);
+        }
+    };
 
     // Catalog state
     const [catalog, setCatalog] = useState<any[]>([])
@@ -131,6 +157,18 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
+
+        let finalFirstPaymentPercentage: number | undefined = undefined;
+        if (firstPaymentOption === "20") finalFirstPaymentPercentage = 20;
+        else if (firstPaymentOption === "50") finalFirstPaymentPercentage = 50;
+        else if (firstPaymentOption === "75") finalFirstPaymentPercentage = 75;
+        else if (firstPaymentOption === "custom") {
+            const parsed = parseFloat(customFirstPaymentPercentage);
+            if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                finalFirstPaymentPercentage = parsed;
+            }
+        }
+
         try {
             const invoiceId = await createInvoiceAction({
                 clientId,
@@ -141,7 +179,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 quoteNumber,
                 reference,
                 projectName,
-                paymentNotes: showPaymentNotes ? paymentNotes : undefined
+                paymentNotes: showPaymentNotes ? paymentNotes : undefined,
+                firstPaymentPercentage: finalFirstPaymentPercentage
             })
             setLastInvoiceId(invoiceId)
             setSubmitted(true)
@@ -510,6 +549,40 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 </div>
                             ))}
                         </div>
+                    </div>
+                </div>
+
+                {/* First Payment / Deposit Option */}
+                <div className="space-y-4 border-t pt-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label>First Payment / Deposit Option</Label>
+                            <select
+                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                value={firstPaymentOption}
+                                onChange={(e) => handleFirstPaymentOptionChange(e.target.value)}
+                            >
+                                <option value="none">Full Payment (100%)</option>
+                                <option value="20">20% Deposit</option>
+                                <option value="50">50% Deposit</option>
+                                <option value="75">75% Deposit</option>
+                                <option value="custom">Custom Percentage</option>
+                            </select>
+                        </div>
+                        {firstPaymentOption === "custom" && (
+                            <div className="space-y-2">
+                                <Label>Custom Percentage (%)</Label>
+                                <Input
+                                    type="number"
+                                    min="1"
+                                    max="99"
+                                    placeholder="e.g. 40"
+                                    value={customFirstPaymentPercentage}
+                                    onChange={(e) => handleCustomPercentageChange(e.target.value)}
+                                    className="bg-transparent border-white/10"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
 

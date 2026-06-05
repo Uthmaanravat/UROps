@@ -41,7 +41,19 @@ export default async function ClientPage({ params }: { params: { id: string } })
 
     const totalInvoiced = client.invoices.filter((i: any) => i.type === 'INVOICE').reduce((acc: number, i: any) => acc + i.total, 0);
     const totalPaid = client.invoices.reduce((acc: number, i: any) => acc + i.payments.reduce((pAcc: number, p: any) => pAcc + p.amount, 0), 0);
-    const outstanding = totalInvoiced - totalPaid;
+    const outstanding = client.invoices
+        .filter((i: any) => i.type === 'INVOICE' && i.status !== 'CANCELLED')
+        .reduce((acc: number, i: any) => {
+            const paid = i.payments.reduce((pAcc: number, p: any) => pAcc + p.amount, 0);
+            let balance = i.total - paid;
+            if (i.firstPaymentPercentage && i.firstPaymentPercentage > 0 && i.firstPaymentPercentage < 100) {
+                const firstPaymentAmount = i.total * (i.firstPaymentPercentage / 100);
+                if (paid < firstPaymentAmount) {
+                    balance = firstPaymentAmount - paid;
+                }
+            }
+            return acc + balance;
+        }, 0);
 
     // Combine activities
     const activities = [

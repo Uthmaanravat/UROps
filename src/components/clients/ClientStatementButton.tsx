@@ -40,7 +40,13 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
             unpaidInvoices.forEach((i: any) => {
                 const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
-                const outstanding = i.total - paid
+                let outstanding = i.total - paid
+                if (i.firstPaymentPercentage && i.firstPaymentPercentage > 0 && i.firstPaymentPercentage < 100) {
+                    const firstPaymentAmount = i.total * (i.firstPaymentPercentage / 100);
+                    if (paid < firstPaymentAmount) {
+                        outstanding = firstPaymentAmount - paid;
+                    }
+                }
                 if (outstanding > 0.01) {
                     totalDue += outstanding
                 }
@@ -147,7 +153,13 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             let processedTotalDue = 0; // Using processedTotalDue to verify calculation matches
             unpaidInvoices.forEach((i: any) => {
                 const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
-                const outstanding = i.total - paid
+                let outstanding = i.total - paid
+                if (i.firstPaymentPercentage && i.firstPaymentPercentage > 0 && i.firstPaymentPercentage < 100) {
+                    const firstPaymentAmount = i.total * (i.firstPaymentPercentage / 100);
+                    if (paid < firstPaymentAmount) {
+                        outstanding = firstPaymentAmount - paid;
+                    }
+                }
 
                 if (outstanding > 0.01) {
                     processedTotalDue += outstanding
@@ -220,7 +232,13 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             )
             unpaidInvoices.forEach((i: any) => {
                 const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
-                const outstanding = i.total - paid
+                let outstanding = i.total - paid
+                if (i.firstPaymentPercentage && i.firstPaymentPercentage > 0 && i.firstPaymentPercentage < 100) {
+                    const firstPaymentAmount = i.total * (i.firstPaymentPercentage / 100);
+                    if (paid < firstPaymentAmount) {
+                        outstanding = firstPaymentAmount - paid;
+                    }
+                }
                 if (outstanding > 0.01) {
                     totalDue += outstanding
                 }
@@ -399,7 +417,13 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             currentRow++;
             unpaidInvoices.forEach((i: any) => {
                 const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
-                const outstanding = i.total - paid
+                let outstanding = i.total - paid
+                if (i.firstPaymentPercentage && i.firstPaymentPercentage > 0 && i.firstPaymentPercentage < 100) {
+                    const firstPaymentAmount = i.total * (i.firstPaymentPercentage / 100);
+                    if (paid < firstPaymentAmount) {
+                        outstanding = firstPaymentAmount - paid;
+                    }
+                }
 
                 if (outstanding > 0.01) {
                     processedExcelTotalDue += outstanding

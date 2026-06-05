@@ -40,6 +40,26 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [commercialStatus, setCommercialStatus] = useState<any>(invoice.project?.commercialStatus || "AWAITING_PO");
     const [showStatusOnQuote, setShowStatusOnQuote] = useState(false);
 
+    const [firstPaymentOption, setFirstPaymentOption] = useState<string>(
+        invoice.firstPaymentPercentage ? invoice.firstPaymentPercentage.toString() : "none"
+    );
+    const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>(
+        invoice.firstPaymentPercentage && ![20, 50, 75].includes(invoice.firstPaymentPercentage)
+            ? invoice.firstPaymentPercentage.toString()
+            : ""
+    );
+
+    const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+    const [convertPoNumber, setConvertPoNumber] = useState("");
+    const [convertFirstPaymentOption, setConvertFirstPaymentOption] = useState<string>(
+        invoice.firstPaymentPercentage ? invoice.firstPaymentPercentage.toString() : "none"
+    );
+    const [convertCustomPercentage, setConvertCustomPercentage] = useState<string>(
+        invoice.firstPaymentPercentage && ![20, 50, 75].includes(invoice.firstPaymentPercentage)
+            ? invoice.firstPaymentPercentage.toString()
+            : ""
+    );
+
     const handleAddItem = () => {
         const newItem = {
             id: `new-${Date.now()}`,
@@ -168,8 +188,20 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
 
         // Handle Project/Site/Ref/QuoteNumber updates
-        if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0]) {
-            promises.push(updateInvoiceDetailsAction(invoice.id, { site, reference, quoteNumber, date }));
+        let finalPct: number | null = null;
+        if (firstPaymentOption === "20") finalPct = 20;
+        else if (firstPaymentOption === "50") finalPct = 50;
+        else if (firstPaymentOption === "75") finalPct = 75;
+        else if (firstPaymentOption === "custom") {
+            const parsed = parseFloat(customFirstPaymentPercentage);
+            if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                finalPct = parsed;
+            }
+        }
+
+        const dbPct = invoice.firstPaymentPercentage;
+        if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct) {
+            promises.push(updateInvoiceDetailsAction(invoice.id, { site, reference, quoteNumber, date, firstPaymentPercentage: finalPct }));
         }
 
         if (promises.length > 0) {
@@ -492,6 +524,22 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.text(`TOTAL DUE:`, 140, currentY + 14);
         doc.text(formatCurrency(invoice.total, currencySymbol), 196, currentY + 14, { align: 'right' });
 
+        if (invoice.firstPaymentPercentage && invoice.firstPaymentPercentage > 0 && invoice.firstPaymentPercentage < 100) {
+            currentY += 6;
+            doc.setFontSize(9.5);
+            doc.setTextColor(16, 185, 129); // Emerald-500
+            doc.setFont("helvetica", "bold");
+            doc.text(`First Payment (${invoice.firstPaymentPercentage}%):`, 140, currentY + 14);
+            doc.text(formatCurrency(invoice.total * (invoice.firstPaymentPercentage / 100), currencySymbol), 196, currentY + 14, { align: 'right' });
+
+            currentY += 5;
+            doc.setFontSize(8.5);
+            doc.setTextColor(100, 116, 139); // Slate-500
+            doc.setFont("helvetica", "normal");
+            doc.text(`Remaining Balance (${100 - invoice.firstPaymentPercentage}%):`, 140, currentY + 14);
+            doc.text(formatCurrency(invoice.total * ((100 - invoice.firstPaymentPercentage) / 100), currencySymbol), 196, currentY + 14, { align: 'right' });
+        }
+
         // 5. Notes & Banking (Professional Footer)
         currentY += 28;
 
@@ -738,6 +786,28 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             totalRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
             totalRow.getCell(7).alignment = { horizontal: 'right' };
 
+            if (invoice.firstPaymentPercentage && invoice.firstPaymentPercentage > 0 && invoice.firstPaymentPercentage < 100) {
+                currentRow++;
+                const depRow = worksheet.getRow(currentRow);
+                depRow.getCell(6).value = `First Payment (${invoice.firstPaymentPercentage}%)`;
+                depRow.getCell(6).font = { bold: true, size: 10, color: { argb: 'FF10B981' } };
+                depRow.getCell(6).alignment = { horizontal: 'right' };
+                depRow.getCell(7).value = total * (invoice.firstPaymentPercentage / 100);
+                depRow.getCell(7).font = { bold: true, size: 10, color: { argb: 'FF10B981' } };
+                depRow.getCell(7).numFmt = '"R"#,##0.00';
+                depRow.getCell(7).alignment = { horizontal: 'right' };
+
+                currentRow++;
+                const remRow = worksheet.getRow(currentRow);
+                remRow.getCell(6).value = `Remaining Balance (${100 - invoice.firstPaymentPercentage}%)`;
+                remRow.getCell(6).font = { size: 9, color: { argb: 'FF64748B' } };
+                remRow.getCell(6).alignment = { horizontal: 'right' };
+                remRow.getCell(7).value = total * ((100 - invoice.firstPaymentPercentage) / 100);
+                remRow.getCell(7).font = { size: 9, color: { argb: 'FF64748B' } };
+                remRow.getCell(7).numFmt = '"R"#,##0.00';
+                remRow.getCell(7).alignment = { horizontal: 'right' };
+            }
+
             // 8. Footer (Banking & Notes)
             currentRow += 2;
             worksheet.getCell(`A${currentRow}`).value = 'BANKING DETAILS';
@@ -771,15 +841,30 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
     };
 
-    const handleConvert = async () => {
-        const poNumber = prompt("Please enter the Client PO Number (Optional):");
-        if (poNumber === null) return;
-
-        if (!confirm("Convert this Quote to an Invoice?")) return;
+    const executeConvert = async () => {
+        setIsConvertDialogOpen(false);
         setLoading(true);
-        await convertToInvoiceAction(invoice.id, poNumber);
-        setLoading(false);
-        router.refresh();
+
+        let finalPct: number | undefined = undefined;
+        if (convertFirstPaymentOption === "20") finalPct = 20;
+        else if (convertFirstPaymentOption === "50") finalPct = 50;
+        else if (convertFirstPaymentOption === "75") finalPct = 75;
+        else if (convertFirstPaymentOption === "custom") {
+            const parsed = parseFloat(convertCustomPercentage);
+            if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                finalPct = parsed;
+            }
+        }
+
+        try {
+            await convertToInvoiceAction(invoice.id, convertPoNumber || undefined, finalPct);
+        } catch (error) {
+            console.error(error);
+            alert("Failed to convert quotation.");
+        } finally {
+            setLoading(false);
+            router.refresh();
+        }
     }
 
     const handlePayment = async () => {
@@ -882,9 +967,69 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     {/* Status & Management Actions */}
                     <div className="flex gap-2">
                         {invoice.type === 'QUOTE' && invoice.status !== 'INVOICED' && (
-                            <Button onClick={handleConvert} disabled={loading} variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl">
-                                <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
-                            </Button>
+                            <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button disabled={loading} variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl">
+                                        <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="bg-[#0f0f1a]/95 border border-white/10 text-white sm:max-w-[425px] backdrop-blur-xl">
+                                    <DialogHeader>
+                                        <DialogTitle className="text-xl font-black uppercase tracking-wider text-primary">Convert Quotation</DialogTitle>
+                                        <DialogDescription className="text-gray-400">
+                                            Generate an official Tax Invoice from this quotation.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="grid gap-6 py-6">
+                                        <div className="space-y-3">
+                                            <Label htmlFor="poNumber" className="text-[10px] font-black uppercase tracking-widest text-primary">Client PO Number (Optional)</Label>
+                                            <Input
+                                                id="poNumber"
+                                                placeholder="e.g. PO-12345"
+                                                value={convertPoNumber}
+                                                onChange={(e) => setConvertPoNumber(e.target.value)}
+                                                className="bg-white/5 border-white/10 text-white h-11 focus:border-primary"
+                                            />
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label htmlFor="convertDeposit" className="text-[10px] font-black uppercase tracking-widest text-primary">First Payment Option</Label>
+                                            <select
+                                                id="convertDeposit"
+                                                value={convertFirstPaymentOption}
+                                                onChange={(e) => setConvertFirstPaymentOption(e.target.value)}
+                                                className="flex h-11 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-primary font-bold"
+                                            >
+                                                <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
+                                                <option value="20" className="bg-[#1E293B]">20% Deposit</option>
+                                                <option value="50" className="bg-[#1E293B]">50% Deposit</option>
+                                                <option value="75" className="bg-[#1E293B]">75% Deposit</option>
+                                                <option value="custom" className="bg-[#1E293B]">Custom Percentage</option>
+                                            </select>
+                                        </div>
+                                        {convertFirstPaymentOption === "custom" && (
+                                            <div className="space-y-3">
+                                                <Label htmlFor="customConvertPct" className="text-[10px] font-black uppercase tracking-widest text-primary">Custom Deposit Percentage (%)</Label>
+                                                <Input
+                                                    id="customConvertPct"
+                                                    type="number"
+                                                    min="1"
+                                                    max="99"
+                                                    placeholder="e.g. 40"
+                                                    value={convertCustomPercentage}
+                                                    onChange={(e) => setConvertCustomPercentage(e.target.value)}
+                                                    className="bg-white/5 border-white/10 text-white h-11 focus:border-primary"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="ghost" onClick={() => setIsConvertDialogOpen(false)} className="text-gray-400">Cancel</Button>
+                                        <Button onClick={executeConvert} disabled={loading} className="bg-primary text-primary-foreground font-black px-8">
+                                            Generate Tax Invoice
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
                         )}
                         {!isPaid && (
                             <Button
@@ -1080,7 +1225,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
-                            <div className="flex justify-between items-center text-xs pb-1 transition-all group-hover:border-primary/20">
+                            <div className="flex justify-between items-center text-xs pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Reference</span>
                                 <input
                                     value={reference}
@@ -1091,6 +1236,37 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
+                            <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1.5 pb-1.5 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Deposit Option</span>
+                                <select
+                                    value={firstPaymentOption}
+                                    onChange={(e) => setFirstPaymentOption(e.target.value)}
+                                    onBlur={saveChanges}
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer font-bold"
+                                    disabled={invoice.status === 'PAID'}
+                                >
+                                    <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
+                                    <option value="20" className="bg-[#1E293B]">20% Deposit</option>
+                                    <option value="50" className="bg-[#1E293B]">50% Deposit</option>
+                                    <option value="75" className="bg-[#1E293B]">75% Deposit</option>
+                                    <option value="custom" className="bg-[#1E293B]">Custom %</option>
+                                </select>
+                            </div>
+                            {firstPaymentOption === "custom" && (
+                                <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1.5 pb-1 transition-all group-hover:border-primary/20">
+                                    <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Custom Deposit %</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="99"
+                                        value={customFirstPaymentPercentage}
+                                        onChange={(e) => setCustomFirstPaymentPercentage(e.target.value)}
+                                        onBlur={saveChanges}
+                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-16"
+                                        disabled={invoice.status === 'PAID'}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -1365,9 +1541,38 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             </div>
                             <div className="h-px bg-white/10 my-3" />
                             <div className="flex justify-between items-center">
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Balance Due</span>
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Total Amount</span>
                                 <span className="text-3xl md:text-4xl font-black text-white tracking-tighter">{formatCurrency(total, currencySymbol)}</span>
                             </div>
+                            {(() => {
+                                let pct: number | undefined = undefined;
+                                if (firstPaymentOption === "20") pct = 20;
+                                else if (firstPaymentOption === "50") pct = 50;
+                                else if (firstPaymentOption === "75") pct = 75;
+                                else if (firstPaymentOption === "custom") {
+                                    const parsed = parseFloat(customFirstPaymentPercentage);
+                                    if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                                        pct = parsed;
+                                    }
+                                }
+
+                                if (pct && pct > 0 && pct < 100) {
+                                    return (
+                                        <>
+                                            <div className="h-px bg-white/10 my-3" />
+                                            <div className="flex justify-between items-center text-sm md:text-base text-emerald-400 font-bold">
+                                                <span>First Payment ({pct}%)</span>
+                                                <span>{formatCurrency(total * (pct / 100), currencySymbol)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm md:text-base text-gray-400 font-bold">
+                                                <span>Remaining Balance ({100 - pct}%)</span>
+                                                <span>{formatCurrency(total * ((100 - pct) / 100), currencySymbol)}</span>
+                                            </div>
+                                        </>
+                                    )
+                                }
+                                return null;
+                            })()}
                         </div>
                     </div>
                 </div>
