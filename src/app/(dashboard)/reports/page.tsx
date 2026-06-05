@@ -4,7 +4,6 @@ import { ensureAuth } from "@/lib/auth-actions";
 import { ReportsList } from "./ReportsList";
 import { redirect } from "next/navigation";
 import React from "react";
-import { Button } from "@/components/ui/button";
 
 
 
@@ -50,7 +49,7 @@ export default async function ReportsPage() {
           <h1 className="text-2xl font-bold text-red-600 dark:text-red-400">Reports Error</h1>
           <p className="text-muted-foreground text-sm">Unable to load reports data at this time.</p>
           <div className="flex gap-2 justify-center mt-4">
-            <Button onClick={() => window.location.reload()} variant="outline">Retry</Button>
+            <a href="/reports" className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium">Retry</a>
           </div>
         </div>
       </div>
