@@ -127,6 +127,33 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
     const totalExpenses = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
     // Calculate Top 5 Suppliers by Frequency (Dynamic based on timePeriod)
+    // Filter out non-supplier transactions (fees, ATM, bank charges, etc.)
+    const NON_SUPPLIER_KEYWORDS = [
+        'atm', 'withdrawal', 'cash send', 'cash deposit', 'fee', 'fees',
+        'bank charge', 'bank charges', 'service fee', 'monthly fee', 'admin fee',
+        'interest', 'interest paid', 'interest earned', 'interest charge',
+        'debit order', 'debit interest', 'account fee', 'card fee',
+        'transaction fee', 'penalty', 'tax', 'vat', 'sars', 'paye',
+        'transfer to', 'transfer from', 'internal transfer', 'own account',
+        'salary', 'wages', 'payroll', 'commission',
+        'electricity', 'water', 'rates', 'municipal',
+        'insurance', 'premium', 'life cover',
+        'cellphone', 'airtime', 'data bundle',
+        'uber', 'bolt', 'parking', 'toll',
+        'unknown', 'unknown supplier', 'miscellaneous',
+        'cashback', 'refund', 'reversal', 'correction',
+        'ibank', 'internet banking', 'app payment',
+        '#', 'charge', 'levy', 'assessment'
+    ];
+
+    const isNonSupplier = (description: string): boolean => {
+        const lower = description.toLowerCase().trim();
+        if (lower.length <= 3) return true; // Too short to be a real supplier name
+        return NON_SUPPLIER_KEYWORDS.some(keyword => 
+            lower.includes(keyword) || lower === keyword
+        );
+    };
+
     const expenseTransactions = filteredTransactions.filter(t => t.type === 'EXPENSE');
     const supplierSpendMap: { [key: string]: { totalSpend: number; transactionCount: number; categoryDistribution: { [cat: string]: number }; transactions: any[] } } = {};
     
@@ -134,6 +161,10 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
     let totalTransactionCount = 0;
     expenseTransactions.forEach((t: any) => {
         const name = t.description.trim() || 'Unknown Supplier';
+        
+        // Skip non-supplier transactions
+        if (isNonSupplier(name)) return;
+
         if (!supplierSpendMap[name]) {
             supplierSpendMap[name] = { totalSpend: 0, transactionCount: 0, categoryDistribution: {}, transactions: [] };
         }
