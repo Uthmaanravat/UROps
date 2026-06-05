@@ -495,10 +495,32 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
         const finalY = (doc as any).lastAutoTable.finalY + 12;
 
-        // Check if footer components will fit on current page
+        // Define page height for later calculations
         const pageHeight = doc.internal.pageSize.getHeight();
         let currentY = finalY;
+        if (invoice.paymentNotes) {
+            const notesLines = doc.splitTextToSize(invoice.paymentNotes, 180);
+            const notesHeight = (notesLines.length * 4.5) + 10;
+            // Ensure we have space on the page
+            if (currentY + notesHeight > pageHeight - 15) {
+                doc.addPage();
+                currentY = 25;
+            }
+            doc.setFontSize(8.5);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(20, 20, 30);
+            doc.text("PAYMENT NOTES", 14, currentY);
+            doc.setDrawColor(163, 230, 53); // Lime separator
+            doc.line(14, currentY + 2, 40, currentY + 2);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(71, 85, 105);
+            doc.text(notesLines, 14, currentY + 8);
+            currentY += notesHeight + 5;
+        }
 
+        // 4. Summary (Standard Style) – continue using currentY
+        // pageHeight already defined above
+        // Check if footer components will fit on current page
         if (currentY + 25 > pageHeight - 15) {
             doc.addPage();
             currentY = 25; // Reset to top of new page
@@ -1000,15 +1022,15 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 className="flex h-11 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-primary font-bold"
                                             >
                                                 <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
-                                                <option value="20" className="bg-[#1E293B]">20% Deposit</option>
-                                                <option value="50" className="bg-[#1E293B]">50% Deposit</option>
-                                                <option value="75" className="bg-[#1E293B]">75% Deposit</option>
+                                                <option value="20" className="bg-[#1E293B]">20% Partial Payment</option>
+                                                <option value="50" className="bg-[#1E293B]">50% Partial Payment</option>
+                                                <option value="75" className="bg-[#1E293B]">75% Partial Payment</option>
                                                 <option value="custom" className="bg-[#1E293B]">Custom Percentage</option>
                                             </select>
                                         </div>
                                         {convertFirstPaymentOption === "custom" && (
                                             <div className="space-y-3">
-                                                <Label htmlFor="customConvertPct" className="text-[10px] font-black uppercase tracking-widest text-primary">Custom Deposit Percentage (%)</Label>
+                                                <Label htmlFor="customConvertPct" className="text-[10px] font-black uppercase tracking-widest text-primary">Custom Partial Payment Percentage (%)</Label>
                                                 <Input
                                                     id="customConvertPct"
                                                     type="number"
@@ -1237,7 +1259,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 />
                             </div>
                             <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1.5 pb-1.5 transition-all group-hover:border-primary/20">
-                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Deposit Option</span>
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Partial Payment Option</span>
                                 <select
                                     value={firstPaymentOption}
                                     onChange={(e) => setFirstPaymentOption(e.target.value)}
@@ -1246,15 +1268,15 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     disabled={invoice.status === 'PAID'}
                                 >
                                     <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
-                                    <option value="20" className="bg-[#1E293B]">20% Deposit</option>
-                                    <option value="50" className="bg-[#1E293B]">50% Deposit</option>
-                                    <option value="75" className="bg-[#1E293B]">75% Deposit</option>
+                                    <option value="20" className="bg-[#1E293B]">20% Partial Payment</option>
+                                    <option value="50" className="bg-[#1E293B]">50% Partial Payment</option>
+                                    <option value="75" className="bg-[#1E293B]">75% Partial Payment</option>
                                     <option value="custom" className="bg-[#1E293B]">Custom %</option>
                                 </select>
                             </div>
                             {firstPaymentOption === "custom" && (
                                 <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1.5 pb-1 transition-all group-hover:border-primary/20">
-                                    <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Custom Deposit %</span>
+                                    <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Custom Partial Payment %</span>
                                     <input
                                         type="number"
                                         min="1"

@@ -57,13 +57,13 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         if (val === "none") {
             setPaymentNotes("");
         } else if (val === "20") {
-            setPaymentNotes("20% deposit required before project commences.");
+            setPaymentNotes("20% partial payment required before project commences.");
         } else if (val === "50") {
-            setPaymentNotes("50% deposit required before project commences.");
+            setPaymentNotes("50% partial payment required before project commences.");
         } else if (val === "75") {
-            setPaymentNotes("75% deposit required before project commences.");
+            setPaymentNotes("75% partial payment required before project commences.");
         } else if (val === "custom") {
-            setPaymentNotes("50% deposit required before project commences.");
+            setPaymentNotes("50% partial payment required before project commences.");
             setCustomFirstPaymentPercentage("50");
         }
     };
@@ -72,7 +72,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         setCustomFirstPaymentPercentage(pct);
         const parsed = parseFloat(pct);
         if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
-            setPaymentNotes(`${parsed}% deposit required before project commences.`);
+            setPaymentNotes(`${parsed}% partial payment required before project commences.`);
         }
     };
 
@@ -556,16 +556,16 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 <div className="space-y-4 border-t pt-4">
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                            <Label>First Payment / Deposit Option</Label>
+                            <Label>Partial Payment Option</Label>
                             <select
                                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 value={firstPaymentOption}
                                 onChange={(e) => handleFirstPaymentOptionChange(e.target.value)}
                             >
                                 <option value="none">Full Payment (100%)</option>
-                                <option value="20">20% Deposit</option>
-                                <option value="50">50% Deposit</option>
-                                <option value="75">75% Deposit</option>
+                                <option value="20">20% Partial Payment</option>
+                                <option value="50">50% Partial Payment</option>
+                                <option value="75">75% Partial Payment</option>
                                 <option value="custom">Custom Percentage</option>
                             </select>
                         </div>
@@ -601,7 +601,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         <Textarea
                             value={paymentNotes}
                             onChange={(e) => setPaymentNotes(e.target.value)}
-                            placeholder="e.g. 50% DEPOSIT REQUIRED BEFORE PROJECT COMMENCES."
+                            placeholder="e.g. 50% PARTIAL PAYMENT REQUIRED BEFORE PROJECT COMMENCES."
                             rows={2}
                             className="bg-transparent border-white/10 font-medium text-xs leading-relaxed"
                         />

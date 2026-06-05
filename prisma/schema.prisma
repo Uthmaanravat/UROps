@@ -336,6 +336,9 @@ model Report {
   company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   type        String       @default("BASIC")
   metadata    Json?
+  coverImage  String?      // Optional hero/cover image (URL or base64)
+  selectedSections Json?   // Array of section identifiers (e.g., ["overview","progress","safety"])
+  sectionOrder Json?       // Ordered list of sections for PDF generation
   items       ReportItem[]
 }
 

@@ -19,7 +19,7 @@ interface ReportsListProps {
     companyId: string
 }
 
-export function ReportsList({ reports, clients, projects, companyId }: ReportsListProps) {
+export function ReportsList({ reports = [], clients = [], projects = [], companyId }: ReportsListProps) {
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState("")
     const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -183,7 +183,7 @@ export function ReportsList({ reports, clients, projects, companyId }: ReportsLi
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded-lg border border-primary/20">
                                             <CalendarIcon className="h-3 w-3" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest">{new Date(report.date).toLocaleDateString('en-GB')}</span>
+                                            <span className="text-[10px] font-black uppercase tracking-widest">{report.date ? new Date(report.date).toLocaleDateString('en-GB') : '-'}</span>
                                         </div>
                                         <Button 
                                             variant="ghost" 

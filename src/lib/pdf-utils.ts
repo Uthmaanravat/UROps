@@ -271,7 +271,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("INSPECTION REPORT", 196, 22, { align: 'right' });
+    doc.text(report.type === "CONSTRUCTION" ? "CONSTRUCTION REPORT" : "INSPECTION REPORT", 196, 22, { align: 'right' });
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -282,12 +282,15 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.text("DATE:", rightInfoX, 34);
     doc.text(new Date(report.date).toLocaleDateString('en-GB'), rightInfoX + 25, 34);
     
-    doc.text("INSPECTED BY:", rightInfoX, 39);
+    doc.text(report.type === "CONSTRUCTION" ? "CONTRACTOR:" : "INSPECTED BY:", rightInfoX, 39);
     doc.text(company.name, rightInfoX + 25, 39);
     
-    if (metadata.pilotName) {
+    if (metadata.pilotName && report.type === "ADVANCED") {
         doc.text("PILOT:", rightInfoX, 44);
         doc.text(metadata.pilotName, rightInfoX + 25, 44);
+    } else if (metadata.inspectorName && report.type === "CONSTRUCTION") {
+        doc.text("INSPECTOR:", rightInfoX, 44);
+        doc.text(metadata.inspectorName, rightInfoX + 25, 44);
     }
 
     // Divider
@@ -296,19 +299,36 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     
     let currentY = 54;
 
-    // 2. Property Info & Photo
+    // We will calculate Property Box height based on fields
+    const propFields = [
+        { label: "Property Address:", val1: metadata.propertyAddress || report.site || "" },
+        { label: "Property Type:", val1: metadata.propertyType || "" },
+        { label: "Client / Contact:", val1: report.client?.name || "", val2: report.client?.email },
+        { label: report.type === "CONSTRUCTION" ? "Phase / Type:" : "Inspection Type:", val1: (report.type === "CONSTRUCTION" ? metadata.projectPhase : metadata.inspectionType) || "" },
+        { label: "Weather Conditions:", val1: metadata.weather || "" }
+    ].filter(f => f.val1 || f.val2);
+
+    if (metadata.customFields && Array.isArray(metadata.customFields)) {
+        metadata.customFields.forEach((cf: any) => {
+            if (cf.key && cf.value) propFields.push({ label: cf.key + ":", val1: cf.value });
+        });
+    }
+
+    // Rough calculation of box height: each field takes ~9 units
+    const calculatedPropBoxHeight = Math.max(65, 10 + (propFields.length * 9));
+
     // Dark Blue Box for Property Info Title
     doc.setFillColor(15, 23, 42);
     doc.roundedRect(14, currentY, 65, 8, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("PROPERTY INFORMATION", 18, currentY + 5.5);
+    doc.text(report.type === "CONSTRUCTION" ? "SITE INFORMATION" : "PROPERTY INFORMATION", 18, currentY + 5.5);
     
     // Box for property details
     doc.setDrawColor(226, 232, 240);
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(14, currentY + 8, 65, 65, 2, 2, 'FD');
+    doc.roundedRect(14, currentY + 8, 65, calculatedPropBoxHeight, 2, 2, 'FD');
     
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(8);
@@ -330,12 +350,8 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         doc.line(18, propY + 1, 75, propY + 1);
         propY += 5;
     };
-    
-    addPropField("Property Address:", metadata.propertyAddress || report.site || "");
-    addPropField("Property Type:", metadata.propertyType || "");
-    addPropField("Client / Contact:", report.client?.name || "", report.client?.email);
-    addPropField("Inspection Type:", metadata.inspectionType || "");
-    addPropField("Weather Conditions:", metadata.weather || "");
+
+    propFields.forEach(f => addPropField(f.label, f.val1, f.val2));
 
     // Large property overview photo
     if (metadata.propertyImage) {
@@ -358,7 +374,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         doc.setTextColor(148, 163, 184);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
-        doc.text("PROPERTY OVERVIEW IMAGE", 140, currentY + 28, { align: 'center' });
+        doc.text("OVERVIEW IMAGE", 140, currentY + 28, { align: 'center' });
     }
 
     // Icons Bar
@@ -366,29 +382,23 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.setFillColor(248, 250, 252);
     doc.roundedRect(84, currentY + 58, 112, 15, 2, 2, 'FD');
     
-    // Columns: Date, Drone, Images, Flight Time
+    // Columns: Date, Drone/Equip, Images, Flight Time
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(7);
     
     const iconBaseY = currentY + 63;
     
-    // Format weather
-    let weatherString = metadata.weather || "";
-    if (!isNaN(Number(weatherString)) && weatherString.trim() !== "") {
-        weatherString += "°C";
-    }
-    
     // Col 1
     doc.setFont("helvetica", "bold");
-    doc.text("INSPECTION DATE", 92, iconBaseY);
+    doc.text(report.type === "CONSTRUCTION" ? "REPORT DATE" : "INSPECTION DATE", 92, iconBaseY);
     doc.setFont("helvetica", "normal");
     doc.text(new Date(report.date).toLocaleDateString('en-GB'), 92, iconBaseY + 5);
     
     // Col 2
     doc.setFont("helvetica", "bold");
-    doc.text("EQUIPMENT USED", 120, iconBaseY);
+    doc.text(report.type === "CONSTRUCTION" ? "INSPECTOR/REP" : "EQUIPMENT USED", 120, iconBaseY);
     doc.setFont("helvetica", "normal");
-    doc.text(metadata.equipmentUsed || "-", 120, iconBaseY + 5);
+    doc.text((report.type === "CONSTRUCTION" ? metadata.inspectorName : metadata.equipmentUsed) || "-", 120, iconBaseY + 5);
     
     // Col 3
     doc.setFont("helvetica", "bold");
@@ -396,19 +406,24 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text((metadata.totalImages || "-").toString(), 150, iconBaseY + 6);
+    const imgCount = report.items.filter((i:any) => i.imageUrl).length || metadata.totalImages || 0;
+    doc.text(imgCount.toString(), 150, iconBaseY + 6);
     doc.setFontSize(7);
     
     // Col 4
     doc.setFont("helvetica", "bold");
-    doc.text("FLIGHT TIME", 175, iconBaseY);
+    doc.text(report.type === "CONSTRUCTION" ? "PHASE" : "FLIGHT TIME", 175, iconBaseY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text(metadata.flightTime ? `${metadata.flightTime} min` : "-", 175, iconBaseY + 6);
+    if (report.type === "CONSTRUCTION") {
+        doc.text(metadata.projectPhase || "-", 175, iconBaseY + 6);
+    } else {
+        doc.text(metadata.flightTime ? `${metadata.flightTime} min` : "-", 175, iconBaseY + 6);
+    }
     doc.setFontSize(7);
 
-    currentY += 80;
+    currentY += Math.max(80, calculatedPropBoxHeight + 15);
 
     // 3. Executive Summary & Key Findings
     // Exec Summary Box

@@ -27,7 +27,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
     const [isSavingConclusion, setIsSavingConclusion] = useState(false)
     const [conclusion, setConclusion] = useState(report.conclusion || "")
     const [reportType, setReportType] = useState(report.type || "BASIC")
-    const [metadata, setMetadata] = useState<any>(report.metadata || {})
+    const [metadata, setMetadata] = useState<any>(report.metadata || { customFields: [] })
     
     // New Item Form State
     const [itemTitle, setItemTitle] = useState("")
@@ -226,8 +226,12 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
             )}
 
             {/* Advanced Settings */}
-            {reportType === "ADVANCED" && (
+            {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (
                 <Card className="bg-card border-white/5 shadow-inner p-4 rounded-2xl grid md:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-300">
+                    <div className="col-span-full mb-2 border-b border-white/5 pb-2">
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary">Cover Page Information</h3>
+                        <p className="text-[10px] text-muted-foreground">Add fields that will appear on the report&apos;s front page.</p>
+                    </div>
                     <div className="space-y-2">
                         <Label className="text-[10px] font-black uppercase text-muted-foreground">Property Address</Label>
                         <Input value={metadata.propertyAddress || ""} onChange={e => setMetadata({...metadata, propertyAddress: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. 12 Greenway Close" />
@@ -244,21 +248,89 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                         <Label className="text-[10px] font-black uppercase text-muted-foreground">Weather Conditions</Label>
                         <Input value={metadata.weather || ""} onChange={e => setMetadata({...metadata, weather: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Clear, 18°C" />
                     </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Equipment Used</Label>
-                        <Input value={metadata.equipmentUsed || ""} onChange={e => setMetadata({...metadata, equipmentUsed: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. DJI Mavic 3" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Total Images</Label>
-                        <Input type="number" value={metadata.totalImages || ""} onChange={e => setMetadata({...metadata, totalImages: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 87" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Flight Time (min)</Label>
-                        <Input type="number" value={metadata.flightTime || ""} onChange={e => setMetadata({...metadata, flightTime: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 24" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Pilot Name</Label>
-                        <Input value={metadata.pilotName || ""} onChange={e => setMetadata({...metadata, pilotName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
+                    {reportType === "ADVANCED" && (
+                        <>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Equipment Used</Label>
+                                <Input value={metadata.equipmentUsed || ""} onChange={e => setMetadata({...metadata, equipmentUsed: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. DJI Mavic 3" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Total Images</Label>
+                                <Input type="number" value={metadata.totalImages || ""} onChange={e => setMetadata({...metadata, totalImages: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 87" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Flight Time (min)</Label>
+                                <Input type="number" value={metadata.flightTime || ""} onChange={e => setMetadata({...metadata, flightTime: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 24" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Pilot Name</Label>
+                                <Input value={metadata.pilotName || ""} onChange={e => setMetadata({...metadata, pilotName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
+                            </div>
+                        </>
+                    )}
+                    {reportType === "CONSTRUCTION" && (
+                        <>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Inspector Name</Label>
+                                <Input value={metadata.inspectorName || ""} onChange={e => setMetadata({...metadata, inspectorName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Project Phase</Label>
+                                <Input value={metadata.projectPhase || ""} onChange={e => setMetadata({...metadata, projectPhase: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Rough-in" />
+                            </div>
+                        </>
+                    )}
+                    <div className="col-span-full mt-4 border-t border-white/5 pt-4">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground mb-2 block">Custom Info Fields</Label>
+                        <div className="grid gap-2 mb-3">
+                            {(metadata.customFields || []).map((field: any, idx: number) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                    <Input 
+                                        value={field.key} 
+                                        onChange={e => {
+                                            const newFields = [...(metadata.customFields || [])];
+                                            newFields[idx].key = e.target.value;
+                                            setMetadata({...metadata, customFields: newFields});
+                                        }} 
+                                        className="bg-white/5 border-white/10 flex-1 font-bold" 
+                                        placeholder="e.g. Contractor" 
+                                    />
+                                    <Input 
+                                        value={field.value} 
+                                        onChange={e => {
+                                            const newFields = [...(metadata.customFields || [])];
+                                            newFields[idx].value = e.target.value;
+                                            setMetadata({...metadata, customFields: newFields});
+                                        }} 
+                                        className="bg-white/5 border-white/10 flex-[2]" 
+                                        placeholder="e.g. ABC Construction" 
+                                    />
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        onClick={() => {
+                                            const newFields = [...(metadata.customFields || [])];
+                                            newFields.splice(idx, 1);
+                                            setMetadata({...metadata, customFields: newFields});
+                                        }}
+                                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                                const newFields = [...(metadata.customFields || []), { key: '', value: '' }];
+                                setMetadata({...metadata, customFields: newFields});
+                            }}
+                            className="bg-transparent border-white/10 hover:bg-white/5 text-xs font-bold uppercase tracking-widest"
+                        >
+                            <Plus className="mr-2 h-3.5 w-3.5" /> Add Custom Field
+                        </Button>
                     </div>
                     <div className="space-y-2 flex items-center gap-2 col-span-full mt-2">
                         <input 
@@ -272,8 +344,8 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                             Show &quot;Professional Inspection Services&quot; in PDF footer
                         </Label>
                     </div>
-                    <div className="space-y-2 col-span-full">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Property Overview Image</Label>
+                    <div className="space-y-2 col-span-full mt-4 pt-4 border-t border-white/5">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Cover / Overview Image</Label>
                         <div className="flex items-center gap-4">
                             {metadata.propertyImage && (
                                 <img src={metadata.propertyImage} alt="Property Overview" className="h-16 w-16 object-cover rounded-md border border-white/10" />
@@ -349,7 +421,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
-                                        {reportType === "ADVANCED" && (
+                                        {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (
                                             <div className="grid grid-cols-2 gap-4 text-xs font-medium pb-2 border-b border-white/5">
                                                 <div><span className="text-muted-foreground/50 uppercase text-[9px] block">Location</span> {item.location || "-"}</div>
                                                 <div>
@@ -365,7 +437,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                         <p className="text-muted-foreground font-medium leading-relaxed whitespace-pre-wrap">
                                             {item.description}
                                         </p>
-                                        {reportType === "ADVANCED" && item.recommendation && (
+                                        {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && item.recommendation && (
                                             <div className="bg-primary/5 border border-primary/10 rounded p-3 text-xs">
                                                 <span className="text-primary font-bold uppercase tracking-wider text-[10px] block mb-1">Recommendation</span>
                                                 {item.recommendation}
@@ -433,7 +505,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                             className="bg-white/5 border-white/10 uppercase font-black tracking-tight h-12"
                                         />
                                     </div>
-                                    {reportType === "ADVANCED" && (
+                                    {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (
                                         <>
                                             <div className="space-y-2">
                                                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Location</Label>
@@ -573,6 +645,14 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                 className={cn("text-[10px] uppercase font-black tracking-widest", reportType === "ADVANCED" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
                             >
                                 Advanced
+                            </Button>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setReportType("CONSTRUCTION")}
+                                className={cn("text-[10px] uppercase font-black tracking-widest", reportType === "CONSTRUCTION" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+                            >
+                                Construction
                             </Button>
                         </div>
                     </div>
