@@ -28,6 +28,17 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
     const [conclusion, setConclusion] = useState(report.conclusion || "")
     const [reportType, setReportType] = useState(report.type || "BASIC")
     const [metadata, setMetadata] = useState<any>(report.metadata || { customFields: [] })
+    const defaultFieldSettings = {
+        showLocation: true, locationLabel: "Location",
+        showSeverity: true, severityLabel: "Severity",
+        showRecommendation: true, recommendationLabel: "Recommendation",
+    }
+    const [fieldSettings, setFieldSettings] = useState<any>(report.metadata?.fieldSettings || defaultFieldSettings)
+    const updateFieldSettings = (key: string, value: any) => {
+        const updated = { ...fieldSettings, [key]: value }
+        setFieldSettings(updated)
+        setMetadata((prev: any) => ({ ...prev, fieldSettings: updated }))
+    }
     
     // New Item Form State
     const [itemTitle, setItemTitle] = useState("")
@@ -241,8 +252,8 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                         <Input value={metadata.propertyType || ""} onChange={e => setMetadata({...metadata, propertyType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Residential" />
                     </div>
                     <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Inspection Type</Label>
-                        <Input value={metadata.inspectionType || ""} onChange={e => setMetadata({...metadata, inspectionType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Roof Inspection" />
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Report Type</Label>
+                        <Input value={metadata.inspectionType || ""} onChange={e => setMetadata({...metadata, inspectionType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Plumbing Inspection" />
                     </div>
                     <div className="space-y-2">
                         <Label className="text-[10px] font-black uppercase text-muted-foreground">Weather Conditions</Label>
@@ -421,25 +432,29 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
-                                        {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (
+                                        {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (fieldSettings.showLocation || fieldSettings.showSeverity) && (
                                             <div className="grid grid-cols-2 gap-4 text-xs font-medium pb-2 border-b border-white/5">
-                                                <div><span className="text-muted-foreground/50 uppercase text-[9px] block">Location</span> {item.location || "-"}</div>
-                                                <div>
-                                                    <span className="text-muted-foreground/50 uppercase text-[9px] block">Severity</span> 
-                                                    <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", 
-                                                        item.severity === 'HIGH' ? 'bg-red-500/20 text-red-500' : 
-                                                        item.severity === 'MEDIUM' ? 'bg-orange-500/20 text-orange-500' : 
-                                                        'bg-blue-500/20 text-blue-500'
-                                                    )}>{item.severity || "LOW"}</span>
-                                                </div>
+                                                {fieldSettings.showLocation && (
+                                                    <div><span className="text-muted-foreground/50 uppercase text-[9px] block">{fieldSettings.locationLabel || "Location"}</span> {item.location || "-"}</div>
+                                                )}
+                                                {fieldSettings.showSeverity && (
+                                                    <div>
+                                                        <span className="text-muted-foreground/50 uppercase text-[9px] block">{fieldSettings.severityLabel || "Severity"}</span> 
+                                                        <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", 
+                                                            item.severity === 'HIGH' ? 'bg-red-500/20 text-red-500' : 
+                                                            item.severity === 'MEDIUM' ? 'bg-orange-500/20 text-orange-500' : 
+                                                            'bg-blue-500/20 text-blue-500'
+                                                        )}>{item.severity || "LOW"}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                         <p className="text-muted-foreground font-medium leading-relaxed whitespace-pre-wrap">
                                             {item.description}
                                         </p>
-                                        {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && item.recommendation && (
+                                        {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && fieldSettings.showRecommendation && item.recommendation && (
                                             <div className="bg-primary/5 border border-primary/10 rounded p-3 text-xs">
-                                                <span className="text-primary font-bold uppercase tracking-wider text-[10px] block mb-1">Recommendation</span>
+                                                <span className="text-primary font-bold uppercase tracking-wider text-[10px] block mb-1">{fieldSettings.recommendationLabel || "Recommendation"}</span>
                                                 {item.recommendation}
                                             </div>
                                         )}
@@ -657,7 +672,52 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-6 space-y-4">
+                <CardContent className="p-6 space-y-6">
+                    {/* Field Visibility & Labels — only shown for Advanced/Construction */}
+                    {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (
+                        <div className="border border-white/5 rounded-xl p-4 space-y-4 bg-white/[0.02]">
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Field Visibility &amp; Labels</h4>
+                            <p className="text-[10px] text-muted-foreground -mt-2">Toggle which fields appear on the report and rename their headings.</p>
+                            <div className="grid gap-3">
+                                {/* Location */}
+                                <div className="flex items-center gap-3">
+                                    <input type="checkbox" id="showLocation" checked={fieldSettings.showLocation !== false} onChange={e => updateFieldSettings('showLocation', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary" />
+                                    <Label htmlFor="showLocation" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Location</Label>
+                                    <Input
+                                        value={fieldSettings.locationLabel || "Location"}
+                                        onChange={e => updateFieldSettings('locationLabel', e.target.value)}
+                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                        placeholder="Heading label..."
+                                        disabled={fieldSettings.showLocation === false}
+                                    />
+                                </div>
+                                {/* Severity */}
+                                <div className="flex items-center gap-3">
+                                    <input type="checkbox" id="showSeverity" checked={fieldSettings.showSeverity !== false} onChange={e => updateFieldSettings('showSeverity', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary" />
+                                    <Label htmlFor="showSeverity" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Severity</Label>
+                                    <Input
+                                        value={fieldSettings.severityLabel || "Severity"}
+                                        onChange={e => updateFieldSettings('severityLabel', e.target.value)}
+                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                        placeholder="Heading label..."
+                                        disabled={fieldSettings.showSeverity === false}
+                                    />
+                                </div>
+                                {/* Recommendation */}
+                                <div className="flex items-center gap-3">
+                                    <input type="checkbox" id="showRecommendation" checked={fieldSettings.showRecommendation !== false} onChange={e => updateFieldSettings('showRecommendation', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary" />
+                                    <Label htmlFor="showRecommendation" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Recommendation</Label>
+                                    <Input
+                                        value={fieldSettings.recommendationLabel || "Recommendation"}
+                                        onChange={e => updateFieldSettings('recommendationLabel', e.target.value)}
+                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                        placeholder="Heading label..."
+                                        disabled={fieldSettings.showRecommendation === false}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     <Textarea
                         placeholder="e.g. All works completed as per scope. Site left clean and tidy. Recommend follow-up inspection in 2 weeks..."
                         value={conclusion}

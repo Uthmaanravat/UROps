@@ -507,13 +507,21 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.rect(14, currentY, 182, 6, 'F');
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(7);
+    const fs = metadata?.fieldSettings || {}
+    const showLocation = fs.showLocation !== false
+    const showSeverity = fs.showSeverity !== false
+    const showRecommendation = fs.showRecommendation !== false
+    const locationLabel = (fs.locationLabel || "LOCATION").toUpperCase()
+    const severityLabel = (fs.severityLabel || "SEVERITY").toUpperCase()
+    const recommendationLabel = (fs.recommendationLabel || "RECOMMENDATION").toUpperCase()
+
     doc.setFont("helvetica", "bold");
     doc.text("ID", 16, currentY + 4);
-    doc.text("LOCATION", 26, currentY + 4);
-    doc.text("ISSUE", 60, currentY + 4);
-    doc.text("SEVERITY", 95, currentY + 4);
+    if (showLocation) doc.text(locationLabel, 26, currentY + 4);
+    doc.text("ISSUE", showLocation ? 60 : 26, currentY + 4);
+    if (showSeverity) doc.text(severityLabel, 95, currentY + 4);
     doc.text("IMAGE", 115, currentY + 4);
-    doc.text("RECOMMENDATION", 155, currentY + 4);
+    if (showRecommendation) doc.text(recommendationLabel, 155, currentY + 4);
     
     currentY += 6;
     
@@ -534,12 +542,13 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
             doc.setTextColor(30, 41, 59);
             doc.setFontSize(7);
             doc.setFont("helvetica", "bold");
+            doc.setFont("helvetica", "bold");
             doc.text("ID", 16, currentY + 4);
-            doc.text("LOCATION", 26, currentY + 4);
-            doc.text("ISSUE", 60, currentY + 4);
-            doc.text("SEVERITY", 95, currentY + 4);
+            if (showLocation) doc.text(locationLabel, 26, currentY + 4);
+            doc.text("ISSUE", showLocation ? 60 : 26, currentY + 4);
+            if (showSeverity) doc.text(severityLabel, 95, currentY + 4);
             doc.text("IMAGE", 115, currentY + 4);
-            doc.text("RECOMMENDATION", 155, currentY + 4);
+            if (showRecommendation) doc.text(recommendationLabel, 155, currentY + 4);
             currentY += 6;
             doc.setFont("helvetica", "normal");
         }
@@ -552,23 +561,27 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         doc.text((i + 1).toString(), 16, currentY + 5);
         
         doc.setFontSize(7);
-        const locLines = doc.splitTextToSize(item.location || "-", 30);
-        doc.text(locLines, 26, currentY + 5);
+        if (showLocation) {
+            const locLines = doc.splitTextToSize(item.location || "-", 30);
+            doc.text(locLines, 26, currentY + 5);
+        }
         
         doc.setFont("helvetica", "normal");
-        const issueLines = doc.splitTextToSize(item.description || "-", 32);
-        doc.text(issueLines, 60, currentY + 5);
+        const issueLines = doc.splitTextToSize(item.description || "-", showLocation ? 32 : 62);
+        doc.text(issueLines, showLocation ? 60 : 26, currentY + 5);
         
         // Severity Badge
-        const sev = item.severity || 'LOW';
-        if (sev === 'HIGH') doc.setFillColor(239, 68, 68);
-        else if (sev === 'MEDIUM') doc.setFillColor(249, 115, 22);
-        else doc.setFillColor(59, 130, 246);
-        doc.roundedRect(95, currentY + 2, 16, 4, 1, 1, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(6);
-        doc.setFont("helvetica", "bold");
-        doc.text(sev, 103, currentY + 5, { align: 'center' });
+        if (showSeverity) {
+            const sev = item.severity || 'LOW';
+            if (sev === 'HIGH') doc.setFillColor(239, 68, 68);
+            else if (sev === 'MEDIUM') doc.setFillColor(249, 115, 22);
+            else doc.setFillColor(59, 130, 246);
+            doc.roundedRect(95, currentY + 2, 16, 4, 1, 1, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(6);
+            doc.setFont("helvetica", "bold");
+            doc.text(sev, 103, currentY + 5, { align: 'center' });
+        }
         
         // Image
         if (item.imageUrl) {
@@ -586,11 +599,13 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         }
         
         // Recommendation
-        doc.setTextColor(30, 41, 59);
-        doc.setFontSize(7);
-        doc.setFont("helvetica", "normal");
-        const recLines = doc.splitTextToSize(item.recommendation || "-", 38);
-        doc.text(recLines, 155, currentY + 5);
+        if (showRecommendation) {
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(7);
+            doc.setFont("helvetica", "normal");
+            const recLines = doc.splitTextToSize(item.recommendation || "-", 38);
+            doc.text(recLines, 155, currentY + 5);
+        }
         
         // Row divider
         doc.setDrawColor(226, 232, 240);
