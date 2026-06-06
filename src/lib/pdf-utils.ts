@@ -86,7 +86,7 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
 }
 
 export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
-    if (report.type === "ADVANCED") {
+    if (report.type === "ADVANCED" || report.type === "CONSTRUCTION") {
         return drawAdvancedReportPdf(doc, company, report);
     }
     
@@ -232,6 +232,7 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
 export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: any) {
     // Advanced Drone Inspection Report Layout
     const metadata = report.metadata || {};
+    const fs = metadata.fieldSettings || {};
     
     // 1. Header Area
     // Top-most solid Navy bar (8mm)
@@ -285,11 +286,16 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.text(report.type === "CONSTRUCTION" ? "CONTRACTOR:" : "INSPECTED BY:", rightInfoX, 39);
     doc.text(company.name, rightInfoX + 25, 39);
     
-    if (metadata.pilotName && report.type === "ADVANCED") {
-        doc.text("PILOT:", rightInfoX, 44);
+    const showPilotName = fs.showPilotName !== false;
+    const showInspectorName = fs.showInspectorName !== false;
+    const pilotNameLabel = fs.pilotNameLabel || "Pilot Name";
+    const inspectorNameLabel = fs.inspectorNameLabel || "Inspector Name";
+
+    if (showPilotName && metadata.pilotName && report.type === "ADVANCED") {
+        doc.text(`${pilotNameLabel.toUpperCase()}:`, rightInfoX, 44);
         doc.text(metadata.pilotName, rightInfoX + 25, 44);
-    } else if (metadata.inspectorName && report.type === "CONSTRUCTION") {
-        doc.text("INSPECTOR:", rightInfoX, 44);
+    } else if (showInspectorName && metadata.inspectorName && report.type === "CONSTRUCTION") {
+        doc.text(`${inspectorNameLabel.toUpperCase()}:`, rightInfoX, 44);
         doc.text(metadata.inspectorName, rightInfoX + 25, 44);
     }
 
@@ -300,13 +306,40 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     let currentY = 54;
 
     // We will calculate Property Box height based on fields
-    const propFields = [
-        { label: "Property Address:", val1: metadata.propertyAddress || report.site || "" },
-        { label: "Property Type:", val1: metadata.propertyType || "" },
-        { label: "Client / Contact:", val1: report.client?.name || "", val2: report.client?.email },
-        { label: report.type === "CONSTRUCTION" ? "Phase / Type:" : "Inspection Type:", val1: (report.type === "CONSTRUCTION" ? metadata.projectPhase : metadata.inspectionType) || "" },
-        { label: "Weather Conditions:", val1: metadata.weather || "" }
-    ].filter(f => f.val1 || f.val2);
+    const showPropertyAddress = fs.showPropertyAddress !== false;
+    const showPropertyType = fs.showPropertyType !== false;
+    const showInspectionType = fs.showInspectionType !== false;
+    const showWeather = fs.showWeather !== false;
+    const showProjectPhase = fs.showProjectPhase !== false;
+
+    const propertyAddressLabel = fs.propertyAddressLabel || "Property Address";
+    const propertyTypeLabel = fs.propertyTypeLabel || "Property Type";
+    const inspectionTypeLabel = fs.inspectionTypeLabel || "Report Type";
+    const weatherLabel = fs.weatherLabel || "Weather Conditions";
+    const projectPhaseLabel = fs.projectPhaseLabel || "Project Phase";
+
+    const propFields = [];
+    if (showPropertyAddress && (metadata.propertyAddress || report.site)) {
+        propFields.push({ label: `${propertyAddressLabel}:`, val1: metadata.propertyAddress || report.site || "" });
+    }
+    if (showPropertyType && metadata.propertyType) {
+        propFields.push({ label: `${propertyTypeLabel}:`, val1: metadata.propertyType });
+    }
+    // Always include Client / Contact
+    propFields.push({ label: "Client / Contact:", val1: report.client?.name || "", val2: report.client?.email });
+    
+    if (report.type === "CONSTRUCTION") {
+        if (showProjectPhase && metadata.projectPhase) {
+            propFields.push({ label: `${projectPhaseLabel}:`, val1: metadata.projectPhase });
+        }
+    } else {
+        if (showInspectionType && metadata.inspectionType) {
+            propFields.push({ label: `${inspectionTypeLabel}:`, val1: metadata.inspectionType });
+        }
+    }
+    if (showWeather && metadata.weather) {
+        propFields.push({ label: `${weatherLabel}:`, val1: metadata.weather });
+    }
 
     if (metadata.customFields && Array.isArray(metadata.customFields)) {
         metadata.customFields.forEach((cf: any) => {
@@ -396,7 +429,10 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     
     // Col 2
     doc.setFont("helvetica", "bold");
-    doc.text(report.type === "CONSTRUCTION" ? "INSPECTOR/REP" : "EQUIPMENT USED", 120, iconBaseY);
+    const col2Label = report.type === "CONSTRUCTION" 
+        ? (fs.inspectorNameLabel || "INSPECTOR") 
+        : (fs.equipmentUsedLabel || "EQUIPMENT USED");
+    doc.text(col2Label.toUpperCase(), 120, iconBaseY);
     doc.setFont("helvetica", "normal");
     doc.text((report.type === "CONSTRUCTION" ? metadata.inspectorName : metadata.equipmentUsed) || "-", 120, iconBaseY + 5);
     
@@ -412,7 +448,10 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     
     // Col 4
     doc.setFont("helvetica", "bold");
-    doc.text(report.type === "CONSTRUCTION" ? "PHASE" : "FLIGHT TIME", 175, iconBaseY);
+    const col4Label = report.type === "CONSTRUCTION" 
+        ? (fs.projectPhaseLabel || "PHASE") 
+        : (fs.flightTimeLabel || "FLIGHT TIME");
+    doc.text(col4Label.toUpperCase(), 175, iconBaseY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
@@ -507,7 +546,6 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.rect(14, currentY, 182, 6, 'F');
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(7);
-    const fs = metadata?.fieldSettings || {}
     const showLocation = fs.showLocation !== false
     const showSeverity = fs.showSeverity !== false
     const showRecommendation = fs.showRecommendation !== false

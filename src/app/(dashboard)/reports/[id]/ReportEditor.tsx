@@ -32,8 +32,20 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
         showLocation: true, locationLabel: "Location",
         showSeverity: true, severityLabel: "Severity",
         showRecommendation: true, recommendationLabel: "Recommendation",
+        showPropertyAddress: true, propertyAddressLabel: "Property Address",
+        showPropertyType: true, propertyTypeLabel: "Property Type",
+        showInspectionType: true, inspectionTypeLabel: "Report Type",
+        showWeather: true, weatherLabel: "Weather Conditions",
+        showPilotName: true, pilotNameLabel: "Pilot Name",
+        showInspectorName: true, inspectorNameLabel: "Inspector Name",
+        showEquipmentUsed: true, equipmentUsedLabel: "Equipment Used",
+        showFlightTime: true, flightTimeLabel: "Flight Time",
+        showProjectPhase: true, projectPhaseLabel: "Project Phase",
     }
-    const [fieldSettings, setFieldSettings] = useState<any>(report.metadata?.fieldSettings || defaultFieldSettings)
+    const [fieldSettings, setFieldSettings] = useState<any>({
+        ...defaultFieldSettings,
+        ...(report.metadata?.fieldSettings || {})
+    })
     const updateFieldSettings = (key: string, value: any) => {
         const updated = { ...fieldSettings, [key]: value }
         setFieldSettings(updated)
@@ -256,54 +268,73 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                         <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary">Cover Page Information</h3>
                         <p className="text-[10px] text-muted-foreground">Add fields that will appear on the report&apos;s front page.</p>
                     </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Property Address</Label>
-                        <Input value={metadata.propertyAddress || ""} onChange={e => setMetadata({...metadata, propertyAddress: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. 12 Greenway Close" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Property Type</Label>
-                        <Input value={metadata.propertyType || ""} onChange={e => setMetadata({...metadata, propertyType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Residential" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Report Type</Label>
-                        <Input value={metadata.inspectionType || ""} onChange={e => setMetadata({...metadata, inspectionType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Plumbing Inspection" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Weather Conditions</Label>
-                        <Input value={metadata.weather || ""} onChange={e => setMetadata({...metadata, weather: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Clear, 18°C" />
-                    </div>
+                    {fieldSettings.showPropertyAddress !== false && (
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.propertyAddressLabel || "Property Address"}</Label>
+                            <Input value={metadata.propertyAddress || ""} onChange={e => setMetadata({...metadata, propertyAddress: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. 12 Greenway Close" />
+                        </div>
+                    )}
+                    {fieldSettings.showPropertyType !== false && (
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.propertyTypeLabel || "Property Type"}</Label>
+                            <Input value={metadata.propertyType || ""} onChange={e => setMetadata({...metadata, propertyType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Residential" />
+                        </div>
+                    )}
+                    {fieldSettings.showInspectionType !== false && (
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.inspectionTypeLabel || "Report Type"}</Label>
+                            <Input value={metadata.inspectionType || ""} onChange={e => setMetadata({...metadata, inspectionType: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Plumbing Inspection" />
+                        </div>
+                    )}
+                    {fieldSettings.showWeather !== false && (
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.weatherLabel || "Weather Conditions"}</Label>
+                            <Input value={metadata.weather || ""} onChange={e => setMetadata({...metadata, weather: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Clear, 18°C" />
+                        </div>
+                    )}
                     {reportType === "ADVANCED" && (
                         <>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Equipment Used</Label>
-                                <Input value={metadata.equipmentUsed || ""} onChange={e => setMetadata({...metadata, equipmentUsed: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. DJI Mavic 3" />
-                            </div>
+                            {fieldSettings.showEquipmentUsed !== false && (
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.equipmentUsedLabel || "Equipment Used"}</Label>
+                                    <Input value={metadata.equipmentUsed || ""} onChange={e => setMetadata({...metadata, equipmentUsed: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. DJI Mavic 3" />
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase text-muted-foreground">Total Images</Label>
                                 <Input type="number" value={metadata.totalImages || ""} onChange={e => setMetadata({...metadata, totalImages: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 87" />
                             </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Flight Time (min)</Label>
-                                <Input type="number" value={metadata.flightTime || ""} onChange={e => setMetadata({...metadata, flightTime: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 24" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Pilot Name</Label>
-                                <Input value={metadata.pilotName || ""} onChange={e => setMetadata({...metadata, pilotName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
-                            </div>
+                            {fieldSettings.showFlightTime !== false && (
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.flightTimeLabel || "Flight Time (min)"}</Label>
+                                    <Input type="number" value={metadata.flightTime || ""} onChange={e => setMetadata({...metadata, flightTime: parseInt(e.target.value) || 0})} className="bg-white/5 border-white/10" placeholder="e.g. 24" />
+                                </div>
+                            )}
+                            {fieldSettings.showPilotName !== false && (
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.pilotNameLabel || "Pilot Name"}</Label>
+                                    <Input value={metadata.pilotName || ""} onChange={e => setMetadata({...metadata, pilotName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
+                                </div>
+                            )}
                         </>
                     )}
                     {reportType === "CONSTRUCTION" && (
                         <>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Inspector Name</Label>
-                                <Input value={metadata.inspectorName || ""} onChange={e => setMetadata({...metadata, inspectorName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-muted-foreground">Project Phase</Label>
-                                <Input value={metadata.projectPhase || ""} onChange={e => setMetadata({...metadata, projectPhase: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Rough-in" />
-                            </div>
+                            {fieldSettings.showInspectorName !== false && (
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.inspectorNameLabel || "Inspector Name"}</Label>
+                                    <Input value={metadata.inspectorName || ""} onChange={e => setMetadata({...metadata, inspectorName: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. John Doe" />
+                                </div>
+                            )}
+                            {fieldSettings.showProjectPhase !== false && (
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">{fieldSettings.projectPhaseLabel || "Project Phase"}</Label>
+                                    <Input value={metadata.projectPhase || ""} onChange={e => setMetadata({...metadata, projectPhase: e.target.value})} className="bg-white/5 border-white/10" placeholder="e.g. Rough-in" />
+                                </div>
+                            )}
                         </>
                     )}
+
                     <div className="col-span-full mt-4 border-t border-white/5 pt-4">
                         <Label className="text-[10px] font-black uppercase text-muted-foreground mb-2 block">Custom Info Fields</Label>
                         <div className="grid gap-2 mb-3">
@@ -691,42 +722,161 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                         <div className="border border-white/5 rounded-xl p-4 space-y-4 bg-white/[0.02]">
                             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Field Visibility &amp; Labels</h4>
                             <p className="text-[10px] text-muted-foreground -mt-2">Toggle which fields appear on the report and rename their headings.</p>
-                            <div className="grid gap-3">
-                                {/* Location */}
-                                <div className="flex items-center gap-3">
-                                    <input type="checkbox" id="showLocation" checked={fieldSettings.showLocation !== false} onChange={e => updateFieldSettings('showLocation', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary" />
-                                    <Label htmlFor="showLocation" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Location</Label>
-                                    <Input
-                                        value={fieldSettings.locationLabel || "Location"}
-                                        onChange={e => updateFieldSettings('locationLabel', e.target.value)}
-                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
-                                        placeholder="Heading label..."
-                                    />
+                            
+                            <div className="grid md:grid-cols-2 gap-6 pt-2">
+                                <div className="space-y-4">
+                                    <h5 className="text-[10px] font-black uppercase tracking-wider text-muted-foreground border-b border-white/5 pb-1">Report Item Fields</h5>
+                                    <div className="space-y-3">
+                                        {/* Location */}
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showLocation" checked={fieldSettings.showLocation !== false} onChange={e => updateFieldSettings('showLocation', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showLocation" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Location</Label>
+                                            <Input
+                                                value={fieldSettings.locationLabel || "Location"}
+                                                onChange={e => updateFieldSettings('locationLabel', e.target.value)}
+                                                className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                placeholder="Heading label..."
+                                            />
+                                        </div>
+                                        {/* Severity */}
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showSeverity" checked={fieldSettings.showSeverity !== false} onChange={e => updateFieldSettings('showSeverity', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showSeverity" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Severity</Label>
+                                            <Input
+                                                value={fieldSettings.severityLabel || "Severity"}
+                                                onChange={e => updateFieldSettings('severityLabel', e.target.value)}
+                                                className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                placeholder="Heading label..."
+                                            />
+                                        </div>
+                                        {/* Recommendation */}
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showRecommendation" checked={fieldSettings.showRecommendation !== false} onChange={e => updateFieldSettings('showRecommendation', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showRecommendation" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Recommendation</Label>
+                                            <Input
+                                                value={fieldSettings.recommendationLabel || "Recommendation"}
+                                                onChange={e => updateFieldSettings('recommendationLabel', e.target.value)}
+                                                className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                placeholder="Heading label..."
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                                {/* Severity */}
-                                <div className="flex items-center gap-3">
-                                    <input type="checkbox" id="showSeverity" checked={fieldSettings.showSeverity !== false} onChange={e => updateFieldSettings('showSeverity', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary" />
-                                    <Label htmlFor="showSeverity" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Severity</Label>
-                                    <Input
-                                        value={fieldSettings.severityLabel || "Severity"}
-                                        onChange={e => updateFieldSettings('severityLabel', e.target.value)}
-                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
-                                        placeholder="Heading label..."
-                                    />
-                                </div>
-                                {/* Recommendation */}
-                                <div className="flex items-center gap-3">
-                                    <input type="checkbox" id="showRecommendation" checked={fieldSettings.showRecommendation !== false} onChange={e => updateFieldSettings('showRecommendation', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary" />
-                                    <Label htmlFor="showRecommendation" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Recommendation</Label>
-                                    <Input
-                                        value={fieldSettings.recommendationLabel || "Recommendation"}
-                                        onChange={e => updateFieldSettings('recommendationLabel', e.target.value)}
-                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
-                                        placeholder="Heading label..."
-                                    />
+
+                                <div className="space-y-4">
+                                    <h5 className="text-[10px] font-black uppercase tracking-wider text-muted-foreground border-b border-white/5 pb-1">Cover Page Fields</h5>
+                                    <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
+                                        {/* Address */}
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showPropertyAddress" checked={fieldSettings.showPropertyAddress !== false} onChange={e => updateFieldSettings('showPropertyAddress', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showPropertyAddress" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Address</Label>
+                                            <Input
+                                                value={fieldSettings.propertyAddressLabel || "Property Address"}
+                                                onChange={e => updateFieldSettings('propertyAddressLabel', e.target.value)}
+                                                className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                placeholder="Address label..."
+                                            />
+                                        </div>
+                                        {/* Property Type */}
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showPropertyType" checked={fieldSettings.showPropertyType !== false} onChange={e => updateFieldSettings('showPropertyType', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showPropertyType" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Prop Type</Label>
+                                            <Input
+                                                value={fieldSettings.propertyTypeLabel || "Property Type"}
+                                                onChange={e => updateFieldSettings('propertyTypeLabel', e.target.value)}
+                                                className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                placeholder="Prop Type label..."
+                                            />
+                                        </div>
+                                        {/* Report Type */}
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showInspectionType" checked={fieldSettings.showInspectionType !== false} onChange={e => updateFieldSettings('showInspectionType', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showInspectionType" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Rep Type</Label>
+                                            <Input
+                                                value={fieldSettings.inspectionTypeLabel || "Report Type"}
+                                                onChange={e => updateFieldSettings('inspectionTypeLabel', e.target.value)}
+                                                className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                placeholder="Report Type label..."
+                                            />
+                                        </div>
+                                        {/* Weather */}
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showWeather" checked={fieldSettings.showWeather !== false} onChange={e => updateFieldSettings('showWeather', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showWeather" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Weather</Label>
+                                            <Input
+                                                value={fieldSettings.weatherLabel || "Weather Conditions"}
+                                                onChange={e => updateFieldSettings('weatherLabel', e.target.value)}
+                                                className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                placeholder="Weather label..."
+                                            />
+                                        </div>
+
+                                        {/* Advanced Specific: Pilot Name, Equipment Used, Flight Time */}
+                                        {reportType === "ADVANCED" && (
+                                            <>
+                                                <div className="flex items-center gap-3">
+                                                    <input type="checkbox" id="showPilotName" checked={fieldSettings.showPilotName !== false} onChange={e => updateFieldSettings('showPilotName', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                                    <Label htmlFor="showPilotName" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Pilot Name</Label>
+                                                    <Input
+                                                        value={fieldSettings.pilotNameLabel || "Pilot Name"}
+                                                        onChange={e => updateFieldSettings('pilotNameLabel', e.target.value)}
+                                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                        placeholder="Pilot label..."
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <input type="checkbox" id="showEquipmentUsed" checked={fieldSettings.showEquipmentUsed !== false} onChange={e => updateFieldSettings('showEquipmentUsed', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                                    <Label htmlFor="showEquipmentUsed" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Equip Used</Label>
+                                                    <Input
+                                                        value={fieldSettings.equipmentUsedLabel || "Equipment Used"}
+                                                        onChange={e => updateFieldSettings('equipmentUsedLabel', e.target.value)}
+                                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                        placeholder="Equipment label..."
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <input type="checkbox" id="showFlightTime" checked={fieldSettings.showFlightTime !== false} onChange={e => updateFieldSettings('showFlightTime', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                                    <Label htmlFor="showFlightTime" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Flight Time</Label>
+                                                    <Input
+                                                        value={fieldSettings.flightTimeLabel || "Flight Time"}
+                                                        onChange={e => updateFieldSettings('flightTimeLabel', e.target.value)}
+                                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                        placeholder="Flight Time label..."
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Construction Specific: Inspector Name, Project Phase */}
+                                        {reportType === "CONSTRUCTION" && (
+                                            <>
+                                                <div className="flex items-center gap-3">
+                                                    <input type="checkbox" id="showInspectorName" checked={fieldSettings.showInspectorName !== false} onChange={e => updateFieldSettings('showInspectorName', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                                    <Label htmlFor="showInspectorName" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Inspector</Label>
+                                                    <Input
+                                                        value={fieldSettings.inspectorNameLabel || "Inspector Name"}
+                                                        onChange={e => updateFieldSettings('inspectorNameLabel', e.target.value)}
+                                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                        placeholder="Inspector label..."
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <input type="checkbox" id="showProjectPhase" checked={fieldSettings.showProjectPhase !== false} onChange={e => updateFieldSettings('showProjectPhase', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                                    <Label htmlFor="showProjectPhase" className="text-xs font-bold text-muted-foreground w-28 cursor-pointer">Show Phase</Label>
+                                                    <Input
+                                                        value={fieldSettings.projectPhaseLabel || "Project Phase"}
+                                                        onChange={e => updateFieldSettings('projectPhaseLabel', e.target.value)}
+                                                        className="bg-white/5 border-white/10 h-8 text-xs flex-1"
+                                                        placeholder="Phase label..."
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex justify-end pt-2">
+
+                            <div className="flex justify-end pt-2 border-t border-white/5">
                                 <Button
                                     onClick={handleSaveSettings}
                                     disabled={isSavingConclusion}
