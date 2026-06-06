@@ -142,11 +142,24 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
         setIsSavingConclusion(true)
         try {
             await updateReportConclusion(report.id, conclusion)
-            await updateReportMetadata(report.id, reportType, metadata)
+            await updateReportMetadata(report.id, reportType, { ...metadata, fieldSettings })
             router.refresh()
         } catch (error) {
             console.error(error)
-            alert("Failed to save conclusion")
+            alert("Failed to save")
+        } finally {
+            setIsSavingConclusion(false)
+        }
+    }
+
+    const handleSaveSettings = async () => {
+        setIsSavingConclusion(true)
+        try {
+            await updateReportMetadata(report.id, reportType, { ...metadata, fieldSettings })
+            router.refresh()
+        } catch (error) {
+            console.error(error)
+            alert("Failed to save settings")
         } finally {
             setIsSavingConclusion(false)
         }
@@ -688,7 +701,6 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                         onChange={e => updateFieldSettings('locationLabel', e.target.value)}
                                         className="bg-white/5 border-white/10 h-8 text-xs flex-1"
                                         placeholder="Heading label..."
-                                        disabled={fieldSettings.showLocation === false}
                                     />
                                 </div>
                                 {/* Severity */}
@@ -700,7 +712,6 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                         onChange={e => updateFieldSettings('severityLabel', e.target.value)}
                                         className="bg-white/5 border-white/10 h-8 text-xs flex-1"
                                         placeholder="Heading label..."
-                                        disabled={fieldSettings.showSeverity === false}
                                     />
                                 </div>
                                 {/* Recommendation */}
@@ -712,9 +723,19 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                         onChange={e => updateFieldSettings('recommendationLabel', e.target.value)}
                                         className="bg-white/5 border-white/10 h-8 text-xs flex-1"
                                         placeholder="Heading label..."
-                                        disabled={fieldSettings.showRecommendation === false}
                                     />
                                 </div>
+                            </div>
+                            <div className="flex justify-end pt-2">
+                                <Button
+                                    onClick={handleSaveSettings}
+                                    disabled={isSavingConclusion}
+                                    size="sm"
+                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase text-[10px] tracking-[0.2em] h-8 px-4 rounded-lg"
+                                >
+                                    {isSavingConclusion ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : null}
+                                    Save Settings
+                                </Button>
                             </div>
                         </div>
                     )}
