@@ -348,9 +348,11 @@ model ReportItem {
   title       String?
   description    String
   imageUrl       String? 
+  imageUrls      String[] @default([])
   location       String?
   severity       String?
   recommendation String?
+  order          Int      @default(0)
   createdAt      DateTime @default(now())
   report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 }

@@ -9,19 +9,30 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
     const companyId = await ensureAuth()
     if (!companyId) redirect('/login')
 
-    const [report, settings] = await Promise.all([
+    const [report, settings, clients, projects] = await Promise.all([
         prisma.report.findUnique({
             where: { id: params.id },
             include: {
                 client: true,
                 project: true,
                 items: {
-                    orderBy: { createdAt: 'asc' }
+                    orderBy: [
+                        { order: 'asc' },
+                        { createdAt: 'asc' }
+                    ]
                 }
             }
         }),
         prisma.companySettings.findUnique({
             where: { companyId }
+        }),
+        prisma.client.findMany({
+            where: { companyId },
+            select: { id: true, name: true }
+        }),
+        prisma.project.findMany({
+            where: { companyId },
+            select: { id: true, name: true, clientId: true }
         })
     ])
 
@@ -39,12 +50,16 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
     }
 
     const serializedReport = JSON.parse(JSON.stringify(report));
-    // Ensure items is an array to avoid undefined issues in client component
     serializedReport.items = serializedReport.items || [];
 
     return (
         <div className="max-w-5xl mx-auto py-6">
-            <ReportEditor report={serializedReport} company={company} />
+            <ReportEditor 
+                report={serializedReport} 
+                company={company} 
+                clients={clients || []} 
+                projects={projects || []} 
+            />
         </div>
     )
 }

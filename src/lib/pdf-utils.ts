@@ -85,12 +85,29 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
     return 48; // Return next Y position
 }
 
+// Helper: collect all images for an item (supports both imageUrl and imageUrls)
+function getItemImages(item: any): string[] {
+    if (item.imageUrls && Array.isArray(item.imageUrls) && item.imageUrls.length > 0) {
+        return item.imageUrls;
+    }
+    if (item.imageUrl) {
+        return [item.imageUrl];
+    }
+    return [];
+}
+
+// Helper: detect image format from base64 data URL
+function getImageFormat(dataUrl: string): string {
+    if (dataUrl.startsWith('data:image/png')) return 'PNG';
+    return 'JPEG';
+}
+
 export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
     if (report.type === "ADVANCED" || report.type === "CONSTRUCTION") {
         return drawAdvancedReportPdf(doc, company, report);
     }
     
-    let currentY = await drawPdfHeader(doc, company, 'SITE / PROGRESS REPORT', `REP-${report.number.toString().padStart(3, '0')}`);
+    let currentY = await drawPdfHeader(doc, company, 'REPORT', `REP-${report.number.toString().padStart(3, '0')}`);
 
     // Report Info Header
     doc.setFontSize(8);
@@ -138,15 +155,15 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
     doc.setDrawColor(226, 232, 240);
     doc.line(14, currentY - 5, 196, currentY - 5);
 
-    // Items (Description + Image)
+    // Items (Description + Images)
     for (const item of report.items) {
-        // Check for page break (Simplified check: if currentY > 240, add new page)
+        // Check for page break
         if (currentY > 240) {
             doc.addPage();
-            currentY = 20; // Start at top of new page
+            currentY = 20;
         }
 
-        // Description
+        // Title
         doc.setFontSize(11);
         doc.setTextColor(30, 41, 59);
         doc.setFont("helvetica", "bold");
@@ -155,6 +172,7 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
             currentY += 6;
         }
 
+        // Description
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(71, 85, 105);
@@ -162,31 +180,48 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
         doc.text(itemDescLines, 14, currentY);
         currentY += (itemDescLines.length * 5) + 5;
 
-        // Image
-        if (item.imageUrl) {
-            try {
-                // Determine image format
-                let format = 'JPEG';
-                if (item.imageUrl.startsWith('data:image/png')) format = 'PNG';
-                
-                // Add image (using width of 120mm as standard)
-                // We'd ideally want to calculate the image aspect ratio, 
-                // but jspdf-autotable or complex image handling might be better.
-                // For now, fixed width and estimated height check.
-                const imgWidth = 120;
-                const imgHeight = 80; // Rough estimate or we can use 0 for auto-scale if we had the natural size
-
-                // Check for page break before image
-                if (currentY + imgHeight > 270) {
-                    doc.addPage();
-                    currentY = 20;
+        // Images - support multiple
+        const images = getItemImages(item);
+        if (images.length > 0) {
+            if (images.length === 1) {
+                // Single image - render large
+                try {
+                    const format = getImageFormat(images[0]);
+                    const imgWidth = 140;
+                    const imgHeight = 95;
+                    if (currentY + imgHeight > 270) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
+                    doc.addImage(images[0], format, 14, currentY, imgWidth, imgHeight, undefined, 'FAST');
+                    currentY += imgHeight + 10;
+                } catch (err) {
+                    console.warn("Failed to add image to PDF", err);
+                    currentY += 5;
                 }
-
-                doc.addImage(item.imageUrl, format, 14, currentY, imgWidth, imgHeight, undefined, 'FAST');
-                currentY += imgHeight + 15;
-            } catch (err) {
-                console.warn("Failed to add image to PDF", err);
-                currentY += 5;
+            } else {
+                // Multiple images - 2 column grid
+                for (let imgIdx = 0; imgIdx < images.length; imgIdx += 2) {
+                    const imgWidth = 88;
+                    const imgHeight = 62;
+                    if (currentY + imgHeight > 270) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
+                    // Left image
+                    try {
+                        const format = getImageFormat(images[imgIdx]);
+                        doc.addImage(images[imgIdx], format, 14, currentY, imgWidth, imgHeight, undefined, 'FAST');
+                    } catch (err) { console.warn("Failed to add image", err); }
+                    // Right image (if exists)
+                    if (imgIdx + 1 < images.length) {
+                        try {
+                            const format = getImageFormat(images[imgIdx + 1]);
+                            doc.addImage(images[imgIdx + 1], format, 106, currentY, imgWidth, imgHeight, undefined, 'FAST');
+                        } catch (err) { console.warn("Failed to add image", err); }
+                    }
+                    currentY += imgHeight + 8;
+                }
             }
         } else {
             currentY += 5;
@@ -194,7 +229,7 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
 
         // Divider between items
         doc.setDrawColor(241, 245, 249);
-        doc.line(14, currentY - 5, 196, currentY - 5);
+        doc.line(14, currentY - 3, 196, currentY - 3);
         currentY += 5;
     }
 
@@ -230,15 +265,12 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
 }
 
 export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: any) {
-    // Advanced Drone Inspection Report Layout
     const metadata = report.metadata || {};
     const fs = metadata.fieldSettings || {};
     
     // 1. Header Area
-    // Top-most solid Navy bar (8mm)
     doc.setFillColor(15, 23, 42);
     doc.rect(0, 0, 210, 8, 'F');
-    // Lime accent line (2mm)
     doc.setFillColor(163, 230, 53);
     doc.rect(0, 8, 210, 2, 'F');
 
@@ -268,11 +300,11 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         doc.text(company.slogan.toUpperCase(), nameX, 32);
     }
 
-    // Right side text
+    // Right side - just "REPORT"
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text(report.type === "CONSTRUCTION" ? "CONSTRUCTION REPORT" : "INSPECTION REPORT", 196, 22, { align: 'right' });
+    doc.text("REPORT", 196, 22, { align: 'right' });
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -283,7 +315,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.text("DATE:", rightInfoX, 34);
     doc.text(new Date(report.date).toLocaleDateString('en-GB'), rightInfoX + 25, 34);
     
-    doc.text(report.type === "CONSTRUCTION" ? "CONTRACTOR:" : "INSPECTED BY:", rightInfoX, 39);
+    doc.text("PREPARED BY:", rightInfoX, 39);
     doc.text(company.name, rightInfoX + 25, 39);
     
     const showPilotName = fs.showPilotName !== false;
@@ -305,7 +337,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     
     let currentY = 54;
 
-    // We will calculate Property Box height based on fields
+    // Property/Site Info Fields
     const showPropertyAddress = fs.showPropertyAddress !== false;
     const showPropertyType = fs.showPropertyType !== false;
     const showInspectionType = fs.showInspectionType !== false;
@@ -318,7 +350,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     const weatherLabel = fs.weatherLabel || "Weather Conditions";
     const projectPhaseLabel = fs.projectPhaseLabel || "Project Phase";
 
-    const propFields = [];
+    const propFields: { label: string; val1: string; val2?: string }[] = [];
     if (showPropertyAddress && (metadata.propertyAddress || report.site)) {
         propFields.push({ label: `${propertyAddressLabel}:`, val1: metadata.propertyAddress || report.site || "" });
     }
@@ -347,16 +379,15 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         });
     }
 
-    // Rough calculation of box height: each field takes ~9 units
-    const calculatedPropBoxHeight = Math.max(65, 10 + (propFields.length * 9));
+    const calculatedPropBoxHeight = Math.max(70, 10 + (propFields.length * 9));
 
-    // Dark Blue Box for Property Info Title
+    // Dark Blue Box for Info Title
     doc.setFillColor(15, 23, 42);
     doc.roundedRect(14, currentY, 65, 8, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text(report.type === "CONSTRUCTION" ? "SITE INFORMATION" : "PROPERTY INFORMATION", 18, currentY + 5.5);
+    doc.text("REPORT INFORMATION", 18, currentY + 5.5);
     
     // Box for property details
     doc.setDrawColor(226, 232, 240);
@@ -386,44 +417,45 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
 
     propFields.forEach(f => addPropField(f.label, f.val1, f.val2));
 
-    // Large property overview photo
+    // Large property overview photo - BIGGER: 70mm height
+    const overviewImgH = 70;
     if (metadata.propertyImage) {
         try {
             let format = 'JPEG';
             if (metadata.propertyImage.startsWith('data:image/png')) format = 'PNG';
-            doc.addImage(metadata.propertyImage, format, 84, currentY, 112, 53, undefined, 'FAST');
+            doc.addImage(metadata.propertyImage, format, 84, currentY, 112, overviewImgH, undefined, 'FAST');
             
             // Subtle border around image
             doc.setDrawColor(226, 232, 240);
-            doc.roundedRect(84, currentY, 112, 53, 2, 2, 'S');
+            doc.roundedRect(84, currentY, 112, overviewImgH, 2, 2, 'S');
         } catch (e) {
             doc.setFillColor(226, 232, 240);
-            doc.roundedRect(84, currentY, 112, 53, 2, 2, 'F');
+            doc.roundedRect(84, currentY, 112, overviewImgH, 2, 2, 'F');
         }
     } else {
         // Grey placeholder
         doc.setFillColor(226, 232, 240);
-        doc.roundedRect(84, currentY, 112, 53, 2, 2, 'F');
+        doc.roundedRect(84, currentY, 112, overviewImgH, 2, 2, 'F');
         doc.setTextColor(148, 163, 184);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
-        doc.text("OVERVIEW IMAGE", 140, currentY + 28, { align: 'center' });
+        doc.text("OVERVIEW IMAGE", 140, currentY + overviewImgH / 2, { align: 'center' });
     }
 
-    // Icons Bar
+    // Icons Bar - positioned below overview image
+    const iconsBarY = currentY + overviewImgH + 5;
     doc.setDrawColor(226, 232, 240);
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(84, currentY + 58, 112, 15, 2, 2, 'FD');
+    doc.roundedRect(84, iconsBarY, 112, 15, 2, 2, 'FD');
     
-    // Columns: Date, Drone/Equip, Images, Flight Time
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(7);
     
-    const iconBaseY = currentY + 63;
+    const iconBaseY = iconsBarY + 5;
     
     // Col 1
     doc.setFont("helvetica", "bold");
-    doc.text(report.type === "CONSTRUCTION" ? "REPORT DATE" : "INSPECTION DATE", 92, iconBaseY);
+    doc.text("REPORT DATE", 92, iconBaseY);
     doc.setFont("helvetica", "normal");
     doc.text(new Date(report.date).toLocaleDateString('en-GB'), 92, iconBaseY + 5);
     
@@ -462,198 +494,315 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     }
     doc.setFontSize(7);
 
-    currentY += Math.max(80, calculatedPropBoxHeight + 15);
+    currentY = Math.max(iconsBarY + 22, currentY + calculatedPropBoxHeight + 15);
 
-    // 3. Executive Summary & Key Findings
-    // Exec Summary Box
-    doc.setFillColor(15, 23, 42);
-    doc.roundedRect(14, currentY, 93, 8, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("EXECUTIVE SUMMARY", 18, currentY + 5.5);
-    
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(14, currentY + 8, 93, 35, 2, 2, 'S');
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    const summaryLines = doc.splitTextToSize(report.description || report.conclusion || "An inspection was conducted to assess the condition. Several areas of concern were identified. Please refer to the findings section for detailed observations.", 85);
-    doc.text(summaryLines, 18, currentY + 14);
+    // 3. Executive Summary & Key Findings - RESPECT VISIBILITY TOGGLES
+    const showExecSummary = fs.showExecutiveSummary !== false;
+    const showKeyFindings = fs.showKeyFindings !== false;
 
-    // Key Findings Box
-    doc.setFillColor(15, 23, 42);
-    doc.roundedRect(112, currentY, 84, 8, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("KEY FINDINGS OVERVIEW", 116, currentY + 5.5);
-    
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(112, currentY + 8, 84, 35, 2, 2, 'S');
-    
-    const highCount = report.items.filter((i: any) => i.severity === 'HIGH').length;
-    const mediumCount = report.items.filter((i: any) => i.severity === 'MEDIUM').length;
-    const lowCount = report.items.filter((i: any) => i.severity === 'LOW').length;
-    
-    let findingY = currentY + 15;
-    
-    const addFindingRow = (count: number, label: string, color: number[], desc: string) => {
-        doc.setFillColor(color[0], color[1], color[2]);
-        doc.circle(120, findingY, 3, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "bold");
-        doc.text("!", 120, findingY + 1, { align: 'center' }); // simple icon
-        
-        doc.setTextColor(30, 41, 59);
-        doc.setFontSize(10);
-        doc.text(count.toString(), 128, findingY + 1);
-        doc.setFontSize(6);
-        doc.setTextColor(100, 116, 139);
-        doc.setFont("helvetica", "normal");
-        doc.text(label, 128, findingY + 4);
-        
-        doc.setTextColor(30, 41, 59);
-        doc.setFontSize(7);
-        const descLines = doc.splitTextToSize(desc, 50);
-        doc.text(descLines, 145, findingY);
-        
-        doc.setDrawColor(241, 245, 249);
-        doc.line(116, findingY + 6, 192, findingY + 6);
-        findingY += 10;
-    };
-    
-    addFindingRow(highCount, "HIGH PRIORITY", [239, 68, 68], "Requires immediate attention.");
-    addFindingRow(mediumCount, "MEDIUM PRIORITY", [249, 115, 22], "Should be addressed in short term.");
-    addFindingRow(lowCount, "LOW PRIORITY", [59, 130, 246], "Minor issues to monitor.");
+    if (showExecSummary || showKeyFindings) {
+        if (showExecSummary && showKeyFindings) {
+            // Both shown: side by side
+            // Executive Summary Box
+            doc.setFillColor(15, 23, 42);
+            doc.roundedRect(14, currentY, 93, 8, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.text("EXECUTIVE SUMMARY", 18, currentY + 5.5);
+            
+            doc.setDrawColor(226, 232, 240);
+            doc.roundedRect(14, currentY + 8, 93, 35, 2, 2, 'S');
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            const summaryLines = doc.splitTextToSize(report.description || report.conclusion || "An inspection was conducted to assess the condition. Several areas of concern were identified. Please refer to the findings section for detailed observations.", 85);
+            doc.text(summaryLines, 18, currentY + 14);
 
-    currentY += 50;
+            // Key Findings Box
+            doc.setFillColor(15, 23, 42);
+            doc.roundedRect(112, currentY, 84, 8, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.text("KEY FINDINGS OVERVIEW", 116, currentY + 5.5);
+            
+            doc.setDrawColor(226, 232, 240);
+            doc.roundedRect(112, currentY + 8, 84, 35, 2, 2, 'S');
+            
+            drawKeyFindingsCounts(doc, report, currentY + 15, 120);
+
+            currentY += 50;
+
+        } else if (showExecSummary) {
+            // Only executive summary - full width
+            doc.setFillColor(15, 23, 42);
+            doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.text("EXECUTIVE SUMMARY", 18, currentY + 5.5);
+            
+            doc.setDrawColor(226, 232, 240);
+            doc.roundedRect(14, currentY + 8, 182, 35, 2, 2, 'S');
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            const summaryLines = doc.splitTextToSize(report.description || report.conclusion || "An inspection was conducted to assess the condition. Several areas of concern were identified. Please refer to the findings section for detailed observations.", 174);
+            doc.text(summaryLines, 18, currentY + 14);
+
+            currentY += 50;
+
+        } else if (showKeyFindings) {
+            // Only key findings - full width
+            doc.setFillColor(15, 23, 42);
+            doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.text("KEY FINDINGS OVERVIEW", 18, currentY + 5.5);
+            
+            doc.setDrawColor(226, 232, 240);
+            doc.roundedRect(14, currentY + 8, 182, 35, 2, 2, 'S');
+            
+            drawKeyFindingsCounts(doc, report, currentY + 15, 22);
+
+            currentY += 50;
+        }
+    }
     
-    // 4. Inspection Findings
-    // Title Box
+    // 4. Findings - CARD BASED LAYOUT (replaces old table)
+    // Section title bar
     doc.setFillColor(15, 23, 42);
     doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("INSPECTION FINDINGS", 18, currentY + 5.5);
+    doc.text("FINDINGS", 18, currentY + 5.5);
     
-    currentY += 8;
-    
-    // Table Header
-    doc.setFillColor(241, 245, 249);
-    doc.rect(14, currentY, 182, 6, 'F');
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(7);
-    const showLocation = fs.showLocation !== false
-    const showSeverity = fs.showSeverity !== false
-    const showRecommendation = fs.showRecommendation !== false
-    const locationLabel = (fs.locationLabel || "LOCATION").toUpperCase()
-    const severityLabel = (fs.severityLabel || "SEVERITY").toUpperCase()
-    const recommendationLabel = (fs.recommendationLabel || "RECOMMENDATION").toUpperCase()
+    currentY += 14;
 
-    doc.setFont("helvetica", "bold");
-    doc.text("ID", 16, currentY + 4);
-    if (showLocation) doc.text(locationLabel, 26, currentY + 4);
-    doc.text("ISSUE", showLocation ? 60 : 26, currentY + 4);
-    if (showSeverity) doc.text(severityLabel, 95, currentY + 4);
-    doc.text("IMAGE", 115, currentY + 4);
-    if (showRecommendation) doc.text(recommendationLabel, 155, currentY + 4);
-    
-    currentY += 6;
-    
-    // Table Rows
-    doc.setFont("helvetica", "normal");
+    const showLocation = fs.showLocation !== false;
+    const showSeverity = fs.showSeverity !== false;
+    const showRecommendation = fs.showRecommendation !== false;
+    const locationLabel = (fs.locationLabel || "Location").toUpperCase();
+    const severityLabel = (fs.severityLabel || "Severity").toUpperCase();
+    const recommendationLabel = (fs.recommendationLabel || "Recommendation").toUpperCase();
     
     for (let i = 0; i < report.items.length; i++) {
         const item = report.items[i];
+        const images = getItemImages(item);
         
-        if (currentY > 260) {
-            // Footer on current page
+        // Estimate card height to decide if we need a page break
+        const descLines = doc.splitTextToSize(item.description || "-", 170);
+        const descHeight = descLines.length * 4;
+        const hasImages = images.length > 0;
+        const imageRowsNeeded = hasImages ? Math.ceil(images.length / 2) : 0;
+        const imageHeight = images.length === 1 ? 100 : (imageRowsNeeded * 68);
+        const recLines = (showRecommendation && item.recommendation) ? doc.splitTextToSize(item.recommendation, 170) : [];
+        const recHeight = recLines.length > 0 ? (recLines.length * 4) + 14 : 0;
+        const estimatedCardHeight = 20 + descHeight + (hasImages ? imageHeight + 8 : 0) + recHeight + 10;
+        
+        // Check page break before card
+        if (currentY + Math.min(estimatedCardHeight, 60) > 265) {
             addFooter(doc, company, metadata);
             doc.addPage();
             currentY = 20;
-            // Redraw Header
-            doc.setFillColor(241, 245, 249);
-            doc.rect(14, currentY, 182, 6, 'F');
-            doc.setTextColor(30, 41, 59);
-            doc.setFontSize(7);
-            doc.setFont("helvetica", "bold");
-            doc.setFont("helvetica", "bold");
-            doc.text("ID", 16, currentY + 4);
-            if (showLocation) doc.text(locationLabel, 26, currentY + 4);
-            doc.text("ISSUE", showLocation ? 60 : 26, currentY + 4);
-            if (showSeverity) doc.text(severityLabel, 95, currentY + 4);
-            doc.text("IMAGE", 115, currentY + 4);
-            if (showRecommendation) doc.text(recommendationLabel, 155, currentY + 4);
-            currentY += 6;
-            doc.setFont("helvetica", "normal");
         }
-        
-        const rowH = 22; // Fixed row height for image
-        
-        doc.setTextColor(30, 41, 59);
+
+        // --- Card Header: Number + Title + Location + Severity ---
+        // Card background - light grey rounded rect
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        const cardHeaderH = 12;
+        doc.roundedRect(14, currentY, 182, cardHeaderH, 2, 2, 'FD');
+
+        // Finding number badge
+        doc.setFillColor(15, 23, 42);
+        doc.roundedRect(16, currentY + 2, 12, 8, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
         doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
-        doc.text((i + 1).toString(), 16, currentY + 5);
-        
-        doc.setFontSize(7);
-        if (showLocation) {
-            const locLines = doc.splitTextToSize(item.location || "-", 30);
-            doc.text(locLines, 26, currentY + 5);
+        doc.text((i + 1).toString(), 22, currentY + 7.5, { align: 'center' });
+
+        // Title
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        const titleText = item.title ? item.title.toUpperCase() : `FINDING ${i + 1}`;
+        doc.text(titleText, 32, currentY + 7.5);
+
+        // Location (right of title)
+        let metaX = 32;
+        const titleWidth = doc.getTextWidth(titleText);
+        metaX += titleWidth + 8;
+
+        if (showLocation && item.location) {
+            doc.setFontSize(7);
+            doc.setTextColor(100, 116, 139);
+            doc.setFont("helvetica", "normal");
+            doc.text(`${locationLabel}: ${item.location}`, metaX, currentY + 7.5);
         }
-        
-        doc.setFont("helvetica", "normal");
-        const issueLines = doc.splitTextToSize(item.description || "-", showLocation ? 32 : 62);
-        doc.text(issueLines, showLocation ? 60 : 26, currentY + 5);
-        
-        // Severity Badge
+
+        // Severity badge (far right)
         if (showSeverity) {
             const sev = item.severity || 'LOW';
             if (sev === 'HIGH') doc.setFillColor(239, 68, 68);
             else if (sev === 'MEDIUM') doc.setFillColor(249, 115, 22);
             else doc.setFillColor(59, 130, 246);
-            doc.roundedRect(95, currentY + 2, 16, 4, 1, 1, 'F');
+            doc.roundedRect(170, currentY + 3, 22, 6, 1.5, 1.5, 'F');
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(6);
             doc.setFont("helvetica", "bold");
-            doc.text(sev, 103, currentY + 5, { align: 'center' });
+            doc.text(sev, 181, currentY + 7, { align: 'center' });
         }
+
+        currentY += cardHeaderH + 4;
+
+        // --- Description ---
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        const descWrapped = doc.splitTextToSize(item.description || "-", 170);
         
-        // Image
-        if (item.imageUrl) {
-            try {
-                let format = 'JPEG';
-                if (item.imageUrl.startsWith('data:image/png')) format = 'PNG';
-                doc.addImage(item.imageUrl, format, 115, currentY + 1, 35, 18, undefined, 'FAST');
-            } catch (e) {
-                doc.setFillColor(226, 232, 240);
-                doc.rect(115, currentY + 1, 35, 18, 'F');
+        // Check if description needs a page break
+        const descRenderHeight = descWrapped.length * 4;
+        if (currentY + descRenderHeight > 270) {
+            addFooter(doc, company, metadata);
+            doc.addPage();
+            currentY = 20;
+        }
+        doc.text(descWrapped, 18, currentY);
+        currentY += descRenderHeight + 6;
+
+        // --- Images - LARGE ---
+        if (images.length === 1) {
+            // Single image: render large
+            const singleImgW = 160;
+            const singleImgH = 100;
+            if (currentY + singleImgH > 270) {
+                addFooter(doc, company, metadata);
+                doc.addPage();
+                currentY = 20;
             }
-        } else {
-            doc.setFillColor(226, 232, 240);
-            doc.rect(115, currentY + 1, 35, 18, 'F');
+            try {
+                const format = getImageFormat(images[0]);
+                doc.addImage(images[0], format, 25, currentY, singleImgW, singleImgH, undefined, 'FAST');
+                doc.setDrawColor(226, 232, 240);
+                doc.roundedRect(25, currentY, singleImgW, singleImgH, 2, 2, 'S');
+            } catch (err) {
+                doc.setFillColor(226, 232, 240);
+                doc.roundedRect(25, currentY, singleImgW, singleImgH, 2, 2, 'F');
+            }
+            currentY += singleImgH + 6;
+        } else if (images.length > 1) {
+            // Multiple images: 2-column grid, each ~85x60mm
+            for (let imgIdx = 0; imgIdx < images.length; imgIdx += 2) {
+                const gridImgW = 85;
+                const gridImgH = 60;
+                if (currentY + gridImgH > 270) {
+                    addFooter(doc, company, metadata);
+                    doc.addPage();
+                    currentY = 20;
+                }
+                // Left image
+                try {
+                    const format = getImageFormat(images[imgIdx]);
+                    doc.addImage(images[imgIdx], format, 14, currentY, gridImgW, gridImgH, undefined, 'FAST');
+                    doc.setDrawColor(226, 232, 240);
+                    doc.roundedRect(14, currentY, gridImgW, gridImgH, 2, 2, 'S');
+                } catch (err) {
+                    doc.setFillColor(226, 232, 240);
+                    doc.roundedRect(14, currentY, gridImgW, gridImgH, 2, 2, 'F');
+                }
+                // Right image
+                if (imgIdx + 1 < images.length) {
+                    try {
+                        const format = getImageFormat(images[imgIdx + 1]);
+                        doc.addImage(images[imgIdx + 1], format, 106, currentY, gridImgW, gridImgH, undefined, 'FAST');
+                        doc.setDrawColor(226, 232, 240);
+                        doc.roundedRect(106, currentY, gridImgW, gridImgH, 2, 2, 'S');
+                    } catch (err) {
+                        doc.setFillColor(226, 232, 240);
+                        doc.roundedRect(106, currentY, gridImgW, gridImgH, 2, 2, 'F');
+                    }
+                }
+                currentY += gridImgH + 6;
+            }
         }
-        
-        // Recommendation
-        if (showRecommendation) {
-            doc.setTextColor(30, 41, 59);
+
+        // --- Recommendation box ---
+        if (showRecommendation && item.recommendation) {
+            const recWrapped = doc.splitTextToSize(item.recommendation, 170);
+            const recBlockH = (recWrapped.length * 4) + 12;
+            if (currentY + recBlockH > 270) {
+                addFooter(doc, company, metadata);
+                doc.addPage();
+                currentY = 20;
+            }
+            // Recommendation box with lime accent
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(163, 230, 53);
+            doc.setLineWidth(0.5);
+            doc.roundedRect(14, currentY, 182, recBlockH, 2, 2, 'FD');
+            
+            doc.setTextColor(163, 230, 53);
             doc.setFontSize(7);
+            doc.setFont("helvetica", "bold");
+            doc.text(recommendationLabel, 18, currentY + 5);
+            
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(8);
             doc.setFont("helvetica", "normal");
-            const recLines = doc.splitTextToSize(item.recommendation || "-", 38);
-            doc.text(recLines, 155, currentY + 5);
+            doc.text(recWrapped, 18, currentY + 10);
+            
+            currentY += recBlockH + 4;
+            doc.setLineWidth(0.2); // reset
         }
-        
-        // Row divider
+
+        // Card bottom divider
         doc.setDrawColor(226, 232, 240);
-        doc.line(14, currentY + rowH, 196, currentY + rowH);
-        
-        currentY += rowH;
+        doc.setLineWidth(0.3);
+        doc.line(14, currentY, 196, currentY);
+        currentY += 8;
+        doc.setLineWidth(0.2);
     }
     
+    // Conclusion section (if exists)
+    if (report.conclusion) {
+        if (currentY + 30 > 265) {
+            addFooter(doc, company, metadata);
+            doc.addPage();
+            currentY = 20;
+        }
+        
+        doc.setFillColor(15, 23, 42);
+        doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text("CONCLUSION", 18, currentY + 5.5);
+        currentY += 12;
+        
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        const concLines = doc.splitTextToSize(report.conclusion, 174);
+        if (currentY + (concLines.length * 4) > 270) {
+            addFooter(doc, company, metadata);
+            doc.addPage();
+            currentY = 20;
+        }
+        doc.text(concLines, 18, currentY);
+        currentY += (concLines.length * 4) + 8;
+    }
+
     // Note
-    currentY += 5;
+    if (currentY + 10 > 280) {
+        addFooter(doc, company, metadata);
+        doc.addPage();
+        currentY = 20;
+    }
     doc.setFontSize(6);
     doc.setTextColor(148, 163, 184);
     doc.text("Note: This report is based on visual data captured and does not replace a physical inspection.", 14, currentY);
@@ -662,6 +811,45 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     addFooter(doc, company, metadata);
 
     return doc;
+}
+
+// Helper to draw the key findings severity counts
+function drawKeyFindingsCounts(doc: jsPDF, report: any, startY: number, startX: number) {
+    const highCount = report.items.filter((i: any) => i.severity === 'HIGH').length;
+    const mediumCount = report.items.filter((i: any) => i.severity === 'MEDIUM').length;
+    const lowCount = report.items.filter((i: any) => i.severity === 'LOW').length;
+    
+    let findingY = startY;
+    
+    const addFindingRow = (count: number, label: string, color: number[], desc: string) => {
+        doc.setFillColor(color[0], color[1], color[2]);
+        doc.circle(startX, findingY, 3, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.text("!", startX, findingY + 1, { align: 'center' });
+        
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(10);
+        doc.text(count.toString(), startX + 8, findingY + 1);
+        doc.setFontSize(6);
+        doc.setTextColor(100, 116, 139);
+        doc.setFont("helvetica", "normal");
+        doc.text(label, startX + 8, findingY + 4);
+        
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(7);
+        const descLines = doc.splitTextToSize(desc, 50);
+        doc.text(descLines, startX + 25, findingY);
+        
+        doc.setDrawColor(241, 245, 249);
+        doc.line(startX - 4, findingY + 6, startX + 72, findingY + 6);
+        findingY += 10;
+    };
+    
+    addFindingRow(highCount, "HIGH PRIORITY", [239, 68, 68], "Requires immediate attention.");
+    addFindingRow(mediumCount, "MEDIUM PRIORITY", [249, 115, 22], "Should be addressed in short term.");
+    addFindingRow(lowCount, "LOW PRIORITY", [59, 130, 246], "Minor issues to monitor.");
 }
 
 function addFooter(doc: jsPDF, company: any, metadata?: any) {

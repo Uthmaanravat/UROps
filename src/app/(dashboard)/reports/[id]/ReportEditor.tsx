@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Trash2, Loader2, Image as ImageIcon, Camera, FileDown, ArrowLeft, Settings } from "lucide-react"
-import { addReportItem, deleteReportItem, updateReportConclusion, updateReportMetadata } from "@/app/actions/reports"
+import { Plus, Trash2, Loader2, Image as ImageIcon, Camera, FileDown, ArrowLeft, Settings, ArrowUp, ArrowDown, Pencil, X, Check } from "lucide-react"
+import { addReportItem, deleteReportItem, updateReportConclusion, updateReportMetadata, updateReportItem, reorderReportItem, updateReportDetails } from "@/app/actions/reports"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { drawReportPdf } from "@/lib/pdf-utils"
@@ -17,9 +17,11 @@ import jsPDF from "jspdf"
 interface ReportEditorProps {
     report: any
     company: any
+    clients?: { id: string; name: string }[]
+    projects?: { id: string; name: string; clientId?: string }[]
 }
 
-export function ReportEditor({ report, company }: ReportEditorProps) {
+export function ReportEditor({ report, company, clients = [], projects = [] }: ReportEditorProps) {
     const router = useRouter()
     const [isAdding, setIsAdding] = useState(false)
     const [isExporting, setIsExporting] = useState(false)
@@ -28,6 +30,29 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
     const [conclusion, setConclusion] = useState(report.conclusion || "")
     const [reportType, setReportType] = useState(report.type || "BASIC")
     const [metadata, setMetadata] = useState<any>(report.metadata || { customFields: [] })
+
+    // Editable report details state
+    const [isEditingDetails, setIsEditingDetails] = useState(false)
+    const [editTitle, setEditTitle] = useState(report.title || "")
+    const [editDate, setEditDate] = useState(report.date ? new Date(report.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
+    const [editClientId, setEditClientId] = useState(report.clientId || "")
+    const [editProjectId, setEditProjectId] = useState(report.projectId || "")
+    const [isSavingDetails, setIsSavingDetails] = useState(false)
+
+    // Edit item state
+    const [editingItemId, setEditingItemId] = useState<string | null>(null)
+    const [editItemTitle, setEditItemTitle] = useState("")
+    const [editItemDescription, setEditItemDescription] = useState("")
+    const [editItemLocation, setEditItemLocation] = useState("")
+    const [editItemSeverity, setEditItemSeverity] = useState("LOW")
+    const [editItemRecommendation, setEditItemRecommendation] = useState("")
+    const [editItemImages, setEditItemImages] = useState<string[]>([])
+    const [isSavingItem, setIsSavingItem] = useState(false)
+    const editFileInputRef = useRef<HTMLInputElement>(null)
+
+    // Reorder loading
+    const [reorderingId, setReorderingId] = useState<string | null>(null)
+
     const defaultFieldSettings = {
         showLocation: true, locationLabel: "Location",
         showSeverity: true, severityLabel: "Severity",
@@ -41,6 +66,8 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
         showEquipmentUsed: true, equipmentUsedLabel: "Equipment Used",
         showFlightTime: true, flightTimeLabel: "Flight Time",
         showProjectPhase: true, projectPhaseLabel: "Project Phase",
+        showExecutiveSummary: true,
+        showKeyFindings: true,
     }
     const [fieldSettings, setFieldSettings] = useState<any>({
         ...defaultFieldSettings,
@@ -52,52 +79,69 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
         setMetadata((prev: any) => ({ ...prev, fieldSettings: updated }))
     }
     
-    // New Item Form State
+    // New Item Form State — multi-image
     const [itemTitle, setItemTitle] = useState("")
     const [itemDescription, setItemDescription] = useState("")
     const [itemLocation, setItemLocation] = useState("")
     const [itemSeverity, setItemSeverity] = useState("LOW")
     const [itemRecommendation, setItemRecommendation] = useState("")
-    const [itemImage, setItemImage] = useState<string | null>(null)
+    const [itemImages, setItemImages] = useState<string[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
-        const reader = new FileReader()
-        reader.onloadend = () => {
-            const img = new Image()
-            img.onload = () => {
-                // Compress image using canvas
-                const canvas = document.createElement('canvas')
-                let width = img.width
-                let height = img.height
-                
-                // Max width/height of 1024px
-                const maxDim = 1024
-                if (width > maxDim || height > maxDim) {
-                    if (width > height) {
-                        height *= maxDim / width
-                        width = maxDim
-                    } else {
-                        width *= maxDim / height
-                        height = maxDim
+    // Compress and return a base64 image
+    const compressImage = (file: File): Promise<string> => {
+        return new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                const img = new Image()
+                img.onload = () => {
+                    const canvas = document.createElement('canvas')
+                    let width = img.width
+                    let height = img.height
+                    const maxDim = 1024
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height *= maxDim / width
+                            width = maxDim
+                        } else {
+                            width *= maxDim / height
+                            height = maxDim
+                        }
                     }
+                    canvas.width = width
+                    canvas.height = height
+                    const ctx = canvas.getContext('2d')
+                    ctx?.drawImage(img, 0, 0, width, height)
+                    resolve(canvas.toDataURL('image/jpeg', 0.7))
                 }
-                
-                canvas.width = width
-                canvas.height = height
-                const ctx = canvas.getContext('2d')
-                ctx?.drawImage(img, 0, 0, width, height)
-                
-                // Get compressed base64
-                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7)
-                setItemImage(compressedBase64)
+                img.src = reader.result as string
             }
-            img.src = reader.result as string
+            reader.readAsDataURL(file)
+        })
+    }
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files
+        if (!files || files.length === 0) return
+        
+        const newImages: string[] = []
+        for (let i = 0; i < files.length; i++) {
+            const compressed = await compressImage(files[i])
+            newImages.push(compressed)
         }
-        reader.readAsDataURL(file)
+        setItemImages(prev => [...prev, ...newImages])
+    }
+
+    const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files
+        if (!files || files.length === 0) return
+        
+        const newImages: string[] = []
+        for (let i = 0; i < files.length; i++) {
+            const compressed = await compressImage(files[i])
+            newImages.push(compressed)
+        }
+        setEditItemImages(prev => [...prev, ...newImages])
     }
 
     const handleAddItem = async (e: React.FormEvent) => {
@@ -110,10 +154,11 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                 reportId: report.id,
                 title: itemTitle || undefined,
                 description: itemDescription,
-                imageUrl: itemImage || undefined,
+                imageUrl: itemImages[0] || undefined,
+                imageUrls: itemImages.length > 0 ? itemImages : undefined,
                 location: itemLocation || undefined,
-                severity: reportType === "ADVANCED" ? itemSeverity : undefined,
-                recommendation: reportType === "ADVANCED" ? itemRecommendation : undefined
+                severity: (reportType === "ADVANCED" || reportType === "CONSTRUCTION") ? itemSeverity : undefined,
+                recommendation: (reportType === "ADVANCED" || reportType === "CONSTRUCTION") ? itemRecommendation : undefined
             })
             
             if (result.success) {
@@ -122,9 +167,8 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                 setItemLocation("")
                 setItemSeverity("LOW")
                 setItemRecommendation("")
-                setItemImage(null)
+                setItemImages([])
                 if (fileInputRef.current) fileInputRef.current.value = ""
-                // Keep form open so user can add more items rapidly
                 router.refresh()
             } else {
                 alert("Failed to add item")
@@ -147,6 +191,85 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
             }
         } catch (error) {
             console.error(error)
+        }
+    }
+
+    const handleReorderItem = async (itemId: string, direction: "up" | "down") => {
+        setReorderingId(itemId)
+        try {
+            await reorderReportItem(itemId, report.id, direction)
+            router.refresh()
+        } catch (error) {
+            console.error(error)
+        } finally {
+            setReorderingId(null)
+        }
+    }
+
+    const startEditItem = (item: any) => {
+        setEditingItemId(item.id)
+        setEditItemTitle(item.title || "")
+        setEditItemDescription(item.description || "")
+        setEditItemLocation(item.location || "")
+        setEditItemSeverity(item.severity || "LOW")
+        setEditItemRecommendation(item.recommendation || "")
+        // Collect all images
+        const imgs = item.imageUrls && Array.isArray(item.imageUrls) && item.imageUrls.length > 0
+            ? [...item.imageUrls]
+            : item.imageUrl ? [item.imageUrl] : []
+        setEditItemImages(imgs)
+    }
+
+    const handleSaveEditItem = async () => {
+        if (!editingItemId || !editItemDescription) return
+        setIsSavingItem(true)
+        try {
+            const result = await updateReportItem({
+                id: editingItemId,
+                reportId: report.id,
+                title: editItemTitle || undefined,
+                description: editItemDescription,
+                imageUrl: editItemImages[0] || undefined,
+                imageUrls: editItemImages.length > 0 ? editItemImages : undefined,
+                location: editItemLocation || undefined,
+                severity: (reportType === "ADVANCED" || reportType === "CONSTRUCTION") ? editItemSeverity : undefined,
+                recommendation: (reportType === "ADVANCED" || reportType === "CONSTRUCTION") ? editItemRecommendation : undefined
+            })
+            if (result.success) {
+                setEditingItemId(null)
+                router.refresh()
+            } else {
+                alert("Failed to update item")
+            }
+        } catch (error) {
+            console.error(error)
+            alert("An error occurred")
+        } finally {
+            setIsSavingItem(false)
+        }
+    }
+
+    const handleSaveDetails = async () => {
+        setIsSavingDetails(true)
+        try {
+            const result = await updateReportDetails({
+                id: report.id,
+                title: editTitle,
+                date: new Date(editDate),
+                clientId: editClientId || undefined,
+                projectId: editProjectId || undefined
+            })
+            if (result.success) {
+                setIsEditingDetails(false)
+                router.refresh()
+            } else {
+                alert("Failed to update details")
+            }
+        } catch (error) {
+            console.error(error)
+            alert("An error occurred")
+        } finally {
+            setIsSavingDetails(false)
         }
     }
 
@@ -182,7 +305,7 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
         try {
             const doc = new jsPDF()
             // Pass live state into the report object for PDF rendering
-            await drawReportPdf(doc, company, { ...report, conclusion, type: reportType, metadata })
+            await drawReportPdf(doc, company, { ...report, conclusion, type: reportType, metadata: { ...metadata, fieldSettings } })
             doc.save(`Report_${report.number.toString().padStart(3, '0')}_${report.title.replace(/\s+/g, '_')}.pdf`)
         } catch (error) {
             console.error("PDF Export failed:", error)
@@ -203,15 +326,69 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                         </Button>
                     </Link>
                     <div>
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-2xl font-black text-white uppercase tracking-tight">{report.title}</h1>
-                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-black border border-primary/20 uppercase tracking-widest">
-                                REP-{report.number.toString().padStart(3, '0')}
-                            </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mt-1">
-                            {new Date(report.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
+                        {isEditingDetails ? (
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <Input 
+                                    value={editTitle} 
+                                    onChange={e => setEditTitle(e.target.value)} 
+                                    className="bg-white/5 border-white/10 font-black text-white uppercase text-lg w-56 h-9"
+                                    placeholder="Report Title"
+                                />
+                                <Input 
+                                    type="date" 
+                                    value={editDate} 
+                                    onChange={e => setEditDate(e.target.value)}
+                                    className="bg-white/5 border-white/10 text-white text-xs w-40 h-9"
+                                />
+                                <select
+                                    value={editClientId}
+                                    onChange={e => setEditClientId(e.target.value)}
+                                    className="h-9 rounded-md border border-white/10 bg-white/5 px-3 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="">No Client</option>
+                                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                                <select
+                                    value={editProjectId}
+                                    onChange={e => setEditProjectId(e.target.value)}
+                                    className="h-9 rounded-md border border-white/10 bg-white/5 px-3 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="">No Project</option>
+                                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                                <Button 
+                                    size="sm" 
+                                    onClick={handleSaveDetails} 
+                                    disabled={isSavingDetails}
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-4 rounded-lg"
+                                >
+                                    {isSavingDetails ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    onClick={() => setIsEditingDetails(false)}
+                                    className="h-9 px-2 text-muted-foreground hover:text-white"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 group/title cursor-pointer" onClick={() => setIsEditingDetails(true)}>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h1 className="text-2xl font-black text-white uppercase tracking-tight">{report.title}</h1>
+                                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-black border border-primary/20 uppercase tracking-widest">
+                                            REP-{report.number.toString().padStart(3, '0')}
+                                        </span>
+                                        <Pencil className="h-3.5 w-3.5 text-muted-foreground/0 group-hover/title:text-muted-foreground/50 transition-colors" />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mt-1">
+                                        {new Date(report.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
                 
@@ -409,30 +586,11 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                 <input 
                                     type="file" 
                                     accept="image/*"
-                                    onChange={(e) => {
+                                    onChange={async (e) => {
                                         const file = e.target.files?.[0];
                                         if (!file) return;
-                                        const reader = new FileReader();
-                                        reader.onloadend = () => {
-                                            const img = new Image();
-                                            img.onload = () => {
-                                                const canvas = document.createElement('canvas');
-                                                let width = img.width;
-                                                let height = img.height;
-                                                const maxDim = 1024;
-                                                if (width > maxDim || height > maxDim) {
-                                                    if (width > height) { height *= maxDim / width; width = maxDim; } 
-                                                    else { width *= maxDim / height; height = maxDim; }
-                                                }
-                                                canvas.width = width;
-                                                canvas.height = height;
-                                                const ctx = canvas.getContext('2d');
-                                                ctx?.drawImage(img, 0, 0, width, height);
-                                                setMetadata({...metadata, propertyImage: canvas.toDataURL('image/jpeg', 0.7)});
-                                            };
-                                            img.src = reader.result as string;
-                                        };
-                                        reader.readAsDataURL(file);
+                                        const compressed = await compressImage(file);
+                                        setMetadata({...metadata, propertyImage: compressed});
                                     }}
                                     className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white/5 file:text-white hover:file:bg-white/10 cursor-pointer"
                                 />
@@ -455,77 +613,211 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
             {/* List of Items */}
             <div className="grid gap-8">
                 {report.items.length > 0 ? (
-                    report.items.map((item: any, idx: number) => (
-                        <div key={item.id} className="relative group animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${idx * 50}ms` }}>
-                            <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary/20 rounded-full group-hover:bg-primary transition-colors duration-500" />
-                            
-                            <Card className="bg-card border-white/5 overflow-hidden rounded-2xl shadow-2xl group-hover:border-primary/20 transition-all duration-300">
-                                <div className="grid md:grid-cols-2 gap-6">
-                                    <div className="p-8 space-y-4">
-                                        <div className="flex justify-between items-start">
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Update #{idx + 1}</span>
-                                                {item.title && <h3 className="text-xl font-black text-white uppercase tracking-tight">{item.title}</h3>}
+                    report.items.map((item: any, idx: number) => {
+                        const allImages = item.imageUrls && Array.isArray(item.imageUrls) && item.imageUrls.length > 0
+                            ? item.imageUrls
+                            : item.imageUrl ? [item.imageUrl] : [];
+
+                        // If editing this item, show edit form
+                        if (editingItemId === item.id) {
+                            return (
+                                <Card key={item.id} className="bg-[#12121e] border-primary/20 shadow-[0_0_50px_rgba(140,255,51,0.05)] rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+                                    <CardHeader className="bg-primary/5 border-b border-primary/10 py-4">
+                                        <CardTitle className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-3">
+                                            <Pencil className="h-4 w-4 text-primary" /> Edit Item #{idx + 1}
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-6 grid md:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Short Title</Label>
+                                                <Input value={editItemTitle} onChange={e => setEditItemTitle(e.target.value)} className="bg-white/5 border-white/10 uppercase font-black tracking-tight h-10" placeholder="e.g. FOUNDATION PROGRESS" />
                                             </div>
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => handleDeleteItem(item.id)}
-                                                className="text-muted-foreground/30 hover:text-red-500 hover:bg-red-500/10 rounded-lg"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                        {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (fieldSettings.showLocation || fieldSettings.showSeverity) && (
-                                            <div className="grid grid-cols-2 gap-4 text-xs font-medium pb-2 border-b border-white/5">
-                                                {fieldSettings.showLocation && (
-                                                    <div><span className="text-muted-foreground/50 uppercase text-[9px] block">{fieldSettings.locationLabel || "Location"}</span> {item.location || "-"}</div>
-                                                )}
-                                                {fieldSettings.showSeverity && (
-                                                    <div>
-                                                        <span className="text-muted-foreground/50 uppercase text-[9px] block">{fieldSettings.severityLabel || "Severity"}</span> 
-                                                        <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", 
-                                                            item.severity === 'HIGH' ? 'bg-red-500/20 text-red-500' : 
-                                                            item.severity === 'MEDIUM' ? 'bg-orange-500/20 text-orange-500' : 
-                                                            'bg-blue-500/20 text-blue-500'
-                                                        )}>{item.severity || "LOW"}</span>
+                                            {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (
+                                                <>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Location</Label>
+                                                        <Input value={editItemLocation} onChange={e => setEditItemLocation(e.target.value)} className="bg-white/5 border-white/10 font-bold h-10" placeholder="e.g. Front Roof Slope" />
                                                     </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Severity</Label>
+                                                        <select value={editItemSeverity} onChange={e => setEditItemSeverity(e.target.value)} className="flex h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer">
+                                                            <option value="LOW">LOW</option>
+                                                            <option value="MEDIUM">MEDIUM</option>
+                                                            <option value="HIGH">HIGH</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Recommendation</Label>
+                                                        <Textarea value={editItemRecommendation} onChange={e => setEditItemRecommendation(e.target.value)} rows={3} className="bg-white/5 border-white/10 font-medium" placeholder="e.g. Replace damaged tile..." />
+                                                    </div>
+                                                </>
+                                            )}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Description</Label>
+                                                <Textarea value={editItemDescription} onChange={e => setEditItemDescription(e.target.value)} rows={5} required className="bg-white/5 border-white/10 font-medium leading-relaxed" placeholder="Describe..." />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Photos ({editItemImages.length})</Label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {editItemImages.map((img, imgIdx) => (
+                                                    <div key={imgIdx} className="relative aspect-square rounded-lg overflow-hidden border border-white/10 group/thumb">
+                                                        <img src={img} alt="" className="w-full h-full object-cover" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditItemImages(prev => prev.filter((_, i) => i !== imgIdx))}
+                                                            className="absolute top-1 right-1 h-6 w-6 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <div
+                                                    onClick={() => editFileInputRef.current?.click()}
+                                                    className="aspect-square rounded-lg border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors gap-1"
+                                                >
+                                                    <Plus className="h-5 w-5 text-muted-foreground/50" />
+                                                    <span className="text-[8px] text-muted-foreground/50 uppercase font-bold">Add</span>
+                                                </div>
+                                            </div>
+                                            <input type="file" ref={editFileInputRef} onChange={handleEditImageUpload} accept="image/*" multiple className="hidden" />
+                                        </div>
+                                    </CardContent>
+                                    <CardFooter className="bg-white/[0.02] border-t border-white/5 p-4 flex justify-between gap-4">
+                                        <Button type="button" variant="ghost" onClick={() => setEditingItemId(null)} className="font-bold uppercase text-xs tracking-widest">
+                                            Cancel
+                                        </Button>
+                                        <Button onClick={handleSaveEditItem} disabled={isSavingItem} className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-widest px-8 h-10 rounded-xl">
+                                            {isSavingItem ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                                            Save Changes
+                                        </Button>
+                                    </CardFooter>
+                                </Card>
+                            )
+                        }
+
+                        // Normal item display
+                        return (
+                            <div key={item.id} className="relative group animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${idx * 50}ms` }}>
+                                <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary/20 rounded-full group-hover:bg-primary transition-colors duration-500" />
+                                
+                                <Card className="bg-card border-white/5 overflow-hidden rounded-2xl shadow-2xl group-hover:border-primary/20 transition-all duration-300">
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        <div className="p-8 space-y-4">
+                                            <div className="flex justify-between items-start">
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Update #{idx + 1}</span>
+                                                    {item.title && <h3 className="text-xl font-black text-white uppercase tracking-tight">{item.title}</h3>}
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    {/* Reorder Buttons */}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleReorderItem(item.id, "up")}
+                                                        disabled={idx === 0 || reorderingId === item.id}
+                                                        className="text-muted-foreground/30 hover:text-white hover:bg-white/10 rounded-lg h-8 w-8"
+                                                    >
+                                                        <ArrowUp className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleReorderItem(item.id, "down")}
+                                                        disabled={idx === report.items.length - 1 || reorderingId === item.id}
+                                                        className="text-muted-foreground/30 hover:text-white hover:bg-white/10 rounded-lg h-8 w-8"
+                                                    >
+                                                        <ArrowDown className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    {/* Edit Button */}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => startEditItem(item)}
+                                                        className="text-muted-foreground/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg h-8 w-8"
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    {/* Delete Button */}
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        onClick={() => handleDeleteItem(item.id)}
+                                                        className="text-muted-foreground/30 hover:text-red-500 hover:bg-red-500/10 rounded-lg h-8 w-8"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (fieldSettings.showLocation || fieldSettings.showSeverity) && (
+                                                <div className="grid grid-cols-2 gap-4 text-xs font-medium pb-2 border-b border-white/5">
+                                                    {fieldSettings.showLocation && (
+                                                        <div><span className="text-muted-foreground/50 uppercase text-[9px] block">{fieldSettings.locationLabel || "Location"}</span> {item.location || "-"}</div>
+                                                    )}
+                                                    {fieldSettings.showSeverity && (
+                                                        <div>
+                                                            <span className="text-muted-foreground/50 uppercase text-[9px] block">{fieldSettings.severityLabel || "Severity"}</span> 
+                                                            <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", 
+                                                                item.severity === 'HIGH' ? 'bg-red-500/20 text-red-500' : 
+                                                                item.severity === 'MEDIUM' ? 'bg-orange-500/20 text-orange-500' : 
+                                                                'bg-blue-500/20 text-blue-500'
+                                                            )}>{item.severity || "LOW"}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            <p className="text-muted-foreground font-medium leading-relaxed whitespace-pre-wrap">
+                                                {item.description}
+                                            </p>
+                                            {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && fieldSettings.showRecommendation && item.recommendation && (
+                                                <div className="bg-primary/5 border border-primary/10 rounded p-3 text-xs">
+                                                    <span className="text-primary font-bold uppercase tracking-wider text-[10px] block mb-1">{fieldSettings.recommendationLabel || "Recommendation"}</span>
+                                                    {item.recommendation}
+                                                </div>
+                                            )}
+                                            <div className="pt-4 flex items-center gap-2 text-[9px] font-black text-muted-foreground/30 uppercase tracking-widest">
+                                                <Camera className="h-3 w-3" />
+                                                <span>Captured {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                {allImages.length > 1 && (
+                                                    <span className="ml-2 text-primary/50">{allImages.length} photos</span>
                                                 )}
                                             </div>
-                                        )}
-                                        <p className="text-muted-foreground font-medium leading-relaxed whitespace-pre-wrap">
-                                            {item.description}
-                                        </p>
-                                        {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && fieldSettings.showRecommendation && item.recommendation && (
-                                            <div className="bg-primary/5 border border-primary/10 rounded p-3 text-xs">
-                                                <span className="text-primary font-bold uppercase tracking-wider text-[10px] block mb-1">{fieldSettings.recommendationLabel || "Recommendation"}</span>
-                                                {item.recommendation}
+                                        </div>
+                                        
+                                        {/* Image(s) display */}
+                                        {allImages.length > 1 ? (
+                                            <div className="grid grid-cols-2 gap-1 bg-black/40 overflow-hidden">
+                                                {allImages.slice(0, 4).map((imgUrl: string, imgIdx: number) => (
+                                                    <div key={imgIdx} className="relative aspect-square overflow-hidden">
+                                                        <img src={imgUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                                                        {imgIdx === 3 && allImages.length > 4 && (
+                                                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                                                <span className="text-white font-black text-lg">+{allImages.length - 4}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : allImages.length === 1 ? (
+                                            <div className="relative aspect-video md:aspect-auto bg-black/40 flex items-center justify-center overflow-hidden">
+                                                <img 
+                                                    src={allImages[0]} 
+                                                    alt={item.title || "Report item"} 
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="aspect-video md:aspect-auto bg-white/5 flex flex-col items-center justify-center text-muted-foreground/20 italic text-xs uppercase tracking-widest gap-2">
+                                                <ImageIcon className="h-8 w-8 opacity-20" />
+                                                No Image Attached
                                             </div>
                                         )}
-                                        <div className="pt-4 flex items-center gap-2 text-[9px] font-black text-muted-foreground/30 uppercase tracking-widest">
-                                            <Camera className="h-3 w-3" />
-                                            <span>Captured {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                        </div>
                                     </div>
-                                    
-                                    {item.imageUrl ? (
-                                        <div className="relative aspect-video md:aspect-auto bg-black/40 flex items-center justify-center overflow-hidden">
-                                            <img 
-                                                src={item.imageUrl} 
-                                                alt={item.title || "Report item"} 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div className="aspect-video md:aspect-auto bg-white/5 flex flex-col items-center justify-center text-muted-foreground/20 italic text-xs uppercase tracking-widest gap-2">
-                                            <ImageIcon className="h-8 w-8 opacity-20" />
-                                            No Image Attached
-                                        </div>
-                                    )}
-                                </div>
-                            </Card>
-                        </div>
-                    ))
+                                </Card>
+                            </div>
+                        )
+                    })
                 ) : !isAdding && (
                     <div className="flex flex-col items-center justify-center py-32 space-y-6">
                         <div className="h-24 w-24 rounded-3xl bg-white/5 border border-dashed border-white/10 flex items-center justify-center text-muted-foreground/20">
@@ -612,44 +904,51 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                     </div>
                                 </div>
                                 
+                                {/* Multi-image upload */}
                                 <div className="space-y-4">
-                                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Supporting Picture</Label>
-                                    <div 
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className={cn(
-                                            "aspect-video rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all gap-4 overflow-hidden group/img",
-                                            itemImage ? "border-primary/50 bg-black/40" : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/10"
-                                        )}
-                                    >
-                                        {itemImage ? (
-                                            <img src={itemImage} alt="Preview" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <>
-                                                <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover/img:scale-110 transition-transform">
-                                                    <Camera className="h-6 w-6" />
-                                                </div>
-                                                <div className="text-center">
-                                                    <span className="text-xs font-black text-white uppercase tracking-widest block">Choose Photo</span>
-                                                    <span className="text-[9px] text-muted-foreground uppercase tracking-widest mt-1 block">JPG or PNG (Auto-compressed)</span>
-                                                </div>
-                                            </>
-                                        )}
+                                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Supporting Photos ({itemImages.length})</Label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {itemImages.map((img, imgIdx) => (
+                                            <div key={imgIdx} className="relative aspect-square rounded-lg overflow-hidden border border-white/10 group/thumb">
+                                                <img src={img} alt="" className="w-full h-full object-cover" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setItemImages(prev => prev.filter((_, i) => i !== imgIdx))}
+                                                    className="absolute top-1 right-1 h-6 w-6 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <div 
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className={cn(
+                                                "aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all gap-2 overflow-hidden group/img",
+                                                "border-white/10 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/20"
+                                            )}
+                                        >
+                                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover/img:scale-110 transition-transform">
+                                                <Camera className="h-5 w-5" />
+                                            </div>
+                                            <span className="text-[8px] font-black text-muted-foreground/50 uppercase tracking-widest">Add Photo</span>
+                                        </div>
                                     </div>
                                     <input 
                                         type="file" 
                                         ref={fileInputRef} 
                                         onChange={handleImageUpload} 
                                         accept="image/*" 
+                                        multiple
                                         className="hidden" 
                                     />
-                                    {itemImage && (
+                                    {itemImages.length > 0 && (
                                         <Button 
                                             type="button" 
                                             variant="ghost" 
-                                            onClick={() => setItemImage(null)}
+                                            onClick={() => setItemImages([])}
                                             className="w-full text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 hover:bg-red-500/10"
                                         >
-                                            <Trash2 className="mr-2 h-3.5 w-3.5" /> Clear Photo
+                                            <Trash2 className="mr-2 h-3.5 w-3.5" /> Clear All Photos
                                         </Button>
                                     )}
                                 </div>
@@ -759,6 +1058,19 @@ export function ReportEditor({ report, company }: ReportEditorProps) {
                                                 className="bg-white/5 border-white/10 h-8 text-xs flex-1"
                                                 placeholder="Heading label..."
                                             />
+                                        </div>
+                                    </div>
+                                    
+                                    {/* PDF Section Toggles */}
+                                    <h5 className="text-[10px] font-black uppercase tracking-wider text-muted-foreground border-b border-white/5 pb-1 mt-4">PDF Sections</h5>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showExecutiveSummary" checked={fieldSettings.showExecutiveSummary !== false} onChange={e => updateFieldSettings('showExecutiveSummary', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showExecutiveSummary" className="text-xs font-bold text-muted-foreground cursor-pointer">Show Executive Summary</Label>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" id="showKeyFindings" checked={fieldSettings.showKeyFindings !== false} onChange={e => updateFieldSettings('showKeyFindings', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary cursor-pointer" />
+                                            <Label htmlFor="showKeyFindings" className="text-xs font-bold text-muted-foreground cursor-pointer">Show Key Findings Overview</Label>
                                         </div>
                                     </div>
                                 </div>
