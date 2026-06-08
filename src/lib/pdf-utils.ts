@@ -379,7 +379,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         });
     }
 
-    const calculatedPropBoxHeight = Math.max(80, 10 + (propFields.length * 9));
+    const calculatedPropBoxHeight = Math.max(95, 10 + (propFields.length * 9));
 
     // Dark Blue Box for Info Title
     doc.setFillColor(15, 23, 42);
@@ -417,8 +417,8 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
 
     propFields.forEach(f => addPropField(f.label, f.val1, f.val2));
 
-    // Large property overview photo - BIGGER: 80mm height, 120mm width
-    const overviewImgH = 80;
+    // Large property overview photo - BIGGER: 95mm height, 120mm width
+    const overviewImgH = 95;
     const overviewImgW = 120;
     if (metadata.propertyImage) {
         try {
@@ -513,7 +513,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
             doc.text("EXECUTIVE SUMMARY", 18, currentY + 5.5);
             
             doc.setDrawColor(226, 232, 240);
-            doc.roundedRect(14, currentY + 8, 93, 35, 2, 2, 'S');
+            doc.roundedRect(14, currentY + 8, 93, 45, 2, 2, 'S');
             doc.setTextColor(30, 41, 59);
             doc.setFontSize(8);
             doc.setFont("helvetica", "normal");
@@ -529,11 +529,11 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
             doc.text("KEY FINDINGS OVERVIEW", 116, currentY + 5.5);
             
             doc.setDrawColor(226, 232, 240);
-            doc.roundedRect(112, currentY + 8, 84, 35, 2, 2, 'S');
+            doc.roundedRect(112, currentY + 8, 84, 45, 2, 2, 'S');
             
             drawKeyFindingsCounts(doc, report, currentY + 15, 120);
 
-            currentY += 50;
+            currentY += 60;
 
         } else if (showExecSummary) {
             // Only executive summary - full width
@@ -545,14 +545,14 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
             doc.text("EXECUTIVE SUMMARY", 18, currentY + 5.5);
             
             doc.setDrawColor(226, 232, 240);
-            doc.roundedRect(14, currentY + 8, 182, 35, 2, 2, 'S');
+            doc.roundedRect(14, currentY + 8, 182, 45, 2, 2, 'S');
             doc.setTextColor(30, 41, 59);
             doc.setFontSize(8);
             doc.setFont("helvetica", "normal");
             const summaryLines = doc.splitTextToSize(report.description || report.conclusion || "An inspection was conducted to assess the condition. Several areas of concern were identified. Please refer to the findings section for detailed observations.", 174);
             doc.text(summaryLines, 18, currentY + 14);
 
-            currentY += 50;
+            currentY += 60;
 
         } else if (showKeyFindings) {
             // Only key findings - full width
@@ -564,11 +564,11 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
             doc.text("KEY FINDINGS OVERVIEW", 18, currentY + 5.5);
             
             doc.setDrawColor(226, 232, 240);
-            doc.roundedRect(14, currentY + 8, 182, 35, 2, 2, 'S');
+            doc.roundedRect(14, currentY + 8, 182, 45, 2, 2, 'S');
             
             drawKeyFindingsCounts(doc, report, currentY + 15, 22);
 
-            currentY += 50;
+            currentY += 60;
         }
     }
     
