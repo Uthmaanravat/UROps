@@ -310,13 +310,13 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.setFont("helvetica", "normal");
     const rightInfoX = 140;
     doc.text("REPORT ID:", rightInfoX, 29);
-    doc.text(`UR-${report.number.toString().padStart(6, '0')}`, rightInfoX + 25, 29);
+    doc.text(`UR-${report.number.toString().padStart(6, '0')}`, rightInfoX + 32, 29);
     
     doc.text("DATE:", rightInfoX, 34);
-    doc.text(new Date(report.date).toLocaleDateString('en-GB'), rightInfoX + 25, 34);
+    doc.text(new Date(report.date).toLocaleDateString('en-GB'), rightInfoX + 32, 34);
     
     doc.text("PREPARED BY:", rightInfoX, 39);
-    doc.text(company.name, rightInfoX + 25, 39);
+    doc.text(company.name, rightInfoX + 32, 39);
     
     const showPilotName = fs.showPilotName !== false;
     const showInspectorName = fs.showInspectorName !== false;
@@ -325,10 +325,10 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
 
     if (showPilotName && metadata.pilotName && report.type === "ADVANCED") {
         doc.text(`${pilotNameLabel.toUpperCase()}:`, rightInfoX, 44);
-        doc.text(metadata.pilotName, rightInfoX + 25, 44);
+        doc.text(metadata.pilotName, rightInfoX + 32, 44);
     } else if (showInspectorName && metadata.inspectorName && report.type === "CONSTRUCTION") {
         doc.text(`${inspectorNameLabel.toUpperCase()}:`, rightInfoX, 44);
-        doc.text(metadata.inspectorName, rightInfoX + 25, 44);
+        doc.text(metadata.inspectorName, rightInfoX + 32, 44);
     }
 
     // Divider
@@ -379,11 +379,11 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         });
     }
 
-    const calculatedPropBoxHeight = Math.max(70, 10 + (propFields.length * 9));
+    const calculatedPropBoxHeight = Math.max(80, 10 + (propFields.length * 9));
 
     // Dark Blue Box for Info Title
     doc.setFillColor(15, 23, 42);
-    doc.roundedRect(14, currentY, 65, 8, 2, 2, 'F');
+    doc.roundedRect(14, currentY, 58, 8, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
@@ -392,7 +392,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     // Box for property details
     doc.setDrawColor(226, 232, 240);
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(14, currentY + 8, 65, calculatedPropBoxHeight, 2, 2, 'FD');
+    doc.roundedRect(14, currentY + 8, 58, calculatedPropBoxHeight, 2, 2, 'FD');
     
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(8);
@@ -403,7 +403,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         doc.text(label, 18, propY);
         propY += 4;
         doc.setFont("helvetica", "normal");
-        const lines = doc.splitTextToSize(val1 || "-", 55);
+        const lines = doc.splitTextToSize(val1 || "-", 50);
         doc.text(lines, 18, propY);
         propY += (lines.length * 4);
         if (val2) {
@@ -411,86 +411,87 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
             propY += 4;
         }
         doc.setDrawColor(226, 232, 240);
-        doc.line(18, propY + 1, 75, propY + 1);
+        doc.line(18, propY + 1, 68, propY + 1);
         propY += 5;
     };
 
     propFields.forEach(f => addPropField(f.label, f.val1, f.val2));
 
-    // Large property overview photo - BIGGER: 70mm height
-    const overviewImgH = 70;
+    // Large property overview photo - BIGGER: 80mm height, 120mm width
+    const overviewImgH = 80;
+    const overviewImgW = 120;
     if (metadata.propertyImage) {
         try {
             let format = 'JPEG';
             if (metadata.propertyImage.startsWith('data:image/png')) format = 'PNG';
-            doc.addImage(metadata.propertyImage, format, 84, currentY, 112, overviewImgH, undefined, 'FAST');
+            doc.addImage(metadata.propertyImage, format, 76, currentY, overviewImgW, overviewImgH, undefined, 'FAST');
             
             // Subtle border around image
             doc.setDrawColor(226, 232, 240);
-            doc.roundedRect(84, currentY, 112, overviewImgH, 2, 2, 'S');
+            doc.roundedRect(76, currentY, overviewImgW, overviewImgH, 2, 2, 'S');
         } catch (e) {
             doc.setFillColor(226, 232, 240);
-            doc.roundedRect(84, currentY, 112, overviewImgH, 2, 2, 'F');
+            doc.roundedRect(76, currentY, overviewImgW, overviewImgH, 2, 2, 'F');
         }
     } else {
         // Grey placeholder
         doc.setFillColor(226, 232, 240);
-        doc.roundedRect(84, currentY, 112, overviewImgH, 2, 2, 'F');
+        doc.roundedRect(76, currentY, overviewImgW, overviewImgH, 2, 2, 'F');
         doc.setTextColor(148, 163, 184);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
-        doc.text("OVERVIEW IMAGE", 140, currentY + overviewImgH / 2, { align: 'center' });
+        doc.text("OVERVIEW IMAGE", 136, currentY + overviewImgH / 2, { align: 'center' });
     }
 
-    // Icons Bar - positioned below overview image
+    // Icons Bar - positioned below overview image (120mm width, matching overview image)
     const iconsBarY = currentY + overviewImgH + 5;
     doc.setDrawColor(226, 232, 240);
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(84, iconsBarY, 112, 15, 2, 2, 'FD');
+    doc.roundedRect(76, iconsBarY, 120, 15, 2, 2, 'FD');
     
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(7);
     
     const iconBaseY = iconsBarY + 5;
     
-    // Col 1
+    // Col 1 (Centered at X = 91)
     doc.setFont("helvetica", "bold");
-    doc.text("REPORT DATE", 92, iconBaseY);
+    doc.text("REPORT DATE", 91, iconBaseY, { align: 'center' });
     doc.setFont("helvetica", "normal");
-    doc.text(new Date(report.date).toLocaleDateString('en-GB'), 92, iconBaseY + 5);
+    doc.text(new Date(report.date).toLocaleDateString('en-GB'), 91, iconBaseY + 5, { align: 'center' });
     
-    // Col 2
+    // Col 2 (Centered at X = 121)
     doc.setFont("helvetica", "bold");
     const col2Label = report.type === "CONSTRUCTION" 
         ? (fs.inspectorNameLabel || "INSPECTOR") 
         : (fs.equipmentUsedLabel || "EQUIPMENT USED");
-    doc.text(col2Label.toUpperCase(), 120, iconBaseY);
+    doc.text(col2Label.toUpperCase(), 121, iconBaseY, { align: 'center' });
     doc.setFont("helvetica", "normal");
-    doc.text((report.type === "CONSTRUCTION" ? metadata.inspectorName : metadata.equipmentUsed) || "-", 120, iconBaseY + 5);
+    doc.text((report.type === "CONSTRUCTION" ? metadata.inspectorName : metadata.equipmentUsed) || "-", 121, iconBaseY + 5, { align: 'center' });
     
-    // Col 3
+    // Col 3 (Centered at X = 151)
     doc.setFont("helvetica", "bold");
-    doc.text("TOTAL IMAGES", 150, iconBaseY);
+    doc.text("TOTAL IMAGES", 151, iconBaseY, { align: 'center' });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     const imgCount = report.items.filter((i:any) => i.imageUrl).length || metadata.totalImages || 0;
-    doc.text(imgCount.toString(), 150, iconBaseY + 6);
+    doc.text(imgCount.toString(), 151, iconBaseY + 6, { align: 'center' });
     doc.setFontSize(7);
     
-    // Col 4
+    // Col 4 (Centered at X = 181)
     doc.setFont("helvetica", "bold");
     const col4Label = report.type === "CONSTRUCTION" 
         ? (fs.projectPhaseLabel || "PHASE") 
         : (fs.flightTimeLabel || "FLIGHT TIME");
-    doc.text(col4Label.toUpperCase(), 175, iconBaseY);
+    doc.text(col4Label.toUpperCase(), 181, iconBaseY, { align: 'center' });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     if (report.type === "CONSTRUCTION") {
-        doc.text(metadata.projectPhase || "-", 175, iconBaseY + 6);
+        doc.text(metadata.projectPhase || "-", 181, iconBaseY + 6, { align: 'center' });
     } else {
-        doc.text(metadata.flightTime ? `${metadata.flightTime} min` : "-", 175, iconBaseY + 6);
+        doc.text(metadata.flightTime ? `${metadata.flightTime} min` : "-", 181, iconBaseY + 6, { align: 'center' });
     }
     doc.setFontSize(7);
 
@@ -572,15 +573,16 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     }
     
     // 4. Findings - CARD BASED LAYOUT (replaces old table)
-    // Section title bar
-    doc.setFillColor(15, 23, 42);
-    doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("FINDINGS", 18, currentY + 5.5);
-    
-    currentY += 14;
+    if (report.items && report.items.length > 0) {
+        // Section title bar
+        doc.setFillColor(15, 23, 42);
+        doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text("FINDINGS", 18, currentY + 5.5);
+        
+        currentY += 14;
 
     const showLocation = fs.showLocation !== false;
     const showSeverity = fs.showSeverity !== false;
@@ -675,11 +677,11 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         doc.text(descWrapped, 18, currentY);
         currentY += descRenderHeight + 6;
 
-        // --- Images - LARGE ---
+        // --- Images - LARGE --- (matches size of cover image: 120x80, centered)
         if (images.length === 1) {
             // Single image: render large
-            const singleImgW = 160;
-            const singleImgH = 100;
+            const singleImgW = 120;
+            const singleImgH = 80;
             if (currentY + singleImgH > 270) {
                 addFooter(doc, company, metadata);
                 doc.addPage();
@@ -687,12 +689,12 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
             }
             try {
                 const format = getImageFormat(images[0]);
-                doc.addImage(images[0], format, 25, currentY, singleImgW, singleImgH, undefined, 'FAST');
+                doc.addImage(images[0], format, 45, currentY, singleImgW, singleImgH, undefined, 'FAST');
                 doc.setDrawColor(226, 232, 240);
-                doc.roundedRect(25, currentY, singleImgW, singleImgH, 2, 2, 'S');
+                doc.roundedRect(45, currentY, singleImgW, singleImgH, 2, 2, 'S');
             } catch (err) {
                 doc.setFillColor(226, 232, 240);
-                doc.roundedRect(25, currentY, singleImgW, singleImgH, 2, 2, 'F');
+                doc.roundedRect(45, currentY, singleImgW, singleImgH, 2, 2, 'F');
             }
             currentY += singleImgH + 6;
         } else if (images.length > 1) {
@@ -766,6 +768,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         doc.line(14, currentY, 196, currentY);
         currentY += 8;
         doc.setLineWidth(0.2);
+    }
     }
     
     // Conclusion section (if exists)
