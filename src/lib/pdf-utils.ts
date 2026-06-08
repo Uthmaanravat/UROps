@@ -625,6 +625,16 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         const cardHeaderH = 12;
         doc.roundedRect(14, currentY, 182, cardHeaderH, 2, 2, 'FD');
 
+        // Draw a thick severity color indicator bar on the left edge of the card header
+        const sev = item.severity || 'LOW';
+        if (sev === 'HIGH') doc.setFillColor(239, 68, 68);
+        else if (sev === 'MEDIUM') doc.setFillColor(249, 115, 22);
+        else doc.setFillColor(59, 130, 246);
+        // Cover only the left-most 4mm of the rounded rect
+        doc.roundedRect(14, currentY, 4, cardHeaderH, 2, 2, 'F');
+        // Straighten the right edge of this 4mm bar
+        doc.rect(16, currentY, 2, cardHeaderH, 'F');
+
         // Finding number badge
         doc.setFillColor(15, 23, 42);
         doc.roundedRect(16, currentY + 2, 12, 8, 2, 2, 'F');
@@ -778,6 +788,36 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     }
 
 
+    // Sign-off section
+    const signOffHeight = 30;
+    if (currentY + signOffHeight + 10 > 280) {
+        addFooter(doc, company, metadata);
+        doc.addPage();
+        currentY = 20;
+    }
+    
+    // Draw sign-off lines
+    doc.setDrawColor(203, 213, 225); // slate-300
+    doc.setLineWidth(0.5);
+    
+    // Inspector Line (Left side)
+    doc.line(14, currentY + 15, 84, currentY + 15);
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.setFont("helvetica", "bold");
+    doc.text("PREPARED / INSPECTED BY", 14, currentY + 19);
+    doc.setFont("helvetica", "normal");
+    doc.text(metadata.inspectorName || company.name, 14, currentY + 23);
+    
+    // Client Line (Right side)
+    doc.line(126, currentY + 15, 196, currentY + 15);
+    doc.setFont("helvetica", "bold");
+    doc.text("CLIENT ACCEPTANCE / SIGN-OFF", 126, currentY + 19);
+    doc.setFont("helvetica", "normal");
+    doc.text(report.client?.name || "Client Representative", 126, currentY + 23);
+    
+    currentY += signOffHeight + 5;
+
     // Note
     if (currentY + 10 > 280) {
         addFooter(doc, company, metadata);
@@ -790,6 +830,16 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
 
     // Footer on last page
     addFooter(doc, company, metadata);
+
+    // Add page numbers to all footers at the end
+    const totalPages = doc.internal.pages.length - 1;
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        doc.setPage(pageNum);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(255, 255, 255); // White text on navy footer
+        doc.text(`PAGE ${pageNum} OF ${totalPages}`, 105, 292, { align: 'center' });
+    }
 
     return doc;
 }
