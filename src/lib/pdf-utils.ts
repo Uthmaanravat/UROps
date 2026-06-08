@@ -776,35 +776,7 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         doc.setLineWidth(0.2);
     }
     }
-    
-    // Conclusion section (if exists)
-    if (report.conclusion) {
-        if (currentY + 30 > 265) {
-            addFooter(doc, company, metadata);
-            doc.addPage();
-            currentY = 20;
-        }
-        
-        doc.setFillColor(15, 23, 42);
-        doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "bold");
-        doc.text("CONCLUSION", 18, currentY + 5.5);
-        currentY += 12;
-        
-        doc.setTextColor(30, 41, 59);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        const concLines = doc.splitTextToSize(report.conclusion, 174);
-        if (currentY + (concLines.length * 4) > 270) {
-            addFooter(doc, company, metadata);
-            doc.addPage();
-            currentY = 20;
-        }
-        doc.text(concLines, 18, currentY);
-        currentY += (concLines.length * 4) + 8;
-    }
+
 
     // Note
     if (currentY + 10 > 280) {
