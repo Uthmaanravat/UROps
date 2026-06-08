@@ -574,43 +574,49 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     
     // 4. Findings - CARD BASED LAYOUT (replaces old table)
     if (report.items && report.items.length > 0) {
-        // Section title bar
-        doc.setFillColor(15, 23, 42);
-        doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "bold");
-        doc.text("FINDINGS", 18, currentY + 5.5);
-        
-        currentY += 14;
+        let findingsHeaderPrinted = false;
 
-    const showLocation = fs.showLocation !== false;
-    const showSeverity = fs.showSeverity !== false;
-    const showRecommendation = fs.showRecommendation !== false;
-    const locationLabel = (fs.locationLabel || "Location").toUpperCase();
-    const severityLabel = (fs.severityLabel || "Severity").toUpperCase();
-    const recommendationLabel = (fs.recommendationLabel || "Recommendation").toUpperCase();
-    
-    for (let i = 0; i < report.items.length; i++) {
-        const item = report.items[i];
-        const images = getItemImages(item);
+        const showLocation = fs.showLocation !== false;
+        const showSeverity = fs.showSeverity !== false;
+        const showRecommendation = fs.showRecommendation !== false;
+        const locationLabel = (fs.locationLabel || "Location").toUpperCase();
+        const severityLabel = (fs.severityLabel || "Severity").toUpperCase();
+        const recommendationLabel = (fs.recommendationLabel || "Recommendation").toUpperCase();
         
-        // Estimate card height to decide if we need a page break
-        const descLines = doc.splitTextToSize(item.description || "-", 170);
-        const descHeight = descLines.length * 4;
-        const hasImages = images.length > 0;
-        const imageRowsNeeded = hasImages ? Math.ceil(images.length / 2) : 0;
-        const imageHeight = images.length === 1 ? 100 : (imageRowsNeeded * 68);
-        const recLines = (showRecommendation && item.recommendation) ? doc.splitTextToSize(item.recommendation, 170) : [];
-        const recHeight = recLines.length > 0 ? (recLines.length * 4) + 14 : 0;
-        const estimatedCardHeight = 20 + descHeight + (hasImages ? imageHeight + 8 : 0) + recHeight + 10;
-        
-        // Check page break before card
-        if (currentY + Math.min(estimatedCardHeight, 60) > 265) {
-            addFooter(doc, company, metadata);
-            doc.addPage();
-            currentY = 20;
-        }
+        for (let i = 0; i < report.items.length; i++) {
+            const item = report.items[i];
+            const images = getItemImages(item);
+            
+            // Estimate card height to decide if we need a page break
+            const descLines = doc.splitTextToSize(item.description || "-", 170);
+            const descHeight = descLines.length * 4;
+            const hasImages = images.length > 0;
+            const imageRowsNeeded = hasImages ? Math.ceil(images.length / 2) : 0;
+            const imageHeight = images.length === 1 ? 100 : (imageRowsNeeded * 68);
+            const recLines = (showRecommendation && item.recommendation) ? doc.splitTextToSize(item.recommendation, 170) : [];
+            const recHeight = recLines.length > 0 ? (recLines.length * 4) + 14 : 0;
+            const estimatedCardHeight = 20 + descHeight + (hasImages ? imageHeight + 8 : 0) + recHeight + 10;
+            
+            // Check page break before card (include header height if not printed yet)
+            const headerHeight = !findingsHeaderPrinted ? 14 : 0;
+            if (currentY + Math.min(estimatedCardHeight, 60) + headerHeight > 265) {
+                addFooter(doc, company, metadata);
+                doc.addPage();
+                currentY = 20;
+            }
+
+            // Print findings header if not yet printed
+            if (!findingsHeaderPrinted) {
+                doc.setFillColor(15, 23, 42);
+                doc.roundedRect(14, currentY, 182, 8, 2, 2, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "bold");
+                doc.text("FINDINGS", 18, currentY + 5.5);
+                
+                currentY += 14;
+                findingsHeaderPrinted = true;
+            }
 
         // --- Card Header: Number + Title + Location + Severity ---
         // Card background - light grey rounded rect
