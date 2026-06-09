@@ -10,9 +10,10 @@ import { BrainCircuit, BookOpen, Layers } from "lucide-react"
 interface KnowledgeBaseClientProps {
     historicalItems: any[]
     aiEnabled?: boolean
+    clients?: { id: string; name: string }[]
 }
 
-export function KnowledgeBaseClient({ historicalItems, aiEnabled = true }: KnowledgeBaseClientProps) {
+export function KnowledgeBaseClient({ historicalItems, aiEnabled = true, clients = [] }: KnowledgeBaseClientProps) {
     const [activeTab, setActiveTab] = useState<'historical' | 'fixed'>('historical')
 
     return (
@@ -133,7 +134,7 @@ export function KnowledgeBaseClient({ historicalItems, aiEnabled = true }: Knowl
                         </div>
                     </div>
 
-                    <FixedPriceManager />
+                    <FixedPriceManager clients={clients} />
                 </div>
             )}
         </div>

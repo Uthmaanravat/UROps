@@ -25,7 +25,7 @@ async function listModels() {
         // But there isn't a simple listModels helper exposed in the high-level `GoogleGenerativeAI` class in early versions.
         // We will try to confirm if 'gemini-1.5-flash' works with a simple prompt, if not try 'gemini-pro'.
 
-        const modelsToTest = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-pro', 'gemini-pro'];
+        const modelsToTest = ['gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-3.5-flash'];
 
         for (const modelName of modelsToTest) {
             try {

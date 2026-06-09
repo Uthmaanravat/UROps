@@ -3,8 +3,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function parseScopeToItems(scopeText: string) {
-    // Mock mode if no valid API key
-    throw new Error("Missing Gemini API Key. AI parsing unavailable.")
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error("Missing Gemini API Key. AI parsing unavailable.")
+    }
 
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-flash-latest", generationConfig: { responseMimeType: "application/json" } });

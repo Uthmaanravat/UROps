@@ -41,7 +41,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [projectId, setProjectId] = useState(initialProjectId || "")
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
 
-    const [items, setItems] = useState(initialScope ? [] : [{ description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
+    const [items, setItems] = useState(initialScope ? [] : [{ code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
     const [site, setSite] = useState("")
     const [quoteNumber, setQuoteNumber] = useState("")
     const [reference, setReference] = useState("")
@@ -109,14 +109,17 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     }, [reference, isProjectNameManual]);
 
     const filteredCatalog = catalog.filter(item =>
-        item.description.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-        item.category?.toLowerCase().includes(catalogSearch.toLowerCase())
+        (!item.clientId || item.clientId === clientId) &&
+        (item.description.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+        item.category?.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+        item.code?.toLowerCase().includes(catalogSearch.toLowerCase()))
     )
 
     const addFromCatalog = (catalogItem: any) => {
         // If the last item is empty, replace it, otherwise add new
         const lastItem = items[items.length - 1]
         const newItem = {
+            code: catalogItem.code || "",
             description: (catalogItem.description || "").toUpperCase(),
             quantity: 1,
             unit: (catalogItem.unit || "").toUpperCase(),
@@ -134,7 +137,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     }
 
     const addItem = () => {
-        setItems([...items, { description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
+        setItems([...items, { code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
     }
 
     const removeItem = (index: number) => {
@@ -235,9 +238,14 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         )
     }
 
+    const clientCatalog = catalog.filter(item => 
+        !item.clientId || item.clientId === clientId
+    );
+
     return (
-        <div className="rounded-lg border bg-card p-6 shadow-sm">
-            <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20">
+            <div className="flex-1 w-full rounded-lg border bg-card p-6 shadow-sm">
+                <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Header Details */}
                 <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-4">
@@ -470,6 +478,29 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             {items.map((item, index) => (
                                 <div key={index} className="flex flex-col md:flex-row gap-4 md:gap-3 items-start p-4 md:p-0 rounded-2xl border md:border-none bg-white/[0.02] md:bg-transparent shadow-sm md:shadow-none border-white/5 md:border-transparent group/row">
                                     <div className="flex-1 w-full space-y-2 md:space-y-0 flex gap-2">
+                                        <div className="w-24 shrink-0">
+                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Code</Label>
+                                            <Input
+                                                placeholder="Code"
+                                                // @ts-ignore
+                                                value={item.code || ""}
+                                                onChange={(e) => {
+                                                    const codeVal = e.target.value.toUpperCase();
+                                                    updateItem(index, 'code', codeVal);
+                                                    // Lookup in catalog
+                                                    const matched = catalog.find(c => 
+                                                        c.code?.toUpperCase() === codeVal && 
+                                                        (!c.clientId || c.clientId === clientId)
+                                                    );
+                                                    if (matched) {
+                                                        updateItem(index, 'description', matched.description.toUpperCase());
+                                                        updateItem(index, 'unit', (matched.unit || "").toUpperCase());
+                                                        updateItem(index, 'unitPrice', matched.unitPrice);
+                                                    }
+                                                }}
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-mono uppercase text-center font-bold"
+                                            />
+                                        </div>
                                         <div className="flex-1">
                                             <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Description & Details</Label>
                                             <Input
@@ -633,5 +664,49 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 </div>
             </form>
         </div>
+
+        {/* Catalog Viewer Panel */}
+        <div className="w-full lg:w-80 shrink-0 bg-[#14141E]/80 border border-white/5 rounded-2xl p-5 h-fit sticky top-6 backdrop-blur-md">
+            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4">
+                <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+                        <Book className="h-4 w-4" /> Catalog Viewer
+                    </h3>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">
+                        {clients.find(c => c.id === clientId)?.name || "Selected Client"}'s Catalog
+                    </p>
+                </div>
+            </div>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1 scrollbar-thin">
+                {clientCatalog.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic text-center py-8">
+                        No catalog items linked to this client yet.
+                    </p>
+                ) : (
+                    clientCatalog.map(item => (
+                        <div 
+                            key={item.id}
+                            className="p-3 bg-white/5 border border-white/5 hover:border-primary/20 rounded-xl flex items-center justify-between gap-3 group transition-all"
+                        >
+                            <div className="min-w-0">
+                                <p className="text-xs font-mono font-bold text-primary uppercase">{item.code || "—"}</p>
+                                <p className="text-xs font-medium text-white truncate max-w-[150px]">{item.description}</p>
+                                <p className="text-[10px] text-muted-foreground uppercase">{formatCurrency(item.unitPrice)} / {item.unit || "ea"}</p>
+                            </div>
+                            <Button
+                                type="button"
+                                onClick={() => addFromCatalog(item)}
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2.5 border-primary/20 hover:bg-primary hover:text-black shrink-0 transition-all font-black text-xs"
+                            >
+                                + Add
+                            </Button>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    </div>
     )
 }

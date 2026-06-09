@@ -36,6 +36,7 @@ model User {
   id                     String   @id
   email                  String   @unique
   name                   String?
+  phone                  String?
   role                   Role     @default(MANAGER)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
@@ -93,6 +94,7 @@ model Client {
   submissionLogs     SubmissionLog[]
   reports            Report[]
   statements         Statement[]
+  fixedItems         FixedPriceItem[]
 }
 
 model Project {
@@ -293,6 +295,8 @@ model PricingKnowledge {
 model FixedPriceItem {
   id          String   @id @default(uuid())
   companyId   String
+  clientId    String?
+  code        String?
   description String
   unitPrice   Float
   unit        String?
@@ -300,6 +304,7 @@ model FixedPriceItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
 model SubmissionLog {

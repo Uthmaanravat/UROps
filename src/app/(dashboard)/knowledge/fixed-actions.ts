@@ -9,6 +9,7 @@ export async function getFixedPriceItemsAction() {
     try {
         return await prisma.fixedPriceItem.findMany({
             where: { companyId },
+            include: { client: { select: { id: true, name: true } } },
             orderBy: { description: 'asc' }
         })
     } catch (error) {
@@ -22,7 +23,9 @@ export async function saveFixedPriceItemAction(data: {
     description: string,
     unitPrice: number,
     unit?: string,
-    category?: string
+    category?: string,
+    clientId?: string | null,
+    code?: string | null
 }) {
     const companyId = await ensureAuth()
     try {
@@ -35,7 +38,9 @@ export async function saveFixedPriceItemAction(data: {
                     description: data.description,
                     unitPrice: data.unitPrice,
                     unit: data.unit,
-                    category: data.category
+                    category: data.category,
+                    clientId: data.clientId || null,
+                    code: data.code || null
                 }
             })
         } else {
@@ -45,7 +50,9 @@ export async function saveFixedPriceItemAction(data: {
                     description: data.description,
                     unitPrice: data.unitPrice,
                     unit: data.unit,
-                    category: data.category
+                    category: data.category,
+                    clientId: data.clientId || null,
+                    code: data.code || null
                 }
             })
         }

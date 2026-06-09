@@ -28,15 +28,48 @@ export async function processBankStatementAction(formData: FormData) {
     try {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        const base64Data = buffer.toString("base64");
+        const fileName = file.name.toLowerCase();
         
-        let mimeType = "text/plain";
-        if (file.name.toLowerCase().endsWith('.pdf')) {
-            mimeType = "application/pdf";
-        } else if (file.name.toLowerCase().endsWith('.csv')) {
-            mimeType = "text/csv";
-        } else if (file.name.toLowerCase().endsWith('.xlsx')) {
-            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        let textContent = "";
+        let fileExtension = fileName.split('.').pop() || "";
+
+        if (fileExtension === 'csv' || fileExtension === 'txt') {
+            textContent = buffer.toString('utf-8');
+        } else if (fileExtension === 'xlsx') {
+            try {
+                const ExcelJS = require('exceljs');
+                const workbook = new ExcelJS.Workbook();
+                await workbook.xlsx.load(buffer);
+                let excelText = "";
+                workbook.eachSheet((worksheet: any) => {
+                    excelText += `Sheet: ${worksheet.name}\n`;
+                    worksheet.eachRow((row: any) => {
+                        const rowValues: string[] = [];
+                        row.eachCell((cell: any) => {
+                            rowValues.push(cell.text || cell.value?.toString() || "");
+                        });
+                        excelText += rowValues.join(", ") + "\n";
+                    });
+                });
+                textContent = excelText;
+            } catch (err: any) {
+                console.error("Excel parsing failed:", err);
+                return { success: false, error: "Failed to parse Excel spreadsheet: " + err.message };
+            }
+        } else if (fileExtension === 'pdf') {
+            try {
+                let pdfParse = require("pdf-parse");
+                if (typeof pdfParse !== 'function' && pdfParse.default) {
+                    pdfParse = pdfParse.default;
+                }
+                if (typeof pdfParse !== 'function') {
+                    throw new Error("pdf-parse is not a function");
+                }
+                const pdfData = await pdfParse(buffer);
+                textContent = pdfData.text;
+            } catch (pdfError) {
+                console.error("Local PDF parsing failed, falling back to Gemini document parser:", pdfError);
+            }
         }
 
         const model = genAI.getGenerativeModel({ 
@@ -66,10 +99,21 @@ export async function processBankStatementAction(formData: FormData) {
         If the file has no recognizable transactions, return {"transactions": []}.
         `;
 
-        const result = await model.generateContent([
-            prompt,
-            { inlineData: { data: base64Data, mimeType } }
-        ]);
+        let result;
+        if (textContent && textContent.trim().length > 0) {
+            console.log("Sending extracted text of length", textContent.length, "to Gemini");
+            const fullPrompt = `${prompt}\n\nHere is the transaction data extracted from the document:\n\n${textContent}`;
+            result = await model.generateContent(fullPrompt);
+        } else if (fileExtension === 'pdf') {
+            console.log("Extracted text empty for PDF, sending base64 to Gemini direct");
+            const base64Data = buffer.toString("base64");
+            result = await model.generateContent([
+                prompt,
+                { inlineData: { data: base64Data, mimeType: "application/pdf" } }
+            ]);
+        } else {
+            return { success: false, error: "Unable to extract text content from the file." };
+        }
 
         const textResponse = result.response.text();
         const parsed = JSON.parse(textResponse);

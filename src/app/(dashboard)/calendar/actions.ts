@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { ensureAuth } from "@/lib/auth-actions"
+import { sendMeetingReminders } from "@/lib/reminders"
 
 export async function createMeeting(data: {
     title: string
@@ -28,6 +29,13 @@ export async function createMeeting(data: {
                 projectId: data.projectId || null
             }
         })
+
+        // Dispatch email and WhatsApp reminders to managers asynchronously
+        try {
+            await sendMeetingReminders(meeting.id)
+        } catch (reminderError) {
+            console.error("Failed to send meeting reminders:", reminderError)
+        }
 
         revalidatePath("/calendar")
         if (data.clientId) revalidatePath(`/clients/${data.clientId}`)
