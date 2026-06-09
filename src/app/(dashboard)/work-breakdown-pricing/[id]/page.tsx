@@ -13,7 +13,11 @@ export default async function WorkBreakdownPricingPage({ params }: { params: { i
         where: { id: params.id },
         include: {
             project: {
-                include: { client: true }
+                include: {
+                    client: {
+                        include: { contacts: true }
+                    }
+                }
             },
             items: true
         }

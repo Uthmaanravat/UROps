@@ -19,42 +19,77 @@ export async function createInvoiceAction(data: {
     type?: 'QUOTE' | 'INVOICE'
     paymentNotes?: string
     firstPaymentPercentage?: number
+    contactId?: string | null
+    attentionTo?: string | null
 }) {
     const companyId = await ensureAuth()
     const year = new Date().getFullYear();
     let nextNumber: number;
     let formattedQuoteNumber = data.quoteNumber;
     const isInvoice = data.type === 'INVOICE';
+    
     const settings = await prisma.companySettings.findUnique({ where: { companyId } });
     if (!settings) throw new Error("Company settings not found");
 
-    if (data.quoteNumber) {
-        const manualNumber = data.quoteNumber;
-        const match = manualNumber.match(/(\d+)$/);
-        if (match) {
-            const manualSeq = parseInt(match[1]);
-            // Always sync CompanySettings if manual number is provided (allows "resetting" sequence)
-            await prisma.companySettings.update({
-                where: { companyId },
-                data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
-            });
-            nextNumber = manualSeq;
+    const clientObj = await prisma.client.findFirst({
+        where: { id: data.clientId, companyId }
+    });
+    if (!clientObj) throw new Error("Client not found");
+
+    const codePrefix = clientObj.codePrefix;
+
+    if (codePrefix) {
+        if (data.quoteNumber) {
+            const manualNumber = data.quoteNumber;
+            const match = manualNumber.match(/(\d+)$/);
+            if (match) {
+                const manualSeq = parseInt(match[1]);
+                await prisma.client.update({
+                    where: { id: data.clientId },
+                    data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
+                });
+                nextNumber = manualSeq;
+            } else {
+                nextNumber = (isInvoice ? (clientObj.lastInvoiceNumber || 0) : (clientObj.lastQuoteNumber || 0)) + 1;
+            }
         } else {
-            // If manual number provided but no sequence found, use current settings + 1
-            nextNumber = (isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0)) + 1;
+            const updatedClient = await prisma.client.update({
+                where: { id: data.clientId },
+                data: isInvoice
+                    ? { lastInvoiceNumber: { increment: 1 } }
+                    : { lastQuoteNumber: { increment: 1 } }
+            });
+            nextNumber = isInvoice ? updatedClient.lastInvoiceNumber : updatedClient.lastQuoteNumber;
+            formattedQuoteNumber = isInvoice
+                ? `${codePrefix}-INV-${year}-${nextNumber.toString().padStart(3, '0')}`
+                : `${codePrefix}-Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
         }
     } else {
-        // Auto-increment
-        const updatedSettings = await prisma.companySettings.update({
-            where: { companyId },
-            data: isInvoice
-                ? { lastInvoiceNumber: { increment: 1 } }
-                : { lastQuoteNumber: { increment: 1 } }
-        });
-        nextNumber = isInvoice ? updatedSettings.lastInvoiceNumber : updatedSettings.lastQuoteNumber;
-        formattedQuoteNumber = isInvoice
-            ? `INV-${year}-${nextNumber.toString().padStart(3, '0')}`
-            : `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+        if (data.quoteNumber) {
+            const manualNumber = data.quoteNumber;
+            const match = manualNumber.match(/(\d+)$/);
+            if (match) {
+                const manualSeq = parseInt(match[1]);
+                await prisma.companySettings.update({
+                    where: { companyId },
+                    data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
+                });
+                nextNumber = manualSeq;
+            } else {
+                nextNumber = (isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0)) + 1;
+            }
+        } else {
+            const updatedSettings = await prisma.companySettings.update({
+                where: { companyId },
+                data: isInvoice
+                    ? { lastInvoiceNumber: { increment: 1 } }
+                    : { lastQuoteNumber: { increment: 1 } }
+            });
+            nextNumber = isInvoice ? updatedSettings.lastInvoiceNumber : updatedSettings.lastQuoteNumber;
+            formattedQuoteNumber = isInvoice
+                ? `INV-${year}-${nextNumber.toString().padStart(3, '0')}`
+                : `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+        }
     }
 
     let effectiveProjectId = data.projectId;
@@ -87,6 +122,8 @@ export async function createInvoiceAction(data: {
             companyId,
             clientId: data.clientId,
             projectId: effectiveProjectId,
+            contactId: data.contactId || null,
+            attentionTo: data.attentionTo || null,
             date: new Date(data.date),
             type: data.type || 'QUOTE', // Use provided type or default to Quote
             status: 'DRAFT',
@@ -123,6 +160,11 @@ export async function createInvoiceAction(data: {
 
     revalidatePath("/invoices");
     revalidatePath("/projects");
+    revalidatePath("/clients");
+    revalidatePath(`/clients/${data.clientId}`);
+    if (effectiveProjectId) {
+        revalidatePath(`/projects/${effectiveProjectId}`);
+    }
     return invoice.id;
 }
 
@@ -135,8 +177,23 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
     revalidatePath(`/invoices/${id}`)
 }
 
-export async function getQuoteSequenceAction() {
+export async function getQuoteSequenceAction(clientId?: string) {
     const companyId = await ensureAuth();
+    const year = new Date().getFullYear();
+
+    if (clientId) {
+        const client = await prisma.client.findFirst({
+            where: { id: clientId, companyId }
+        });
+        if (client && client.codePrefix) {
+            const lastQuote = await prisma.invoice.findFirst({
+                where: { companyId, clientId, type: 'QUOTE' },
+                orderBy: { number: 'desc' }
+            });
+            const nextNumber = Math.max(client.lastQuoteNumber || 0, lastQuote?.number || 0) + 1;
+            return `${client.codePrefix}-Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+        }
+    }
 
     // Find the highest number used in existing quotes
     const lastQuote = await prisma.invoice.findFirst({
@@ -152,12 +209,26 @@ export async function getQuoteSequenceAction() {
 
     // Use whichever is higher: the DB counter or the highest actual number found
     const nextNumber = Math.max(settings.lastQuoteNumber || 0, lastQuote?.number || 0) + 1;
-    const year = new Date().getFullYear();
     return `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
 }
 
-export async function getInvoiceSequenceAction() {
+export async function getInvoiceSequenceAction(clientId?: string) {
     const companyId = await ensureAuth();
+    const year = new Date().getFullYear();
+
+    if (clientId) {
+        const client = await prisma.client.findFirst({
+            where: { id: clientId, companyId }
+        });
+        if (client && client.codePrefix) {
+            const lastInvoice = await prisma.invoice.findFirst({
+                where: { companyId, clientId, type: 'INVOICE' },
+                orderBy: { number: 'desc' }
+            });
+            const nextNumber = Math.max(client.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+            return `${client.codePrefix}-INV-${year}-${nextNumber.toString().padStart(3, '0')}`;
+        }
+    }
 
     // Find the highest number used in existing invoices
     const lastInvoice = await prisma.invoice.findFirst({
@@ -172,7 +243,6 @@ export async function getInvoiceSequenceAction() {
     if (!settings) return null;
 
     const nextNumber = Math.max(settings.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
-    const year = new Date().getFullYear();
     return `INV-${year}-${nextNumber.toString().padStart(3, '0')}`;
 }
 
@@ -182,27 +252,42 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
     // 1. Get the original quote details
     const quote = await prisma.invoice.findUnique({
         where: { id, companyId },
-        include: { items: true }
+        include: { items: true, client: true }
     });
     if (!quote) throw new Error("Quote not found");
 
-    // 2. Get the next invoice number based on actual data/settings
-    const lastInvoice = await prisma.invoice.findFirst({
-        where: { companyId, type: 'INVOICE' },
-        orderBy: { number: 'desc' }
-    });
+    const client = quote.client;
+    const codePrefix = client.codePrefix;
+    let nextInvoiceNumber: number;
 
-    const settings = await prisma.companySettings.findUnique({ where: { companyId } });
-    const nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
-
-    // 3. Update company settings to reserve the next number
-    await prisma.companySettings.update({
-        where: { companyId },
-        data: { lastInvoiceNumber: nextInvoiceNumber }
-    });
+    // 2. Get the next invoice number based on client prefix or settings
+    if (codePrefix) {
+        const lastInvoice = await prisma.invoice.findFirst({
+            where: { companyId, clientId: quote.clientId, type: 'INVOICE' },
+            orderBy: { number: 'desc' }
+        });
+        nextInvoiceNumber = Math.max(client.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+        await prisma.client.update({
+            where: { id: quote.clientId },
+            data: { lastInvoiceNumber: nextInvoiceNumber }
+        });
+    } else {
+        const lastInvoice = await prisma.invoice.findFirst({
+            where: { companyId, type: 'INVOICE' },
+            orderBy: { number: 'desc' }
+        });
+        const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+        nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+        await prisma.companySettings.update({
+            where: { companyId },
+            data: { lastInvoiceNumber: nextInvoiceNumber }
+        });
+    }
 
     const year = new Date().getFullYear();
-    const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+    const formattedInvoiceNumber = codePrefix 
+        ? `${codePrefix}-INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`
+        : `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
 
     // 4. Create the NEW separate Invoice record
     const invoice = await prisma.invoice.create({
@@ -211,6 +296,8 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             clientId: quote.clientId,
             projectId: quote.projectId,
             wbpId: quote.wbpId,
+            contactId: quote.contactId || null,
+            attentionTo: quote.attentionTo || null,
             type: 'INVOICE',
             status: 'DRAFT',
             number: nextInvoiceNumber,
@@ -356,31 +443,55 @@ export async function deleteInvoiceAction(id: string) {
     })
 
     revalidatePath("/invoices")
+    revalidatePath("/clients")
+    revalidatePath(`/clients/${invoice.clientId}`)
+    if (invoice.projectId) {
+        revalidatePath(`/projects/${invoice.projectId}`)
+    }
     redirect("/invoices")
 }
 
 export async function createStatementAction(clientId: string, totalDue: number) {
     const companyId = await ensureAuth()
     
-    const lastStatement = await prisma.statement.findFirst({
-        where: { companyId },
-        orderBy: { number: 'desc' }
+    const client = await prisma.client.findFirst({
+        where: { id: clientId, companyId }
     });
+    if (!client) throw new Error("Client not found");
 
-    const settings = await prisma.companySettings.findUnique({
-        where: { companyId }
-    });
+    const codePrefix = client.codePrefix;
+    let nextNumber: number;
 
-    if (!settings) throw new Error("Company settings not found");
+    if (codePrefix) {
+        const lastStatement = await prisma.statement.findFirst({
+            where: { companyId, clientId },
+            orderBy: { number: 'desc' }
+        });
+        nextNumber = Math.max(client.lastStatementNumber || 0, lastStatement?.number || 0) + 1;
+        await prisma.client.update({
+            where: { id: clientId },
+            data: { lastStatementNumber: nextNumber }
+        });
+    } else {
+        const lastStatement = await prisma.statement.findFirst({
+            where: { companyId },
+            orderBy: { number: 'desc' }
+        });
+        const settings = await prisma.companySettings.findUnique({
+            where: { companyId }
+        });
+        if (!settings) throw new Error("Company settings not found");
+        nextNumber = Math.max(settings.lastStatementNumber || 0, lastStatement?.number || 0) + 1;
+        await prisma.companySettings.update({
+            where: { companyId },
+            data: { lastStatementNumber: nextNumber }
+        });
+    }
 
-    const nextNumber = Math.max(settings.lastStatementNumber || 0, lastStatement?.number || 0) + 1;
     const year = new Date().getFullYear();
-    const statementNumber = `STM-${year}-${nextNumber.toString().padStart(3, '0')}`;
-
-    await prisma.companySettings.update({
-        where: { companyId },
-        data: { lastStatementNumber: nextNumber }
-    });
+    const statementNumber = codePrefix
+        ? `${codePrefix}-STM-${year}-${nextNumber.toString().padStart(3, '0')}`
+        : `STM-${year}-${nextNumber.toString().padStart(3, '0')}`;
 
     const statement = await prisma.statement.create({
         data: {

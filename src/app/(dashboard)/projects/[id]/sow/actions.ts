@@ -12,7 +12,7 @@ export async function submitScopeAction(projectId: string, items: any[], site?: 
     return { wbpId: result.wbp.id }
 }
 
-export async function saveWBPDraftAction(wbpId: string, items: any[], options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string }) {
+export async function saveWBPDraftAction(wbpId: string, items: any[], options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string, contactId?: string | null, attentionTo?: string | null }) {
     const companyId = await ensureAuth()
 
     // Update WBP items without marking as APPROVED
@@ -53,7 +53,9 @@ export async function saveWBPDraftAction(wbpId: string, items: any[], options?: 
         data: {
             site: options?.site,
             quoteNumber: options?.quoteNumber,
-            notes: options?.notes
+            notes: options?.notes,
+            contactId: options?.contactId || null,
+            attentionTo: options?.attentionTo || null
         }
     })
 
@@ -61,11 +63,20 @@ export async function saveWBPDraftAction(wbpId: string, items: any[], options?: 
     return { success: true }
 }
 
-export async function getSuggestedQuoteNumberAction() {
-    return await getQuoteSequenceAction()
+export async function getSuggestedQuoteNumberAction(projectId: string) {
+    const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { clientId: true }
+    })
+    if (!project) return null
+    return await getQuoteSequenceAction(project.clientId)
 }
 
-export async function generateQuotationAction(wbpId: string, items: any[], options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string }) {
+export async function generateQuotationAction(
+    wbpId: string,
+    items: any[],
+    options?: { site?: string; quoteNumber?: string; reference?: string; notes?: string; contactId?: string | null; attentionTo?: string | null }
+) {
     return await generateQuotationFromWBP(wbpId, items, options)
 }
 

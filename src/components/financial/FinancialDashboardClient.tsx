@@ -11,7 +11,7 @@ import { processBankStatementAction, addManualTransactionAction } from "@/app/(d
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Badge } from "@/components/ui/badge"
-import { Check, Copy, ChevronRight, Building2, Mail } from "lucide-react"
+import { Check, Copy, ChevronRight, Building2, Mail, Users } from "lucide-react"
 
 const COLORS = ['#10b981', '#f43f5e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
@@ -114,6 +114,32 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
         }
         return acc + balance;
     }, 0);
+
+    const clientOutstandingMap: Record<string, { clientId: string, clientName: string, outstanding: number, invoiceCount: number }> = {};
+    unpaidInvoices.forEach(inv => {
+        const paid = inv.payments?.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0) || 0;
+        let balance = inv.total - paid;
+        if (inv.firstPaymentPercentage && inv.firstPaymentPercentage > 0 && inv.firstPaymentPercentage < 100) {
+            const firstPaymentAmount = inv.total * (inv.firstPaymentPercentage / 100);
+            if (paid < firstPaymentAmount) {
+                balance = firstPaymentAmount - paid;
+            }
+        }
+        const cId = inv.client?.id || "unknown";
+        const cName = inv.client?.name || "Unknown Client";
+        if (!clientOutstandingMap[cId]) {
+            clientOutstandingMap[cId] = {
+                clientId: cId,
+                clientName: cName,
+                outstanding: 0,
+                invoiceCount: 0
+            };
+        }
+        clientOutstandingMap[cId].outstanding += balance;
+        clientOutstandingMap[cId].invoiceCount += 1;
+    });
+
+    const clientOutstandingList = Object.values(clientOutstandingMap).sort((a, b) => b.outstanding - a.outstanding);
 
     const activeProjectsList = projects.filter(p => !['COMPLETED', 'PAID', 'CANCELLED'].includes(p.status));
 
@@ -494,75 +520,140 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                 </Card>
             </div>
 
-            {/* Supplier Intelligence */}
-            <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl overflow-hidden relative">
-                <div className="absolute top-0 right-0 p-4 opacity-5">
-                    <Building2 className="h-24 w-24 text-white" />
-                </div>
-                <CardHeader className="border-b border-white/5 pb-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div>
-                            <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-                                <Building2 className="h-5 w-5 text-primary" /> Supplier Intelligence
-                            </CardTitle>
-                            <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Top 5 most frequent suppliers for the selected period</CardDescription>
-                        </div>
-                        <Badge variant="outline" className="w-fit border-primary/20 bg-primary/5 text-primary text-[10px] font-black uppercase">
-                            Actionable Statement Reviews
-                        </Badge>
+            {/* Supplier & Receivables Intelligence Grid */}
+            <div className="grid gap-6 lg:grid-cols-2">
+                {/* Supplier Intelligence */}
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
+                        <Building2 className="h-24 w-24 text-white" />
                     </div>
-                </CardHeader>
-                <CardContent className="pt-6">
-                    {topSuppliers.length === 0 ? (
-                        <div className="text-center py-10">
-                            <p className="text-xs text-muted-foreground italic">No expense transactions recorded in this period.</p>
+                    <CardHeader className="border-b border-white/5 pb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div>
+                                <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                    <Building2 className="h-5 w-5 text-primary" /> Supplier Intelligence
+                                </CardTitle>
+                                <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Top 5 most frequent suppliers for the selected period</CardDescription>
+                            </div>
+                            <Badge variant="outline" className="w-fit border-primary/20 bg-primary/5 text-primary text-[10px] font-black uppercase">
+                                Actionable Statement Reviews
+                            </Badge>
                         </div>
-                    ) : (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                            {topSuppliers.map((supplier: any) => {
-                                const emailDraft = `Subject: Strategic Vendor Account Review - ${businessName || 'Our Company'}\n\nDear ${supplier.name} Sales Team,\n\nI hope this email finds you well.\n\nWe are conducting our financial audit and strategic partner reviews. According to our internal records at ${businessName || 'our company'}, our recent total expenditure with ${supplier.name} is ${formatCurrency(supplier.spend)}.\n\nGiven the scale of our partnership and our consistent payment history, we would love to discuss options to optimize our transaction structure. Specifically, we would like to explore:\n1. Preferred loyalty discount rates or volume rebates.\n2. Dedicated pricing tiers for upcoming bulk construction projects.\n3. Extended payment term opportunities.\n\nWe value our relationship and look forward to scaling our business with you in our next phase of projects. Please let us know when we can hop on a brief call to align on this.\n\nBest regards,\nOperations Manager\n${businessName || 'Management'} Team`;
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        {topSuppliers.length === 0 ? (
+                            <div className="text-center py-10">
+                                <p className="text-xs text-muted-foreground italic">No expense transactions recorded in this period.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {topSuppliers.map((supplier: any) => {
+                                    const emailDraft = `Subject: Strategic Vendor Account Review - ${businessName || 'Our Company'}\n\nDear ${supplier.name} Sales Team,\n\nI hope this email finds you well.\n\nWe are conducting our financial audit and strategic partner reviews. According to our internal records at ${businessName || 'our company'}, our recent total expenditure with ${supplier.name} is ${formatCurrency(supplier.spend)}.\n\nGiven the scale of our partnership and our consistent payment history, we would love to discuss options to optimize our transaction structure. Specifically, we would like to explore:\n1. Preferred loyalty discount rates or volume rebates.\n2. Dedicated pricing tiers for upcoming bulk construction projects.\n3. Extended payment term opportunities.\n\nWe value our relationship and look forward to scaling our business with you in our next phase of projects. Please let us know when we can hop on a brief call to align on this.\n\nBest regards,\nOperations Manager\n${businessName || 'Management'} Team`;
 
-                                return (
-                                    <div key={supplier.name} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/[0.08] hover:border-primary/20 transition-all gap-4 group">
-                                        <div className="flex-1 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-black text-sm text-white group-hover:text-primary transition-colors">{supplier.name}</span>
-                                                <Badge variant="outline" className="text-[8px] font-black uppercase px-2 py-0.5 bg-white/5 border-white/10 text-muted-foreground">
-                                                    {supplier.category}
-                                                </Badge>
+                                    return (
+                                        <div key={supplier.name} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/[0.08] hover:border-primary/20 transition-all gap-4 group">
+                                            <div className="flex-1 space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-black text-sm text-white group-hover:text-primary transition-colors">{supplier.name}</span>
+                                                    <Badge variant="outline" className="text-[8px] font-black uppercase px-2 py-0.5 bg-white/5 border-white/10 text-muted-foreground">
+                                                        {supplier.category}
+                                                    </Badge>
+                                                </div>
+                                                
+                                                <div className="space-y-1">
+                                                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full" style={{ width: `${supplier.frequencyPercentage}%` }} />
+                                                    </div>
+                                                    <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground tracking-widest">
+                                                        <span>{supplier.transactionCount} Transactions</span>
+                                                        <span>{supplier.frequencyPercentage.toFixed(1)}% of all purchases</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                             
-                                            <div className="space-y-1">
-                                                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full" style={{ width: `${supplier.frequencyPercentage}%` }} />
+                                            <div className="flex items-center gap-4 shrink-0 justify-between sm:justify-end">
+                                                <div className="text-right">
+                                                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">Total Spent</span>
+                                                    <span className="text-lg font-black text-white">{formatCurrency(supplier.spend)}</span>
                                                 </div>
-                                                <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground tracking-widest">
-                                                    <span>{supplier.transactionCount} Transactions</span>
-                                                    <span>{supplier.frequencyPercentage.toFixed(1)}% of all purchases</span>
-                                                </div>
+                                                <Button 
+                                                    onClick={() => setSelectedSupplier({ ...supplier, emailDraft })}
+                                                    size="sm" 
+                                                    className="bg-white/5 hover:bg-primary hover:text-black border border-white/10 text-white text-[10px] font-black uppercase rounded-xl transition-all h-10 px-4 flex items-center gap-2 shadow-lg hover:shadow-primary/20"
+                                                >
+                                                    Review <ChevronRight className="h-3 w-3" />
+                                                </Button>
                                             </div>
                                         </div>
-                                        
-                                        <div className="flex items-center gap-4 shrink-0 justify-between sm:justify-end">
-                                            <div className="text-right">
-                                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">Total Spent</span>
-                                                <span className="text-lg font-black text-white">{formatCurrency(supplier.spend)}</span>
-                                            </div>
-                                            <Button 
-                                                onClick={() => setSelectedSupplier({ ...supplier, emailDraft })}
-                                                size="sm" 
-                                                className="bg-white/5 hover:bg-primary hover:text-black border border-white/10 text-white text-[10px] font-black uppercase rounded-xl transition-all h-10 px-4 flex items-center gap-2 shadow-lg hover:shadow-primary/20"
-                                            >
-                                                Review <ChevronRight className="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Receivables Intelligence by Client */}
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
+                        <Users className="h-24 w-24 text-white" />
+                    </div>
+                    <CardHeader className="border-b border-white/5 pb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div>
+                                <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                    <Users className="h-5 w-5 text-primary" /> Receivables Intelligence
+                                </CardTitle>
+                                <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Outstanding revenue receivables broken down per client</CardDescription>
+                            </div>
+                            <Badge variant="outline" className="w-fit border-orange-500/20 bg-orange-500/5 text-orange-400 text-[10px] font-black uppercase">
+                                Aged Receivables
+                            </Badge>
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        {clientOutstandingList.length === 0 ? (
+                            <div className="text-center py-10">
+                                <p className="text-xs text-muted-foreground italic">No outstanding client invoices.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {clientOutstandingList.map((client: any) => {
+                                    const percentage = outstandingInvoices > 0 ? (client.outstanding / outstandingInvoices) * 100 : 0;
+                                    return (
+                                        <div key={client.clientId} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/[0.08] hover:border-orange-500/20 transition-all gap-4 group">
+                                            <div className="flex-1 space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-black text-sm text-white group-hover:text-primary transition-colors">{client.clientName}</span>
+                                                    <Badge variant="outline" className="text-[8px] font-black uppercase px-2 py-0.5 bg-white/5 border-white/10 text-muted-foreground">
+                                                        {client.invoiceCount} {client.invoiceCount === 1 ? 'Invoice' : 'Invoices'}
+                                                    </Badge>
+                                                </div>
+                                                
+                                                <div className="space-y-1">
+                                                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full" style={{ width: `${percentage}%` }} />
+                                                    </div>
+                                                    <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground tracking-widest">
+                                                        <span>Outstanding Share</span>
+                                                        <span>{percentage.toFixed(1)}% of receivables</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-4 shrink-0 justify-between sm:justify-end">
+                                                <div className="text-right">
+                                                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">Total Outstanding</span>
+                                                    <span className="text-lg font-black text-orange-400">{formatCurrency(client.outstanding)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
             {/* Drill Down Dialog */}
             <Dialog open={drillDownType !== null} onOpenChange={(open) => !open && setDrillDownType(null)}>
@@ -578,9 +669,9 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
 
                     <div className="mt-4">
                         {drillDownType === 'OUTSTANDING' && (
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-3 gap-4 mb-6">
-                                    <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-3 gap-4 mb-2">
+                                    <div className="bg-white/5 p-4 rounded-xl border border-white/10 col-span-2">
                                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Total Outstanding</p>
                                         <p className="text-2xl font-black text-orange-500">{formatCurrency(outstandingInvoices)}</p>
                                     </div>
@@ -589,37 +680,71 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                         <p className="text-2xl font-black text-white">{unpaidInvoices.length}</p>
                                     </div>
                                 </div>
-                                <table className="w-full text-sm text-left">
-                                    <thead className="[&_tr]:border-b border-white/10">
-                                        <tr className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
-                                            <th className="py-3 px-4">Client</th>
-                                            <th className="py-3 px-4">Invoice #</th>
-                                            <th className="py-3 px-4">Date</th>
-                                            <th className="py-3 px-4 text-right">Owes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {unpaidInvoices.map(inv => {
-                                            const paid = inv.payments?.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0) || 0;
-                                            let owes = inv.total - paid;
-                                            if (inv.firstPaymentPercentage && inv.firstPaymentPercentage > 0 && inv.firstPaymentPercentage < 100) {
-                                                const firstPaymentAmount = inv.total * (inv.firstPaymentPercentage / 100);
-                                                if (paid < firstPaymentAmount) {
-                                                    owes = firstPaymentAmount - paid;
-                                                }
-                                            }
+
+                                {/* Client Receivables Breakdown */}
+                                <div className="space-y-3">
+                                    <h3 className="text-xs font-black text-white uppercase tracking-widest">Client Receivables Share</h3>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        {clientOutstandingList.map((client: any) => {
+                                            const pct = outstandingInvoices > 0 ? (client.outstanding / outstandingInvoices) * 100 : 0;
                                             return (
-                                                <tr key={inv.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                                                    <td className="py-3 px-4 font-bold text-white">{inv.client?.name || 'Unknown'}</td>
-                                                    <td className="py-3 px-4 text-muted-foreground">#{inv.number}</td>
-                                                    <td className="py-3 px-4 text-muted-foreground">{new Date(inv.date).toLocaleDateString()}</td>
-                                                    <td className="py-3 px-4 text-right font-black text-orange-400">{formatCurrency(owes)}</td>
-                                                </tr>
-                                            )
+                                                <div key={client.clientId} className="bg-white/5 border border-white/5 p-3 rounded-xl flex flex-col justify-between gap-2">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="font-bold text-white truncate max-w-[150px]">{client.clientName}</span>
+                                                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{client.invoiceCount} invoices</span>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex justify-between items-end">
+                                                            <span className="text-sm font-black text-orange-400">{formatCurrency(client.outstanding)}</span>
+                                                            <span className="text-[10px] font-bold text-muted-foreground">{pct.toFixed(0)}%</span>
+                                                        </div>
+                                                        <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
                                         })}
-                                        {unpaidInvoices.length === 0 && <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">No outstanding invoices.</td></tr>}
-                                    </tbody>
-                                </table>
+                                    </div>
+                                </div>
+
+                                {/* Detailed Unpaid Invoices Table */}
+                                <div className="space-y-3 pt-2">
+                                    <h3 className="text-xs font-black text-white uppercase tracking-widest">Detailed Aging Invoices</h3>
+                                    <div className="border border-white/5 rounded-xl overflow-hidden">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="[&_tr]:border-b border-white/10 bg-white/5">
+                                                <tr className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+                                                    <th className="py-3 px-4">Client</th>
+                                                    <th className="py-3 px-4">Invoice #</th>
+                                                    <th className="py-3 px-4">Date</th>
+                                                    <th className="py-3 px-4 text-right">Owes</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {unpaidInvoices.map(inv => {
+                                                    const paid = inv.payments?.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0) || 0;
+                                                    let owes = inv.total - paid;
+                                                    if (inv.firstPaymentPercentage && inv.firstPaymentPercentage > 0 && inv.firstPaymentPercentage < 100) {
+                                                        const firstPaymentAmount = inv.total * (inv.firstPaymentPercentage / 100);
+                                                        if (paid < firstPaymentAmount) {
+                                                            owes = firstPaymentAmount - paid;
+                                                        }
+                                                    }
+                                                    return (
+                                                        <tr key={inv.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                                                            <td className="py-3 px-4 font-bold text-white">{inv.client?.name || 'Unknown'}</td>
+                                                            <td className="py-3 px-4 text-muted-foreground">#{inv.number}</td>
+                                                            <td className="py-3 px-4 text-muted-foreground">{new Date(inv.date).toLocaleDateString()}</td>
+                                                            <td className="py-3 px-4 text-right font-black text-orange-400">{formatCurrency(owes)}</td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                                {unpaidInvoices.length === 0 && <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">No outstanding invoices.</td></tr>}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         )}
 

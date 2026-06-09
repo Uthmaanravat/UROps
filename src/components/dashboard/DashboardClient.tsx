@@ -59,6 +59,7 @@ interface DashboardClientProps {
         invoiceCount: number
         unpaidCount: number
         unpaidTotal: number
+        clientOutstanding: any[]
         projectCount: number
         activeProjects: any[]
         recentInvoices: any[]
@@ -85,6 +86,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
         projectCount,
         activeProjects,
         unpaidCount,
+        clientOutstanding = [],
         unpaidInvoices,
         pendingScopes,
         upcomingMeetings,
@@ -193,6 +195,58 @@ export function DashboardClient({ data }: DashboardClientProps) {
                     </CardContent>
                 </Card>
             </div>
+ 
+            {/* Outstanding Balance by Client Section */}
+            {clientOutstanding && clientOutstanding.length > 0 && (
+                <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl">
+                    <CardHeader className="border-b border-white/5 pb-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                    <Building2 className="h-5 w-5 text-primary" /> Receivables by Client
+                                </CardTitle>
+                                <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Aged outstanding revenue broken down per client</CardDescription>
+                            </div>
+                            <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase tracking-tighter border border-primary/20">
+                                {clientOutstanding.length} Clients Pending
+                            </span>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {clientOutstanding.map((client: any) => {
+                                const percentage = unpaidTotal > 0 ? (client.outstanding / unpaidTotal) * 100 : 0;
+                                return (
+                                    <div key={client.clientId} className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-primary/30 transition-all flex flex-col justify-between gap-3 group">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-bold text-sm text-white group-hover:text-primary transition-colors truncate">{client.clientName}</span>
+                                                <Badge className="bg-orange-500/20 text-orange-400 text-[8px] font-black uppercase border-none">
+                                                    {client.invoiceCount} {client.invoiceCount === 1 ? 'Invoice' : 'Invoices'}
+                                                </Badge>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground font-medium">Outstanding Revenue Share</div>
+                                        </div>
+                                        
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-end">
+                                                <span className="text-xl font-black text-white">{formatCurrency(client.outstanding)}</span>
+                                                <span className="text-[10px] font-black text-muted-foreground tracking-widest">{percentage.toFixed(0)}%</span>
+                                            </div>
+                                            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-500" 
+                                                    style={{ width: `${percentage}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Financial Performance Section */}
             <div className="grid gap-6 md:grid-cols-7">

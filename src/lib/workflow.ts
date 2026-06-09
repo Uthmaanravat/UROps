@@ -10,15 +10,27 @@ export async function submitScopeOfWork(projectId: string, items: { description:
     })
 
     // 1. Create DRAFT Invoice Record to reserve the Number immediately
-    // Get company settings to increment the sequence
-    const settings = await prisma.companySettings.update({
-        where: { companyId: project!.companyId },
-        data: { lastQuoteNumber: { increment: 1 } }
-    })
-
     const year = new Date().getFullYear()
-    const nextNumber = settings.lastQuoteNumber
-    const suggestedQuoteNumber = `Q-${year}-${nextNumber.toString().padStart(3, '0')}`
+    let nextNumber: number
+    let suggestedQuoteNumber: string
+    const client = project!.client
+    const codePrefix = client.codePrefix
+
+    if (codePrefix) {
+        const updatedClient = await prisma.client.update({
+            where: { id: client.id },
+            data: { lastQuoteNumber: { increment: 1 } }
+        })
+        nextNumber = updatedClient.lastQuoteNumber
+        suggestedQuoteNumber = `${codePrefix}-Q-${year}-${nextNumber.toString().padStart(3, '0')}`
+    } else {
+        const settings = await prisma.companySettings.update({
+            where: { companyId: project!.companyId },
+            data: { lastQuoteNumber: { increment: 1 } }
+        })
+        nextNumber = settings.lastQuoteNumber
+        suggestedQuoteNumber = `Q-${year}-${nextNumber.toString().padStart(3, '0')}`
+    }
 
     const invoice = await prisma.invoice.create({
         data: {
@@ -123,7 +135,7 @@ export async function submitScopeOfWork(projectId: string, items: { description:
 export async function generateQuotationFromWBP(
     wbpId: string,
     items: { id?: string, description: string, quantity: number, unit?: string, unitPrice: number, notes?: string, area?: string }[],
-    options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string }
+    options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string, contactId?: string | null, attentionTo?: string | null }
 ) {
     const wbp = await prisma.workBreakdownPricing.findUniqueOrThrow({
         where: { id: wbpId },
@@ -182,7 +194,9 @@ export async function generateQuotationFromWBP(
         where: { id: wbpId },
         data: {
             status: 'APPROVED',
-            notes: options?.notes
+            notes: options?.notes,
+            contactId: options?.contactId || null,
+            attentionTo: options?.attentionTo || null
         }
     })
 
@@ -202,11 +216,18 @@ export async function generateQuotationFromWBP(
             const manualSeq = parseInt(match[1]);
             finalNumber = manualSeq;
 
-            // Always sync CompanySettings if manual number is provided (allows "resetting" sequence)
-            await prisma.companySettings.update({
-                where: { companyId: wbp.project.companyId },
-                data: { lastQuoteNumber: manualSeq }
-            });
+            // Always sync client sequence if client has codePrefix, otherwise company settings
+            if (wbp.project.client.codePrefix) {
+                await prisma.client.update({
+                    where: { id: wbp.project.clientId },
+                    data: { lastQuoteNumber: manualSeq }
+                });
+            } else {
+                await prisma.companySettings.update({
+                    where: { companyId: wbp.project.companyId },
+                    data: { lastQuoteNumber: manualSeq }
+                });
+            }
         }
     }
 
@@ -228,6 +249,8 @@ export async function generateQuotationFromWBP(
                 quoteNumber: options?.quoteNumber || provisionalNumber, // Keep consistent
                 reference: options?.reference,
                 notes: options?.notes,
+                contactId: options?.contactId || null,
+                attentionTo: options?.attentionTo || null,
                 items: {
                     deleteMany: {}, // Clear placeholder/old items
                     create: items.map(i => ({
@@ -261,6 +284,8 @@ export async function generateQuotationFromWBP(
                 quoteNumber: options?.quoteNumber,
                 reference: options?.reference,
                 notes: options?.notes,
+                contactId: options?.contactId || null,
+                attentionTo: options?.attentionTo || null,
                 items: {
                     create: items.map(i => ({
                         area: i.area,
@@ -320,26 +345,41 @@ export async function generateQuotationFromWBP(
 export async function approveQuote(quoteId: string) {
     const quote = await prisma.invoice.findUniqueOrThrow({
         where: { id: quoteId },
-        include: { items: true }
+        include: { items: true, client: true }
     })
 
-    // 1. Get the next invoice number based on settings
-    const lastInvoice = await prisma.invoice.findFirst({
-        where: { companyId: quote.companyId, type: 'INVOICE' },
-        orderBy: { number: 'desc' }
-    });
+    const client = quote.client;
+    const codePrefix = client.codePrefix;
+    let nextInvoiceNumber: number;
 
-    const settings = await prisma.companySettings.findUnique({ where: { companyId: quote.companyId } });
-    const nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
-
-    // 2. Update company settings to reserve the next number
-    await prisma.companySettings.update({
-        where: { companyId: quote.companyId },
-        data: { lastInvoiceNumber: nextInvoiceNumber }
-    });
+    // 1. Get the next invoice number based on client prefix or settings
+    if (codePrefix) {
+        const lastInvoice = await prisma.invoice.findFirst({
+            where: { companyId: quote.companyId, clientId: quote.clientId, type: 'INVOICE' },
+            orderBy: { number: 'desc' }
+        });
+        nextInvoiceNumber = Math.max(client.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+        await prisma.client.update({
+            where: { id: quote.clientId },
+            data: { lastInvoiceNumber: nextInvoiceNumber }
+        });
+    } else {
+        const lastInvoice = await prisma.invoice.findFirst({
+            where: { companyId: quote.companyId, type: 'INVOICE' },
+            orderBy: { number: 'desc' }
+        });
+        const settings = await prisma.companySettings.findUnique({ where: { companyId: quote.companyId } });
+        nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+        await prisma.companySettings.update({
+            where: { companyId: quote.companyId },
+            data: { lastInvoiceNumber: nextInvoiceNumber }
+        });
+    }
 
     const year = new Date().getFullYear();
-    const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+    const formattedInvoiceNumber = codePrefix 
+        ? `${codePrefix}-INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`
+        : `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
 
     // 3. Create NEW separate Invoice record
     const invoice = await prisma.invoice.create({
@@ -348,6 +388,8 @@ export async function approveQuote(quoteId: string) {
             clientId: quote.clientId,
             projectId: quote.projectId,
             wbpId: quote.wbpId,
+            contactId: quote.contactId || null,
+            attentionTo: quote.attentionTo || null,
             type: 'INVOICE',
             status: 'DRAFT',
             number: nextInvoiceNumber,

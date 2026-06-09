@@ -61,7 +61,16 @@ export default async function DashboardPage() {
             }),
             prisma.invoice.findMany({
                 where: { companyId, type: 'INVOICE', status: { notIn: ['PAID', 'CANCELLED'] } },
-                select: { total: true, payments: { select: { amount: true } }, quoteNumber: true, date: true, id: true, number: true, firstPaymentPercentage: true }
+                select: { 
+                    total: true, 
+                    payments: { select: { amount: true } }, 
+                    quoteNumber: true, 
+                    date: true, 
+                    id: true, 
+                    number: true, 
+                    firstPaymentPercentage: true,
+                    client: { select: { id: true, name: true } }
+                }
             }),
             (prisma as any).scopeOfWork?.count({ where: { companyId } }) || 0,
             prisma.invoice.count({ where: { companyId, type: 'QUOTE' } }),
@@ -75,6 +84,7 @@ export default async function DashboardPage() {
 
         let unpaidTotal = 0;
         let unpaidInvoices: any[] = [];
+        const clientOutstandingMap: Record<string, { clientId: string, clientName: string, outstanding: number, invoiceCount: number }> = {};
         
         (allUnpaidInvoices || []).forEach(inv => {
             const paid = (inv.payments || []).reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
@@ -89,8 +99,24 @@ export default async function DashboardPage() {
                 }
                 unpaidTotal += balance;
                 unpaidInvoices.push({ ...inv, balance });
+
+                // Accumulate per client
+                const cId = inv.client?.id || "unknown";
+                const cName = inv.client?.name || "Unknown Client";
+                if (!clientOutstandingMap[cId]) {
+                    clientOutstandingMap[cId] = {
+                        clientId: cId,
+                        clientName: cName,
+                        outstanding: 0,
+                        invoiceCount: 0
+                    };
+                }
+                clientOutstandingMap[cId].outstanding += balance;
+                clientOutstandingMap[cId].invoiceCount += 1;
             }
         });
+
+        const clientOutstanding = Object.values(clientOutstandingMap).sort((a, b) => b.outstanding - a.outstanding);
 
         // Calculate Trend Data (last 6 months)
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -120,6 +146,7 @@ export default async function DashboardPage() {
             invoiceCount,
             unpaidCount: unpaidInvoices.length,
             unpaidTotal,
+            clientOutstanding,
             projectCount: activeProjects.length,
             activeProjects,
             recentInvoices,

@@ -20,7 +20,20 @@ import { Search, Book } from "lucide-react"
 import { useEffect } from "react"
 
 interface QuoteFormProps {
-    clients: { id: string; name: string }[]
+    clients: {
+        id: string;
+        name: string;
+        codePrefix?: string | null;
+        attentionTo?: string | null;
+        contacts?: {
+            id: string;
+            clientId: string;
+            name: string;
+            email: string | null;
+            phone: string | null;
+            role: string | null;
+        }[];
+    }[]
     projects: { id: string; name: string, clientId: string }[]
     initialClientId?: string
     initialProjectId?: string
@@ -52,6 +65,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [firstPaymentOption, setFirstPaymentOption] = useState<string>("none")
     const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>("")
 
+    // Contacts state
+    const [contactId, setContactId] = useState("")
+    const [attentionTo, setAttentionTo] = useState("")
+
     const handleFirstPaymentOptionChange = (val: string) => {
         setFirstPaymentOption(val);
         if (val === "none") {
@@ -81,15 +98,31 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [catalogSearch, setCatalogSearch] = useState("")
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
 
+    // Sync sequence number when clientId changes
     useEffect(() => {
         const loadSequence = async () => {
-            if (!quoteNumber) {
-                const docNumber = await getQuoteSequenceAction();
+            if (clientId) {
+                const docNumber = await getQuoteSequenceAction(clientId);
                 if (docNumber) setQuoteNumber(docNumber);
             }
         }
         loadSequence();
+    }, [clientId])
 
+    // Sync contacts when clientId changes
+    useEffect(() => {
+        const selectedClient = clients.find(c => c.id === clientId);
+        const contacts = selectedClient?.contacts || [];
+        if (contacts.length > 0) {
+            setContactId(contacts[0].id);
+            setAttentionTo(contacts[0].name);
+        } else {
+            setContactId("");
+            setAttentionTo(selectedClient?.attentionTo || "");
+        }
+    }, [clientId, clients]);
+
+    useEffect(() => {
         const loadCatalog = async () => {
             try {
                 const data = await getFixedPriceItemsAction()
@@ -183,7 +216,9 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 reference,
                 projectName,
                 paymentNotes: showPaymentNotes ? paymentNotes : undefined,
-                firstPaymentPercentage: finalFirstPaymentPercentage
+                firstPaymentPercentage: finalFirstPaymentPercentage,
+                contactId: contactId || undefined,
+                attentionTo: attentionTo || undefined
             })
             setLastInvoiceId(invoiceId)
             setSubmitted(true)
@@ -237,11 +272,13 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
             </div >
         )
     }
-
     const clientCatalog = catalog.filter(item => 
         !item.clientId || item.clientId === clientId
     );
 
+    const selectedClient = clients.find(c => c.id === clientId);
+    const clientContacts = selectedClient?.contacts || [];
+ 
     return (
         <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20">
             <div className="flex-1 w-full rounded-lg border bg-card p-6 shadow-sm">
@@ -265,6 +302,35 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                     <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
                             </select>
+                        </div>
+                        {clientContacts.length > 0 && (
+                            <div className="space-y-2">
+                                <Label>Select Contact (Optional)</Label>
+                                <select
+                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    value={contactId}
+                                    onChange={(e) => {
+                                        setContactId(e.target.value);
+                                        const contact = clientContacts.find(c => c.id === e.target.value);
+                                        setAttentionTo(contact ? contact.name : "");
+                                    }}
+                                >
+                                    <option value="">-- Select Contact --</option>
+                                    {clientContacts.map(c => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.name} {c.role ? `(${c.role})` : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <Label>Attention To</Label>
+                            <Input
+                                placeholder="e.g. Mr. Smith"
+                                value={attentionTo}
+                                onChange={(e) => setAttentionTo(e.target.value)}
+                            />
                         </div>
                     </div>
                     <div className="space-y-4">

@@ -86,6 +86,10 @@ model Client {
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   companyId          String
+  codePrefix         String?
+  lastQuoteNumber    Int             @default(0)
+  lastInvoiceNumber  Int             @default(0)
+  lastStatementNumber Int            @default(0)
   company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   interactions       Interaction[]
   invoices           Invoice[]
@@ -95,6 +99,7 @@ model Client {
   reports            Report[]
   statements         Statement[]
   fixedItems         FixedPriceItem[]
+  contacts           ClientContact[]
 }
 
 model Project {
@@ -153,12 +158,15 @@ model WorkBreakdownPricing {
   notes       String?
   site        String?
   quoteNumber String?
+  contactId   String?
+  attentionTo String?
   createdAt   DateTime                   @default(now())
   updatedAt   DateTime                   @updatedAt
   companyId   String
   invoices    Invoice[]
   company     Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project     Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contact     ClientContact?             @relation(fields: [contactId], references: [id], onDelete: SetNull)
   items       WorkBreakdownPricingItem[]
 }
 
@@ -215,6 +223,8 @@ model Invoice {
   clientId       String
   projectId      String?
   wbpId          String?
+  contactId      String?
+  attentionTo    String?
   subtotal       Float                 @default(0)
   taxRate        Float                 @default(0.15)
   taxAmount      Float                 @default(0)
@@ -233,6 +243,7 @@ model Invoice {
   company        Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project        Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   wbp            WorkBreakdownPricing? @relation(fields: [wbpId], references: [id])
+  contact        ClientContact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
   items          InvoiceItem[]
   payments       Payment[]
 }
@@ -446,4 +457,18 @@ model Transaction {
 enum TransactionType {
   INCOME
   EXPENSE
+}
+
+model ClientContact {
+  id        String                 @id @default(uuid())
+  clientId  String
+  name      String
+  email     String?
+  phone     String?
+  role      String?
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+  client    Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  invoices  Invoice[]
+  wbps      WorkBreakdownPricing[]
 }

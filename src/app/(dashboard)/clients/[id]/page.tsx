@@ -7,6 +7,7 @@ import { ClientStatementButton } from "@/components/clients/ClientStatementButto
 import { DeleteClientButton } from "@/components/clients/DeleteClientButton";
 import { InteractionList } from "@/components/clients/InteractionList";
 import { ActivityTimeline } from "@/components/clients/ActivityTimeline";
+import { ClientContactsList } from "@/components/clients/ClientContactsList";
 import { notFound } from "next/navigation";
 import { ensureAuth } from "@/lib/auth-actions";
 
@@ -29,6 +30,9 @@ export default async function ClientPage({ params }: { params: { id: string } })
             },
             statements: {
                 orderBy: { date: 'desc' }
+            },
+            contacts: {
+                orderBy: { name: 'asc' }
             }
         }
     });
@@ -157,6 +161,8 @@ export default async function ClientPage({ params }: { params: { id: string } })
                     <div className="text-2xl font-bold text-red-600">{formatCurrency(outstanding)}</div>
                 </div>
             </div>
+
+            <ClientContactsList clientId={client.id} initialContacts={client.contacts as any} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="rounded-md border bg-card">

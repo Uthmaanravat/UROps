@@ -11,13 +11,19 @@ const statuses = [
     { value: "PAID", label: "Paid" },
 ]
 
-export function InvoiceFilters() {
+interface ClientOption {
+    id: string
+    name: string
+}
+
+export function InvoiceFilters({ clients }: { clients: ClientOption[] }) {
     const router = useRouter()
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
 
     const currentStatus = searchParams.get("status") || ""
     const currentType = searchParams.get("type") || ""
+    const currentClientId = searchParams.get("clientId") || ""
 
     const updateFilter = (key: string, value: string) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -33,6 +39,16 @@ export function InvoiceFilters() {
 
     return (
         <div className="flex items-center gap-2">
+            <select
+                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={currentClientId}
+                onChange={(e) => updateFilter("clientId", e.target.value)}
+            >
+                <option value="">All Clients</option>
+                {clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+            </select>
             <select
                 className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={currentType}

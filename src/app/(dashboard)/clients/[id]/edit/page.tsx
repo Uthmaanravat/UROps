@@ -109,14 +109,26 @@ export default async function EditClientPage({ params }: { params: { id: string 
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="vendorNumber">Vendor Number (If applicable)</Label>
-                        <Input
-                            id="vendorNumber"
-                            name="vendorNumber"
-                            defaultValue={client.vendorNumber || ""}
-                            placeholder="e.g. V-12345"
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="vendorNumber">Vendor Number (If applicable)</Label>
+                            <Input
+                                id="vendorNumber"
+                                name="vendorNumber"
+                                defaultValue={client.vendorNumber || ""}
+                                placeholder="e.g. V-12345"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="codePrefix">Custom Numbering Prefix (Optional)</Label>
+                            <Input
+                                id="codePrefix"
+                                name="codePrefix"
+                                defaultValue={client.codePrefix || ""}
+                                placeholder="e.g. CCT (For CCT-Q-2026-001)"
+                                maxLength={10}
+                            />
+                        </div>
                     </div>
 
                     <div className="space-y-2">

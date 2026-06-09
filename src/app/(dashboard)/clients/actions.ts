@@ -18,6 +18,7 @@ export async function createClient(formData: FormData) {
         vatNumber: formData.get('vatNumber') as string,
         registrationNumber: formData.get('registrationNumber') as string,
         vendorNumber: formData.get('vendorNumber') as string,
+        codePrefix: (formData.get('codePrefix') as string || "").toUpperCase() || null,
         notes: formData.get('notes') as string,
     }
     const client = await prisma.client.create({ data })
@@ -37,6 +38,7 @@ export async function updateClient(id: string, formData: FormData) {
         vatNumber: formData.get('vatNumber') as string,
         registrationNumber: formData.get('registrationNumber') as string,
         vendorNumber: formData.get('vendorNumber') as string,
+        codePrefix: (formData.get('codePrefix') as string || "").toUpperCase() || null,
         notes: formData.get('notes') as string,
     }
     await prisma.client.update({
@@ -105,6 +107,95 @@ export async function getClientsAction() {
     const companyId = await ensureAuth()
     return await prisma.client.findMany({
         where: { companyId },
+        include: { contacts: true },
+        orderBy: { name: 'asc' }
+    })
+}
+
+export async function createClientContactAction(data: {
+    clientId: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    role?: string | null;
+}) {
+    const companyId = await ensureAuth()
+    const client = await prisma.client.findFirst({
+        where: { id: data.clientId, companyId }
+    })
+    if (!client) throw new Error("Client not found")
+
+    const contact = await prisma.clientContact.create({
+        data: {
+            clientId: data.clientId,
+            name: data.name,
+            email: data.email || null,
+            phone: data.phone || null,
+            role: data.role || null
+        }
+    })
+
+    revalidatePath(`/clients/${data.clientId}`)
+    return contact;
+}
+
+export async function updateClientContactAction(data: {
+    id: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    role?: string | null;
+}) {
+    const companyId = await ensureAuth()
+    const contact = await prisma.clientContact.findUnique({
+        where: { id: data.id },
+        include: { client: true }
+    })
+    if (!contact || contact.client.companyId !== companyId) {
+        throw new Error("Access denied")
+    }
+
+    const updated = await prisma.clientContact.update({
+        where: { id: data.id },
+        data: {
+            name: data.name,
+            email: data.email || null,
+            phone: data.phone || null,
+            role: data.role || null
+        }
+    })
+
+    revalidatePath(`/clients/${contact.clientId}`)
+    return updated;
+}
+
+export async function deleteClientContactAction(id: string) {
+    const companyId = await ensureAuth()
+    const contact = await prisma.clientContact.findUnique({
+        where: { id },
+        include: { client: true }
+    })
+    if (!contact || contact.client.companyId !== companyId) {
+        throw new Error("Access denied")
+    }
+
+    await prisma.clientContact.delete({
+        where: { id }
+    })
+
+    revalidatePath(`/clients/${contact.clientId}`)
+    return { success: true };
+}
+
+export async function getClientContactsAction(clientId: string) {
+    const companyId = await ensureAuth()
+    const client = await prisma.client.findFirst({
+        where: { id: clientId, companyId }
+    })
+    if (!client) throw new Error("Client not found")
+
+    return await prisma.clientContact.findMany({
+        where: { clientId },
         orderBy: { name: 'asc' }
     })
 }

@@ -74,3 +74,13 @@
     --accent: 262 83% 58%;
   }
 }
+
+/* Fix select dropdowns and options visibility globally in dark mode */
+select {
+  color-scheme: dark !important;
+}
+
+select option {
+  background-color: #121320 !important; /* Deep dark navy background */
+  color: #ffffff !important;            /* White text color */
+}

@@ -9,7 +9,10 @@ export default async function NewQuotePage({
     searchParams: { clientId?: string; projectId?: string; scope?: string }
 }) {
     const [clients, projects, settings] = await Promise.all([
-        prisma.client.findMany({ orderBy: { name: 'asc' } }),
+        prisma.client.findMany({
+            include: { contacts: true },
+            orderBy: { name: 'asc' }
+        }),
         (prisma as any).project.findMany({
             where: { status: { not: 'COMPLETED' } },
             orderBy: { name: 'asc' }

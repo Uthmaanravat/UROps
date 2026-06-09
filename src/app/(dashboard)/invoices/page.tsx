@@ -14,16 +14,25 @@ export const dynamic = 'force-dynamic';
 export default async function InvoicesPage({
     searchParams
 }: {
-    searchParams: { q?: string; status?: string; type?: string }
+    searchParams: { q?: string; status?: string; type?: string; clientId?: string }
 }) {
     const companyId = await ensureAuth();
     const query = searchParams.q || "";
     const statusFilter = searchParams.status || "";
     const typeFilter = searchParams.type || "";
+    const clientIdFilter = searchParams.clientId || "";
     let invoices: any[] = [];
+    let clients: { id: string; name: string }[] = [];
 
     try {
         const statusExcludedByDefault = !statusFilter;
+
+        // Fetch client list for filter options
+        clients = await prisma.client.findMany({
+            where: { companyId },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' }
+        });
 
         invoices = await prisma.invoice.findMany({
             where: {
@@ -36,6 +45,7 @@ export default async function InvoicesPage({
                             { client: { name: { contains: query, mode: 'insensitive' as const } } }
                         ]
                     } : {},
+                    clientIdFilter ? { clientId: clientIdFilter } : {},
                     statusFilter
                         ? { status: statusFilter as any }
                         : (typeFilter === 'QUOTE'
@@ -68,7 +78,7 @@ export default async function InvoicesPage({
 
             <div className="flex items-center justify-between gap-4">
                 <SearchInput placeholder="Search by number or client..." />
-                <InvoiceFilters />
+                <InvoiceFilters clients={clients} />
             </div>
 
             <div className="rounded-md border bg-card">

@@ -265,6 +265,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const [lastQuoteId, setLastQuoteId] = useState<string | null>(null)
     const [lastQuoteNumber, setLastQuoteNumber] = useState<string | null>(null)
 
+    // Contact states
+    const [contactId, setContactId] = useState(wbp.contactId || "")
+    const [attentionTo, setAttentionTo] = useState(wbp.attentionTo || "")
+
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
@@ -347,8 +351,23 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
         setClientVat(newClient.vatNumber || "")
         setClientReg(newClient.registrationNumber || "")
 
+        // Also update contacts!
+        const contacts = newClient.contacts || []
+        if (contacts.length > 0) {
+            setContactId(contacts[0].id)
+            setAttentionTo(contacts[0].name)
+        } else {
+            setContactId("")
+            setAttentionTo(newClient.attentionTo || "")
+        }
+
         try {
             await updateProject(project.id, { clientId })
+            // Refresh preview quote number when switching clients
+            const suggested = await getSuggestedQuoteNumberAction(project.id)
+            if (suggested) {
+                setQuoteNumber(suggested)
+            }
         } catch (err) {
             console.error("Failed to switch client on project:", err)
         }
@@ -364,6 +383,17 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
         }
     }, [project.id, router])
 
+    // Sync initial contact if not set
+    useEffect(() => {
+        const clientContacts = client.contacts || []
+        if (!contactId && clientContacts.length > 0) {
+            setContactId(clientContacts[0].id)
+            setAttentionTo(clientContacts[0].name)
+        } else if (!attentionTo) {
+            setAttentionTo(client.attentionTo || "")
+        }
+    }, [contactId, client.contacts, client.attentionTo])
+
     useEffect(() => {
         async function loadData() {
             try {
@@ -371,7 +401,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                 setAllClients(clients)
 
                 if (!quoteNumber) {
-                    const suggested = await getSuggestedQuoteNumberAction()
+                    const suggested = await getSuggestedQuoteNumberAction(project.id)
                     setQuoteNumber(suggested)
                 }
             } catch (err) {
@@ -389,7 +419,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             }
         }
         loadCatalog()
-    }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [project.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         async function fetchSuggestions() {
@@ -617,7 +647,14 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             if (projectName !== project.name) {
                 await updateProject(project.id, { name: projectName })
             }
-            const quote = await generateQuotationAction(wbpId, items, { site, quoteNumber, reference, notes: quotationNotes })
+            const quote = await generateQuotationAction(wbpId, items, {
+                site,
+                quoteNumber,
+                reference,
+                notes: quotationNotes,
+                contactId: contactId || null,
+                attentionTo: attentionTo || null
+            })
             // @ts-ignore
             setLastQuoteId(quote.id)
             // @ts-ignore
@@ -645,7 +682,14 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             if (projectName !== project.name) {
                 await updateProject(project.id, { name: projectName })
             }
-            await saveWBPDraftAction(wbpId, items, { site, quoteNumber, reference, notes: quotationNotes })
+            await saveWBPDraftAction(wbpId, items, {
+                site,
+                quoteNumber,
+                reference,
+                notes: quotationNotes,
+                contactId: contactId || null,
+                attentionTo: attentionTo || null
+            })
             alert("Draft saved successfully!")
         } catch (error) {
             console.error("Error saving draft:", error)
@@ -654,6 +698,9 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             setIsSavingDraft(false)
         }
     }
+
+    const selectedClientObj = allClients.find(c => c.id === selectedClientId)
+    const clientContacts = selectedClientObj?.contacts || []
 
     return (
         <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20">
@@ -824,6 +871,39 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                         clientUpdatesRef.current.reg = e.target.value
                                     }}
                                     placeholder="2024/123456/07"
+                                    className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-white/5">
+                            {clientContacts.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Select Contact (Optional)</Label>
+                                    <select
+                                        value={contactId}
+                                        onChange={(e) => {
+                                            setContactId(e.target.value)
+                                            const contact = clientContacts.find((c: any) => c.id === e.target.value)
+                                            setAttentionTo(contact ? contact.name : "")
+                                        }}
+                                        className="flex h-12 w-full rounded-md border border-primary/20 bg-[#14141E] px-3 py-2 text-sm text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:border-primary/40 transition-colors"
+                                    >
+                                        <option value="">-- Select Contact --</option>
+                                        {clientContacts.map((c: any) => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} {c.role ? `(${c.role})` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            <div className="space-y-2 md:col-span-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Attention To</Label>
+                                <Input
+                                    value={attentionTo}
+                                    onChange={(e) => setAttentionTo(e.target.value)}
+                                    placeholder="e.g. Mr. Smith"
                                     className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
                                 />
                             </div>
