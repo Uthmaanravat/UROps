@@ -50,6 +50,10 @@ const WbpItemRow = memo(({
     const [isDraggable, setIsDraggable] = useState(false);
 
     // Local stable handlers to bind the index
+    const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onUpdate(index, 'code', e.target.value)
+    }, [index, onUpdate])
+
     const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         onUpdate(index, 'description', e.target.value)
     }, [index, onUpdate])
@@ -107,6 +111,15 @@ const WbpItemRow = memo(({
                         onMouseLeave={() => setIsDraggable(false)}
                     >
                         <GripVertical className="h-5 w-5" />
+                    </div>
+                    <div className="w-20 shrink-0">
+                        <Label className="text-[10px] font-black uppercase text-primary italic mb-1 block">Code</Label>
+                        <Input
+                            value={item.code || ""}
+                            onChange={handleCodeChange}
+                            className="h-10 text-center font-mono uppercase bg-[#14141E] border-white/10 text-white font-bold"
+                            placeholder="CODE"
+                        />
                     </div>
                     <div className="flex-1 relative">
                         <Textarea
@@ -231,6 +244,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const [items, setItems] = useState<any[]>(initialItems.map((i: any) => ({
         id: i.id || Math.random().toString(36).substr(2, 9),
         area: i.area || "",
+        code: i.code || "",
         description: i.description,
         quantity: i.quantity,
         unit: i.unit || "",
@@ -290,6 +304,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const [catalog, setCatalog] = useState<any[]>([])
     const [catalogSearch, setCatalogSearch] = useState("")
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
+    const [sidebarSearch, setSidebarSearch] = useState("")
 
     const [allClients, setAllClients] = useState<any[]>([])
     const [selectedClientId, setSelectedClientId] = useState(client.id)
@@ -402,14 +417,28 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             if (prev[index] && (prev[index] as any)[field] === value) return prev
             const next = [...prev]
             next[index] = { ...next[index], [field]: value }
+
+            if (field === 'code') {
+                const codeVal = value.toUpperCase();
+                const matched = catalog.find(c => 
+                    c.code?.toUpperCase() === codeVal && 
+                    (!c.clientId || c.clientId === selectedClientId)
+                );
+                if (matched) {
+                    next[index].description = matched.description.toUpperCase();
+                    next[index].unit = (matched.unit || "").toUpperCase();
+                    next[index].unitPrice = matched.unitPrice;
+                }
+            }
             return next
         })
-    }, [])
+    }, [catalog, selectedClientId])
 
     const addItem = useCallback(() => {
         setItems((prev: any[]) => [...prev, {
             id: Math.random().toString(36).substr(2, 9),
             area: prev[prev.length - 1]?.area || "",
+            code: "",
             description: "",
             quantity: 1,
             unit: "",
@@ -509,9 +538,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             const newItem = {
                 id: Math.random().toString(36).substr(2, 9),
                 area: prev[prev.length - 1]?.area || "GENERAL",
-                description: catalogItem.description,
+                code: catalogItem.code || "",
+                description: (catalogItem.description || "").toUpperCase(),
                 quantity: 1,
-                unit: catalogItem.unit || "",
+                unit: (catalogItem.unit || "").toUpperCase(),
                 notes: "",
                 unitPrice: catalogItem.unitPrice
             }
@@ -553,10 +583,26 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
 
     const filteredCatalog = useMemo(() => {
         return catalog.filter(item =>
-            item.description.toLowerCase().includes(deferredCatalogSearch.toLowerCase()) ||
-            item.category?.toLowerCase().includes(deferredCatalogSearch.toLowerCase())
+            (!item.clientId || item.clientId === selectedClientId) &&
+            (item.description.toLowerCase().includes(deferredCatalogSearch.toLowerCase()) ||
+             (item.code && item.code.toLowerCase().includes(deferredCatalogSearch.toLowerCase())) ||
+             item.category?.toLowerCase().includes(deferredCatalogSearch.toLowerCase()))
         )
-    }, [catalog, deferredCatalogSearch])
+    }, [catalog, deferredCatalogSearch, selectedClientId])
+
+    const clientCatalog = useMemo(() => {
+        return catalog.filter(item => 
+            !item.clientId || item.clientId === selectedClientId
+        )
+    }, [catalog, selectedClientId])
+
+    const filteredSidebarCatalog = useMemo(() => {
+        return clientCatalog.filter(item =>
+            item.description.toLowerCase().includes(sidebarSearch.toLowerCase()) ||
+            (item.code && item.code.toLowerCase().includes(sidebarSearch.toLowerCase())) ||
+            (item.category && item.category.toLowerCase().includes(sidebarSearch.toLowerCase()))
+        )
+    }, [clientCatalog, sidebarSearch])
 
     const subtotal = useMemo(() => {
         return items.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0)
@@ -610,400 +656,457 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     }
 
     return (
-        <div className="space-y-8">
-            {submitted && (
-                <Card className="bg-primary/10 border-primary shadow-2xl overflow-hidden rounded-2xl animate-in fade-in slide-in-from-top-4 duration-500 mb-8">
-                    <CardContent className="p-8">
-                        <div className="flex items-start gap-6">
-                            <div className="bg-primary rounded-full p-3 shadow-lg shadow-primary/20">
-                                <CheckCircle className="h-8 w-8 text-primary-foreground" />
+        <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20">
+            <div className="flex-1 w-full space-y-8">
+                {submitted && (
+                    <Card className="bg-primary/10 border-primary shadow-2xl overflow-hidden rounded-2xl animate-in fade-in slide-in-from-top-4 duration-500 mb-8">
+                        <CardContent className="p-8">
+                            <div className="flex items-start gap-6">
+                                <div className="bg-primary rounded-full p-3 shadow-lg shadow-primary/20">
+                                    <CheckCircle className="h-8 w-8 text-primary-foreground" />
+                                </div>
+                                <div className="flex-1 space-y-4">
+                                    <div className="space-y-1">
+                                        <h3 className="text-2xl font-black text-primary flex items-center gap-2 uppercase tracking-wider">
+                                            ✅ Quotation submitted
+                                        </h3>
+                                        <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px]">Commercial Validation Complete</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 border-y border-primary/10">
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase text-muted-foreground block mb-1">Quote Number</span>
+                                            <span className="text-lg font-bold text-white tracking-widest">{lastQuoteNumber || 'N/A'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase text-muted-foreground block mb-1">Site</span>
+                                            <span className="text-sm font-bold text-white truncate block">{site || 'N/A'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase text-muted-foreground block mb-1">Commercial Total</span>
+                                            <span className="text-lg font-black text-primary">{formatCurrency(total)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase text-muted-foreground block mb-1">Project</span>
+                                            <span className="text-sm font-bold text-white truncate block">{project.name}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-2">
+                                        <Link
+                                            href={`/invoices/${lastQuoteId}`}
+                                            className="bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/10"
+                                        >
+                                            View Official Quotation
+                                        </Link>
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => setSubmitted(false)}
+                                            className="text-muted-foreground hover:text-white font-bold"
+                                        >
+                                            Back to editor
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex-1 space-y-4">
-                                <div className="space-y-1">
-                                    <h3 className="text-2xl font-black text-primary flex items-center gap-2 uppercase tracking-wider">
-                                        ✅ Quotation submitted
-                                    </h3>
-                                    <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px]">Commercial Validation Complete</p>
+                        </CardContent>
+                    </Card>
+                )}
+                <Card className="border-white/5 bg-[#1A1A2E] shadow-2xl overflow-hidden rounded-2xl">
+                    <CardHeader className="bg-white/5 p-6 border-b border-white/5">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-2 md:gap-3 text-lg md:text-2xl font-black text-white uppercase italic">
+                                    <FileText className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                                    Pricing Breakdown
+                                </CardTitle>
+                                <p className="text-[9px] md:text-xs text-muted-foreground font-black mt-1 md:mt-2 uppercase tracking-[0.2em]">
+                                    Engineering metrics & commercial validation.
+                                </p>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button variant="outline" size="sm" onClick={addSection} className="border-primary/20 hover:bg-primary/10 text-primary font-black px-4 transition-all">
+                                    <Plus className="h-4 w-4 mr-2" /> Add Section
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={addItem} className="border-primary/20 hover:bg-primary/10 text-primary font-black px-4 transition-all">
+                                    <Plus className="h-4 w-4 mr-2" /> Add Component
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/5">
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Site Name</Label>
+                                <Input
+                                    value={site}
+                                    onChange={(e) => setSite(e.target.value)}
+                                    placeholder="e.g. 15 Culemborg Street, Avondale"
+                                    className="bg-[#14141E] border-white/10 text-white font-bold h-12"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Custom Quote #</Label>
+                                <Input
+                                    value={quoteNumber}
+                                    onChange={(e) => setQuoteNumber(e.target.value)}
+                                    placeholder="e.g. Q-2024-001"
+                                    className="bg-[#14141E] border-white/10 text-white font-bold h-12"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Customer Reference</Label>
+                                <Input
+                                    value={reference}
+                                    onChange={(e) => setReference(e.target.value)}
+                                    placeholder="e.g. PO Ref / Project Code"
+                                    className="bg-[#14141E] border-white/10 text-white font-bold h-12"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Commercial Status</Label>
+                                <select
+                                    value={commercialStatus}
+                                    onChange={(e) => handleCommercialStatusChange(e.target.value)}
+                                    className={cn(
+                                        "flex h-12 w-full rounded-md border px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary transition-all cursor-pointer",
+                                        commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 border-red-500 text-red-400" :
+                                            commercialStatus === 'REACTIVE_WORK' ? "bg-orange-500/20 border-orange-500 text-orange-400" :
+                                            commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 border-primary text-primary" :
+                                                "bg-[#14141E] border-white/10 text-white"
+                                    )}
+                                >
+                                    <option value="AWAITING_PO">AWAITING PO</option>
+                                    <option value="PO_RECEIVED">PO RECEIVED</option>
+                                    <option value="EMERGENCY_WORK">EMERGENCY WORK</option>
+                                    <option value="REACTIVE_WORK">REACTIVE WORK</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-white/5">
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Project Name</Label>
+                                <Input
+                                    value={projectName}
+                                    onChange={(e) => setProjectName(e.target.value)}
+                                    placeholder="Edit Project Name..."
+                                    className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Select Client from CRM</Label>
+                                <select
+                                    value={selectedClientId}
+                                    onChange={(e) => handleClientSwitch(e.target.value)}
+                                    className="flex h-12 w-full rounded-md border border-primary/20 bg-[#14141E] px-3 py-2 text-sm text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:border-primary/40 transition-colors"
+                                >
+                                    {allClients.map(c => (
+                                        <option key={c.id} value={c.id}>{c.companyName || c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Client VAT #</Label>
+                                <Input
+                                    value={clientVat}
+                                    onChange={(e) => {
+                                        setClientVat(e.target.value)
+                                        clientUpdatesRef.current.vat = e.target.value
+                                    }}
+                                    placeholder="123456789"
+                                    className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Client Reg #</Label>
+                                <Input
+                                    value={clientReg}
+                                    onChange={(e) => {
+                                        setClientReg(e.target.value)
+                                        clientUpdatesRef.current.reg = e.target.value
+                                    }}
+                                    placeholder="2024/123456/07"
+                                    className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
+                                />
+                            </div>
+                        </div>
+                    </CardHeader>
+
+                    <CardContent className="p-0">
+                        {/* Voice-to-Scope Integration */}
+                        <div className="bg-primary/5 border-b border-white/5 px-8 py-6">
+                            <VoiceRecorder onParsed={(newParsedItems) => {
+                                if (newParsedItems && newParsedItems.length > 0) {
+                                    const lastArea = items[items.length - 1]?.area || "GENERAL";
+                                    const formatted = newParsedItems.map(i => ({
+                                        id: Math.random().toString(36).substr(2, 9),
+                                        area: lastArea,
+                                        code: i.code || "",
+                                        description: (i.description || "").toUpperCase(),
+                                        quantity: i.quantity || 1,
+                                        unit: (i.unit || "ea").toUpperCase(),
+                                        notes: "",
+                                        unitPrice: i.unitPrice || 0
+                                    }));
+                                    
+                                    if (items.length === 1 && !items[0].description && items[0].unitPrice === 0) {
+                                        setItems(formatted);
+                                    } else {
+                                        setItems(prev => [...prev, ...formatted]);
+                                    }
+                                }
+                            }} />
+                        </div>
+
+                        {/* Catalog Picker */}
+                        {catalog.length > 0 && (
+                            <div className="bg-primary/5 border-y border-white/5 px-8 py-4 relative">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <Book className="h-4 w-4 text-primary" />
+                                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground italic">Quick-Add from Standard Catalog</h3>
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 border-y border-primary/10">
-                                    <div>
-                                        <span className="text-[10px] font-black uppercase text-muted-foreground block mb-1">Quote Number</span>
-                                        <span className="text-lg font-bold text-white tracking-widest">{lastQuoteNumber || 'N/A'}</span>
+                                <div className="relative group max-w-2xl">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                                     </div>
-                                    <div>
-                                        <span className="text-[10px] font-black uppercase text-muted-foreground block mb-1">Site</span>
-                                        <span className="text-sm font-bold text-white truncate block">{site || 'N/A'}</span>
+                                    <Input
+                                        placeholder="Search standard rates (Emergency Call-out, Labor, etc.)"
+                                        className="pl-10 bg-[#14141E] border-white/10 hover:border-primary/40 focus:border-primary transition-all text-sm font-bold h-11"
+                                        value={catalogSearch}
+                                        onChange={(e) => {
+                                            setCatalogSearch(e.target.value)
+                                            setIsCatalogOpen(true)
+                                        }}
+                                        onFocus={() => setIsCatalogOpen(true)}
+                                    />
+
+                                    {isCatalogOpen && catalogSearch && (
+                                        <div className="absolute z-50 w-full mt-2 bg-[#1A1A2E] border border-primary/20 rounded-xl shadow-2xl max-h-60 overflow-auto animate-in fade-in zoom-in-95 duration-200">
+                                            {filteredCatalog.length === 0 ? (
+                                                <div className="p-4 text-center text-xs text-muted-foreground italic">
+                                                    No matching standard items found.
+                                                </div>
+                                            ) : (
+                                                <div className="p-1">
+                                                    {filteredCatalog.map(item => (
+                                                        <button
+                                                            key={item.id}
+                                                            type="button"
+                                                            onClick={() => addFromCatalog(item)}
+                                                            className="w-full text-left p-3 hover:bg-primary/10 rounded-lg flex items-center justify-between group/item transition-colors"
+                                                        >
+                                                            <div>
+                                                                <p className="font-bold text-white group-hover/item:text-primary transition-colors">{item.description}</p>
+                                                                {item.category && <p className="text-[10px] text-muted-foreground uppercase">{item.category}</p>}
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="font-black text-primary">{formatCurrency(item.unitPrice)}</p>
+                                                                <p className="text-[10px] text-muted-foreground uppercase">{item.unit || 'ea'}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                {isCatalogOpen && catalogSearch && (
+                                    <div
+                                        className="fixed inset-0 z-40 transition-opacity"
+                                        onClick={() => setIsCatalogOpen(false)}
+                                    />
+                                )}
+                            </div>
+                        )}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-[#14141E] border-b border-white/5 text-muted-foreground font-black text-[10px] uppercase tracking-[0.2em]">
+                                    <tr>
+                                        <th className="px-4 md:px-8 py-4 md:py-5 min-w-[200px] md:min-w-[350px]">Description & Headings</th>
+                                        <th className="hidden md:table-cell px-4 py-5 text-center w-28">Quantity</th>
+                                        <th className="hidden md:table-cell px-4 py-5 text-center w-28">Unit</th>
+                                        <th className="hidden md:table-cell px-4 py-5 text-right w-44">Unit Price (R)</th>
+                                        <th className="px-4 md:px-8 py-4 md:py-5 text-right w-32 md:w-40 text-primary">Total</th>
+                                        <th className="px-4 py-5 w-12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {(() => {
+                                        const sequentialGroups: { area: string, items: any[] }[] = [];
+                                        items.forEach((item, index) => {
+                                            const area = item.area?.trim() || "GENERAL"
+                                            const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+                                            if (lastGroup && lastGroup.area === area) {
+                                                lastGroup.items.push({ ...item, originalIndex: index });
+                                            } else {
+                                                sequentialGroups.push({ area, items: [{ ...item, originalIndex: index }] });
+                                            }
+                                        });
+
+                                        return sequentialGroups.map((group: any, gIdx: number) => (
+                                            <Fragment key={`group-${group.area}-${gIdx}`}>
+                                                <tr className="bg-primary/5 border-y border-white/5">
+                                                    <td colSpan={6} className="px-8 py-3">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[9px] font-black uppercase text-primary/40 tracking-[0.2em] italic mb-1">Group Heading</span>
+                                                                <Input
+                                                                    value={group.area || "NO HEADING"}
+                                                                    onChange={(e) => {
+                                                                        // Rename items ONLY in this contiguous group
+                                                                        const newArea = e.target.value;
+                                                                        setItems(prev => prev.map((item, i) => {
+                                                                            if (group.items.some((gi: any) => gi.originalIndex === i)) {
+                                                                                return { ...item, area: newArea };
+                                                                            }
+                                                                            return item;
+                                                                        }));
+                                                                    }}
+                                                                    className="h-8 min-w-[300px] max-w-lg bg-transparent border-none text-[11px] font-black text-left uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0 placeholder:opacity-20"
+                                                                    placeholder="ENTER SECTION HEADING..."
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {group.items.map((item: any) => {
+                                                    const suggestion = suggestions[item.description]
+                                                    return (
+                                                        <WbpItemRow
+                                                            key={item.id}
+                                                            item={item}
+                                                            index={item.originalIndex}
+                                                            suggestion={suggestion}
+                                                            aiEnabled={aiEnabled}
+                                                            onUpdate={updateItem}
+                                                            onRemove={removeItem}
+                                                            onSplit={splitItem}
+                                                            onMoveUp={moveItemUp}
+                                                            onMoveDown={moveItemDown}
+                                                            onDragStart={handleDragStart}
+                                                            onDragEnter={handleDragEnter}
+                                                            onDragEnd={handleDragEnd}
+                                                            isDragOver={dragOverIndex === item.originalIndex}
+                                                        />
+                                                    )
+                                                })}
+                                            </Fragment>
+                                        ))
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="bg-white/5 border-t border-white/5 p-6 md:p-10 flex flex-col lg:flex-row justify-between items-start gap-8 md:gap-10">
+                            <div className="space-y-6 flex-1 min-w-[300px]">
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Quotation Notes & Specific Requirements</Label>
+                                    <Textarea
+                                        value={quotationNotes}
+                                        onChange={(e) => setQuotationNotes(e.target.value)}
+                                        placeholder="Add overall requirements, payment terms (e.g. 50% deposit), or site conditions..."
+                                        className="min-h-[100px] bg-[#14141E] border-primary/20 focus:border-primary text-white font-medium text-sm resize-none"
+                                    />
+                                </div>
+                                <div className="space-y-3 pt-4">
+                                    <div className="flex gap-6 text-sm">
+                                        <span className="text-muted-foreground uppercase font-black tracking-widest text-[10px] w-24">Subtotal:</span>
+                                        <span className="font-black text-white">{formatCurrency(subtotal)}</span>
                                     </div>
-                                    <div>
-                                        <span className="text-[10px] font-black uppercase text-muted-foreground block mb-1">Commercial Total</span>
-                                        <span className="text-lg font-black text-primary">{formatCurrency(total)}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-[10px] font-black uppercase text-muted-foreground block mb-1">Project</span>
-                                        <span className="text-sm font-bold text-white truncate block">{project.name}</span>
+                                    <div className="flex gap-6 text-sm">
+                                        <span className="text-muted-foreground uppercase font-black tracking-widest text-[10px] w-24">VAT (15%):</span>
+                                        <span className="font-black text-white">{formatCurrency(total - subtotal)}</span>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3 pt-2">
-                                    <Link
-                                        href={`/invoices/${lastQuoteId}`}
-                                        className="bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/10"
-                                    >
-                                        View Official Quotation
-                                    </Link>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 w-full lg:w-auto">
+                                <div className="text-center sm:text-right flex-1 sm:flex-none">
+                                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] block mb-1 md:mb-3 opacity-50 italic">Commercial Total</span>
+                                    <span className="text-4xl md:text-5xl font-black text-white shadow-primary/20 drop-shadow-2xl">{formatCurrency(total)}</span>
+                                </div>
+                                <div className="flex gap-3 w-full sm:w-auto">
                                     <Button
-                                        variant="ghost"
-                                        onClick={() => setSubmitted(false)}
-                                        className="text-muted-foreground hover:text-white font-bold"
+                                        size="lg"
+                                        variant="outline"
+                                        onClick={handleSaveDraft}
+                                        disabled={isGenerating || isSavingDraft}
+                                        className="flex-1 sm:flex-none border-primary/20 hover:bg-primary/5 text-primary font-black px-6 h-16 rounded-xl transition-all"
                                     >
-                                        Back to editor
+                                        {isSavingDraft ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                                        <span className="sm:hidden ml-2">Save</span>
+                                    </Button>
+                                    <Button
+                                        size="lg"
+                                        onClick={handleGenerate}
+                                        disabled={isGenerating || isSavingDraft}
+                                        className="flex-[2] sm:flex-none bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-2xl shadow-primary/20 px-6 md:px-12 h-14 md:h-16 rounded-xl transition-all active:scale-95 text-xs md:text-sm uppercase tracking-widest italic"
+                                    >
+                                        {isGenerating ? (
+                                            <Loader2 className="h-6 w-6 animate-spin" />
+                                        ) : (
+                                            "AUTHORIZE & GENERATE QUOTATION"
+                                        )}
                                     </Button>
                                 </div>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
-            )}
-            <Card className="border-white/5 bg-[#1A1A2E] shadow-2xl overflow-hidden rounded-2xl">
-                <CardHeader className="bg-white/5 p-6 border-b border-white/5">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle className="flex items-center gap-2 md:gap-3 text-lg md:text-2xl font-black text-white uppercase italic">
-                                <FileText className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                                Pricing Breakdown
-                            </CardTitle>
-                            <p className="text-[9px] md:text-xs text-muted-foreground font-black mt-1 md:mt-2 uppercase tracking-[0.2em]">
-                                Engineering metrics & commercial validation.
-                            </p>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={addSection} className="border-primary/20 hover:bg-primary/10 text-primary font-black px-4 transition-all">
-                                <Plus className="h-4 w-4 mr-2" /> Add Section
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={addItem} className="border-primary/20 hover:bg-primary/10 text-primary font-black px-4 transition-all">
-                                <Plus className="h-4 w-4 mr-2" /> Add Component
-                            </Button>
-                        </div>
-                    </div>
+            </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/5">
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Site Name</Label>
-                            <Input
-                                value={site}
-                                onChange={(e) => setSite(e.target.value)}
-                                placeholder="e.g. 15 Culemborg Street, Avondale"
-                                className="bg-[#14141E] border-white/10 text-white font-bold h-12"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Custom Quote #</Label>
-                            <Input
-                                value={quoteNumber}
-                                onChange={(e) => setQuoteNumber(e.target.value)}
-                                placeholder="e.g. Q-2024-001"
-                                className="bg-[#14141E] border-white/10 text-white font-bold h-12"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Customer Reference</Label>
-                            <Input
-                                value={reference}
-                                onChange={(e) => setReference(e.target.value)}
-                                placeholder="e.g. PO Ref / Project Code"
-                                className="bg-[#14141E] border-white/10 text-white font-bold h-12"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Commercial Status</Label>
-                            <select
-                                value={commercialStatus}
-                                onChange={(e) => handleCommercialStatusChange(e.target.value)}
-                                className={cn(
-                                    "flex h-12 w-full rounded-md border px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary transition-all cursor-pointer",
-                                    commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 border-red-500 text-red-400" :
-                                        commercialStatus === 'REACTIVE_WORK' ? "bg-orange-500/20 border-orange-500 text-orange-400" :
-                                        commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 border-primary text-primary" :
-                                            "bg-[#14141E] border-white/10 text-white"
-                                )}
+            {/* Catalog Viewer Panel */}
+            <div className="w-full lg:w-80 shrink-0 bg-[#14141E]/80 border border-white/5 rounded-2xl p-5 h-fit sticky top-6 backdrop-blur-md">
+                <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4">
+                    <div>
+                        <h3 className="text-sm font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+                            <Book className="h-4 w-4" /> Catalog Viewer
+                        </h3>
+                        <p className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">
+                            {allClients.find(c => c.id === selectedClientId)?.companyName || allClients.find(c => c.id === selectedClientId)?.name || "Selected Client"}&apos;s Catalog
+                        </p>
+                    </div>
+                </div>
+
+                <div className="relative mb-4">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                        placeholder="Filter catalog..."
+                        className="pl-8 h-8 text-xs bg-[#14141E] border-white/10"
+                        value={sidebarSearch}
+                        onChange={(e) => setSidebarSearch(e.target.value)}
+                    />
+                </div>
+
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1 scrollbar-thin">
+                    {filteredSidebarCatalog.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic text-center py-8">
+                            No catalog items found.
+                        </p>
+                    ) : (
+                        filteredSidebarCatalog.map(item => (
+                            <div 
+                                key={item.id}
+                                className="p-3 bg-white/5 border border-white/5 hover:border-primary/20 rounded-xl flex items-center justify-between gap-3 group transition-all"
                             >
-                                <option value="AWAITING_PO">AWAITING PO</option>
-                                <option value="PO_RECEIVED">PO RECEIVED</option>
-                                <option value="EMERGENCY_WORK">EMERGENCY WORK</option>
-                                <option value="REACTIVE_WORK">REACTIVE WORK</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-white/5">
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Project Name</Label>
-                            <Input
-                                value={projectName}
-                                onChange={(e) => setProjectName(e.target.value)}
-                                placeholder="Edit Project Name..."
-                                className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Select Client from CRM</Label>
-                            <select
-                                value={selectedClientId}
-                                onChange={(e) => handleClientSwitch(e.target.value)}
-                                className="flex h-12 w-full rounded-md border border-primary/20 bg-[#14141E] px-3 py-2 text-sm text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:border-primary/40 transition-colors"
-                            >
-                                {allClients.map(c => (
-                                    <option key={c.id} value={c.id}>{c.companyName || c.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Client VAT #</Label>
-                            <Input
-                                value={clientVat}
-                                onChange={(e) => {
-                                    setClientVat(e.target.value)
-                                    clientUpdatesRef.current.vat = e.target.value
-                                }}
-                                placeholder="123456789"
-                                className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Client Reg #</Label>
-                            <Input
-                                value={clientReg}
-                                onChange={(e) => {
-                                    setClientReg(e.target.value)
-                                    clientUpdatesRef.current.reg = e.target.value
-                                }}
-                                placeholder="2024/123456/07"
-                                className="bg-[#14141E] border-primary/20 text-white font-bold h-12 focus:border-primary"
-                            />
-                        </div>
-                    </div>
-                </CardHeader>
-
-                <CardContent className="p-0">
-                    {/* Voice-to-Scope Integration */}
-                    <div className="bg-primary/5 border-b border-white/5 px-8 py-6">
-                        <VoiceRecorder onParsed={(newParsedItems) => {
-                            if (newParsedItems && newParsedItems.length > 0) {
-                                const lastArea = items[items.length - 1]?.area || "GENERAL";
-                                const formatted = newParsedItems.map(i => ({
-                                    id: Math.random().toString(36).substr(2, 9),
-                                    area: lastArea,
-                                    description: (i.description || "").toUpperCase(),
-                                    quantity: i.quantity || 1,
-                                    unit: (i.unit || "ea").toLowerCase(),
-                                    notes: "",
-                                    unitPrice: i.unitPrice || 0
-                                }));
-                                
-                                if (items.length === 1 && !items[0].description && items[0].unitPrice === 0) {
-                                    setItems(formatted);
-                                } else {
-                                    setItems(prev => [...prev, ...formatted]);
-                                }
-                            }
-                        }} />
-                    </div>
-
-                    {/* Catalog Picker */}
-                    {catalog.length > 0 && (
-                        <div className="bg-primary/5 border-y border-white/5 px-8 py-4 relative">
-                            <div className="flex items-center gap-3 mb-3">
-                                <Book className="h-4 w-4 text-primary" />
-                                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground italic">Quick-Add from Standard Catalog</h3>
-                            </div>
-                            <div className="relative group max-w-2xl">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Search className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                <div className="min-w-0">
+                                    <p className="text-xs font-mono font-bold text-primary uppercase">{item.code || "—"}</p>
+                                    <p className="text-xs font-medium text-white truncate max-w-[150px]">{item.description}</p>
+                                    <p className="text-[10px] text-muted-foreground uppercase">{formatCurrency(item.unitPrice)} / {item.unit || "ea"}</p>
                                 </div>
-                                <Input
-                                    placeholder="Search standard rates (Emergency Call-out, Labor, etc.)"
-                                    className="pl-10 bg-[#14141E] border-white/10 hover:border-primary/40 focus:border-primary transition-all text-sm font-bold h-11"
-                                    value={catalogSearch}
-                                    onChange={(e) => {
-                                        setCatalogSearch(e.target.value)
-                                        setIsCatalogOpen(true)
-                                    }}
-                                    onFocus={() => setIsCatalogOpen(true)}
-                                />
-
-                                {isCatalogOpen && catalogSearch && (
-                                    <div className="absolute z-50 w-full mt-2 bg-[#1A1A2E] border border-primary/20 rounded-xl shadow-2xl max-h-60 overflow-auto animate-in fade-in zoom-in-95 duration-200">
-                                        {filteredCatalog.length === 0 ? (
-                                            <div className="p-4 text-center text-xs text-muted-foreground italic">
-                                                No matching standard items found.
-                                            </div>
-                                        ) : (
-                                            <div className="p-1">
-                                                {filteredCatalog.map(item => (
-                                                    <button
-                                                        key={item.id}
-                                                        type="button"
-                                                        onClick={() => addFromCatalog(item)}
-                                                        className="w-full text-left p-3 hover:bg-primary/10 rounded-lg flex items-center justify-between group/item transition-colors"
-                                                    >
-                                                        <div>
-                                                            <p className="font-bold text-white group-hover/item:text-primary transition-colors">{item.description}</p>
-                                                            {item.category && <p className="text-[10px] text-muted-foreground uppercase">{item.category}</p>}
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="font-black text-primary">{formatCurrency(item.unitPrice)}</p>
-                                                            <p className="text-[10px] text-muted-foreground uppercase">{item.unit || 'ea'}</p>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                            {isCatalogOpen && catalogSearch && (
-                                <div
-                                    className="fixed inset-0 z-40 transition-opacity"
-                                    onClick={() => setIsCatalogOpen(false)}
-                                />
-                            )}
-                        </div>
-                    )}
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-[#14141E] border-b border-white/5 text-muted-foreground font-black text-[10px] uppercase tracking-[0.2em]">
-                                <tr>
-                                    <th className="px-4 md:px-8 py-4 md:py-5 min-w-[200px] md:min-w-[350px]">Description & Headings</th>
-                                    <th className="hidden md:table-cell px-4 py-5 text-center w-28">Quantity</th>
-                                    <th className="hidden md:table-cell px-4 py-5 text-center w-28">Unit</th>
-                                    <th className="hidden md:table-cell px-4 py-5 text-right w-44">Unit Price (R)</th>
-                                    <th className="px-4 md:px-8 py-4 md:py-5 text-right w-32 md:w-40 text-primary">Total</th>
-                                    <th className="px-4 py-5 w-12"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {(() => {
-                                    const sequentialGroups: { area: string, items: any[] }[] = [];
-                                    items.forEach((item, index) => {
-                                        const area = item.area?.trim() || "GENERAL"
-                                        const lastGroup = sequentialGroups[sequentialGroups.length - 1];
-                                        if (lastGroup && lastGroup.area === area) {
-                                            lastGroup.items.push({ ...item, originalIndex: index });
-                                        } else {
-                                            sequentialGroups.push({ area, items: [{ ...item, originalIndex: index }] });
-                                        }
-                                    });
-
-                                    return sequentialGroups.map((group: any, gIdx: number) => (
-                                        <Fragment key={`group-${group.area}-${gIdx}`}>
-                                            <tr className="bg-primary/5 border-y border-white/5">
-                                                <td colSpan={6} className="px-8 py-3">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[9px] font-black uppercase text-primary/40 tracking-[0.2em] italic mb-1">Group Heading</span>
-                                                            <Input
-                                                                value={group.area || "NO HEADING"}
-                                                                onChange={(e) => {
-                                                                    // Rename items ONLY in this contiguous group
-                                                                    const newArea = e.target.value;
-                                                                    setItems(prev => prev.map((item, i) => {
-                                                                        if (group.items.some((gi: any) => gi.originalIndex === i)) {
-                                                                            return { ...item, area: newArea };
-                                                                        }
-                                                                        return item;
-                                                                    }));
-                                                                }}
-                                                                className="h-8 min-w-[300px] max-w-lg bg-transparent border-none text-[11px] font-black text-left uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0 placeholder:opacity-20"
-                                                                placeholder="ENTER SECTION HEADING..."
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {group.items.map((item: any) => {
-                                                const suggestion = suggestions[item.description]
-                                                return (
-                                                    <WbpItemRow
-                                                        key={item.id}
-                                                        item={item}
-                                                        index={item.originalIndex}
-                                                        suggestion={suggestion}
-                                                        aiEnabled={aiEnabled}
-                                                        onUpdate={updateItem}
-                                                        onRemove={removeItem}
-                                                        onSplit={splitItem}
-                                                        onMoveUp={moveItemUp}
-                                                        onMoveDown={moveItemDown}
-                                                        onDragStart={handleDragStart}
-                                                        onDragEnter={handleDragEnter}
-                                                        onDragEnd={handleDragEnd}
-                                                        isDragOver={dragOverIndex === item.originalIndex}
-                                                    />
-                                                )
-                                            })}
-                                        </Fragment>
-                                    ))
-                                })()}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className="bg-white/5 border-t border-white/5 p-6 md:p-10 flex flex-col lg:flex-row justify-between items-start gap-8 md:gap-10">
-                        <div className="space-y-6 flex-1 min-w-[300px]">
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Quotation Notes & Specific Requirements</Label>
-                                <Textarea
-                                    value={quotationNotes}
-                                    onChange={(e) => setQuotationNotes(e.target.value)}
-                                    placeholder="Add overall requirements, payment terms (e.g. 50% deposit), or site conditions..."
-                                    className="min-h-[100px] bg-[#14141E] border-primary/20 focus:border-primary text-white font-medium text-sm resize-none"
-                                />
-                            </div>
-                            <div className="space-y-3 pt-4">
-                                <div className="flex gap-6 text-sm">
-                                    <span className="text-muted-foreground uppercase font-black tracking-widest text-[10px] w-24">Subtotal:</span>
-                                    <span className="font-black text-white">{formatCurrency(subtotal)}</span>
-                                </div>
-                                <div className="flex gap-6 text-sm">
-                                    <span className="text-muted-foreground uppercase font-black tracking-widest text-[10px] w-24">VAT (15%):</span>
-                                    <span className="font-black text-white">{formatCurrency(total - subtotal)}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 w-full lg:w-auto">
-                            <div className="text-center sm:text-right flex-1 sm:flex-none">
-                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] block mb-1 md:mb-3 opacity-50 italic">Commercial Total</span>
-                                <span className="text-4xl md:text-5xl font-black text-white shadow-primary/20 drop-shadow-2xl">{formatCurrency(total)}</span>
-                            </div>
-                            <div className="flex gap-3 w-full sm:w-auto">
                                 <Button
-                                    size="lg"
+                                    type="button"
+                                    onClick={() => addFromCatalog(item)}
+                                    size="sm"
                                     variant="outline"
-                                    onClick={handleSaveDraft}
-                                    disabled={isGenerating || isSavingDraft}
-                                    className="flex-1 sm:flex-none border-primary/20 hover:bg-primary/5 text-primary font-black px-6 h-16 rounded-xl transition-all"
+                                    className="h-8 px-2.5 border-primary/20 hover:bg-primary hover:text-black shrink-0 transition-all font-black text-xs"
                                 >
-                                    {isSavingDraft ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                                    <span className="sm:hidden ml-2">Save</span>
-                                </Button>
-                                <Button
-                                    size="lg"
-                                    onClick={handleGenerate}
-                                    disabled={isGenerating || isSavingDraft}
-                                    className="flex-[2] sm:flex-none bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-2xl shadow-primary/20 px-6 md:px-12 h-14 md:h-16 rounded-xl transition-all active:scale-95 text-xs md:text-sm uppercase tracking-widest italic"
-                                >
-                                    {isGenerating ? (
-                                        <Loader2 className="h-6 w-6 animate-spin" />
-                                    ) : (
-                                        "AUTHORIZE & GENERATE QUOTATION"
-                                    )}
+                                    + Add
                                 </Button>
                             </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                        ))
+                    )}
+                </div>
+            </div>
         </div>
     )
 }

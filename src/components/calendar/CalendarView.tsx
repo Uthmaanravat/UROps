@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { createMeeting, deleteMeeting } from "@/app/(dashboard)/calendar/actions"
+import { createMeeting, deleteMeeting, updateMeeting } from "@/app/(dashboard)/calendar/actions"
 import { useRouter } from "next/navigation"
 
 interface CalendarViewProps {
@@ -34,6 +34,78 @@ export function CalendarView({ meetings, projects, clients }: CalendarViewProps)
         clientId: "",
         projectId: ""
     })
+
+    const [selectedMeeting, setSelectedMeeting] = useState<any | null>(null)
+    const [isEditOpen, setIsEditOpen] = useState(false)
+    const [editMeeting, setEditMeeting] = useState({
+        id: "",
+        title: "",
+        date: "",
+        time: "09:00",
+        duration: "60",
+        location: "",
+        notes: "",
+        clientId: "",
+        projectId: ""
+    })
+
+    const handleMeetingClick = (meeting: any) => {
+        setSelectedMeeting(meeting)
+        const mDate = new Date(meeting.date)
+        
+        // Format to local date string (YYYY-MM-DD)
+        const year = mDate.getFullYear()
+        const month = String(mDate.getMonth() + 1).padStart(2, '0')
+        const day = String(mDate.getDate()).padStart(2, '0')
+        const dateStr = `${year}-${month}-${day}`
+        
+        const timeStr = mDate.toTimeString().split(' ')[0].substring(0, 5)
+        
+        setEditMeeting({
+            id: meeting.id,
+            title: meeting.title,
+            date: dateStr,
+            time: timeStr,
+            duration: String(meeting.duration),
+            location: meeting.location || "",
+            notes: meeting.notes || "",
+            clientId: meeting.clientId || "",
+            projectId: meeting.projectId || ""
+        })
+        setIsEditOpen(true)
+    }
+
+    const handleUpdateMeeting = async () => {
+        setLoading(true)
+        const dateObj = new Date(`${editMeeting.date}T${editMeeting.time}`)
+        const res = await updateMeeting(editMeeting.id, {
+            ...editMeeting,
+            date: dateObj,
+            duration: parseInt(editMeeting.duration)
+        })
+        if (res.success) {
+            setIsEditOpen(false)
+            setSelectedMeeting(null)
+            router.refresh()
+        } else {
+            alert(res.error || "Failed to update meeting")
+        }
+        setLoading(false)
+    }
+
+    const handleDeleteMeeting = async () => {
+        if (!confirm("Are you sure you want to delete this meeting?")) return
+        setLoading(true)
+        const res = await deleteMeeting(editMeeting.id)
+        if (res.success) {
+            setIsEditOpen(false)
+            setSelectedMeeting(null)
+            router.refresh()
+        } else {
+            alert(res.error || "Failed to delete meeting")
+        }
+        setLoading(false)
+    }
 
     const handlePrevMonth = () => {
         setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
@@ -133,10 +205,72 @@ export function CalendarView({ meetings, projects, clients }: CalendarViewProps)
                                 <Label>Location</Label>
                                 <Input value={newMeeting.location} onChange={e => setNewMeeting({ ...newMeeting, location: e.target.value })} />
                             </div>
+                            <div className="space-y-2">
+                                <Label>Notes</Label>
+                                <Textarea value={newMeeting.notes} onChange={e => setNewMeeting({ ...newMeeting, notes: e.target.value })} placeholder="Add any details or description..." />
+                            </div>
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
                             <Button onClick={handleAddMeeting} disabled={loading || !newMeeting.title || !newMeeting.date}>Save Meeting</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Edit / Delete Meeting Dialog */}
+                <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Edit Meeting</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="space-y-2">
+                                <Label>Title</Label>
+                                <Input value={editMeeting.title} onChange={e => setEditMeeting({ ...editMeeting, title: e.target.value })} placeholder="e.g. Site Inspection" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Date</Label>
+                                    <Input type="date" value={editMeeting.date} onChange={e => setEditMeeting({ ...editMeeting, date: e.target.value })} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Time</Label>
+                                    <Input type="time" value={editMeeting.time} onChange={e => setEditMeeting({ ...editMeeting, time: e.target.value })} />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Client (Optional)</Label>
+                                    <select className="flex h-9 w-full rounded-md border px-3 text-sm" value={editMeeting.clientId} onChange={e => setEditMeeting({ ...editMeeting, clientId: e.target.value })}>
+                                        <option value="">None</option>
+                                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Project (Optional)</Label>
+                                    <select className="flex h-9 w-full rounded-md border px-3 text-sm" value={editMeeting.projectId} onChange={e => setEditMeeting({ ...editMeeting, projectId: e.target.value })}>
+                                        <option value="">None</option>
+                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Location</Label>
+                                <Input value={editMeeting.location} onChange={e => setEditMeeting({ ...editMeeting, location: e.target.value })} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Notes</Label>
+                                <Textarea value={editMeeting.notes} onChange={e => setEditMeeting({ ...editMeeting, notes: e.target.value })} placeholder="Add any details or description..." />
+                            </div>
+                        </div>
+                        <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3">
+                            <Button variant="destructive" onClick={handleDeleteMeeting} disabled={loading} className="w-full sm:w-auto">
+                                Delete Meeting
+                            </Button>
+                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                <Button variant="outline" onClick={() => setIsEditOpen(false)} className="w-full sm:w-auto">Cancel</Button>
+                                <Button onClick={handleUpdateMeeting} disabled={loading || !editMeeting.title || !editMeeting.date} className="w-full sm:w-auto bg-primary text-primary-foreground">Save Changes</Button>
+                            </div>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
@@ -172,9 +306,16 @@ export function CalendarView({ meetings, projects, clients }: CalendarViewProps)
                                     </div>
                                     <div className="mt-2 space-y-1.5 overflow-hidden">
                                         {dayMeetings.map(m => (
-                                            <div key={m.id} className="text-[9px] md:text-[11px] p-1 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 truncate flex items-center gap-1 border border-blue-500/20 font-medium">
+                                            <button
+                                                key={m.id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleMeetingClick(m);
+                                                }}
+                                                className="w-full text-[9px] md:text-[11px] p-1 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 truncate flex items-center gap-1 border border-blue-500/20 font-medium hover:bg-blue-500/25 transition-all text-left"
+                                            >
                                                 <CalendarIcon className="h-2.5 w-2.5 shrink-0" /> {m.title}
-                                            </div>
+                                            </button>
                                         ))}
                                         {dayProjects.map(p => (
                                             <div key={p.id} className="text-[9px] md:text-[11px] p-1 rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 truncate flex items-center gap-1 border border-purple-500/20 font-medium">

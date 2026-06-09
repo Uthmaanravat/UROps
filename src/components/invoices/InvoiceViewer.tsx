@@ -409,6 +409,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             doc.text(`REG: ${invoice.client.registrationNumber}`, 85, clientLegalY);
             clientLegalY += 4.5;
         }
+        if (invoice.client.vendorNumber) {
+            doc.text(`VENDOR: ${invoice.client.vendorNumber}`, 85, clientLegalY);
+            clientLegalY += 4.5;
+        }
 
         // Column 3: From (Company Contact)
         doc.setTextColor(163, 230, 53); // Lime
@@ -734,6 +738,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             currentRow += 2;
             if (invoice.client.vatNumber) {
                 worksheet.getCell(`A${currentRow}`).value = `VAT: ${invoice.client.vatNumber}`;
+                worksheet.getCell(`A${currentRow}`).font = { size: 10 };
+                currentRow++;
+            }
+            if (invoice.client.vendorNumber) {
+                worksheet.getCell(`A${currentRow}`).value = `VENDOR: ${invoice.client.vendorNumber}`;
                 worksheet.getCell(`A${currentRow}`).font = { size: 10 };
                 currentRow++;
             }
@@ -1362,6 +1371,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5 flex items-center gap-2">
                                         <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">REG</span>
                                         <span className="text-[10px] font-bold text-gray-300">{invoice.client.registrationNumber}</span>
+                                    </div>
+                                )}
+                                {invoice.client.vendorNumber && (
+                                    <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5 flex items-center gap-2">
+                                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">VENDOR</span>
+                                        <span className="text-[10px] font-bold text-gray-300">{invoice.client.vendorNumber}</span>
                                     </div>
                                 )}
                             </div>

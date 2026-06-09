@@ -66,3 +66,46 @@ export async function deleteMeeting(id: string) {
     }
 }
 
+export async function updateMeeting(id: string, data: {
+    title: string
+    date: Date
+    duration?: number
+    location?: string
+    notes?: string
+    clientId?: string
+    projectId?: string
+}) {
+    try {
+        const companyId = await ensureAuth()
+
+        const meeting = await prisma.meeting.update({
+            where: { id, companyId },
+            data: {
+                title: data.title,
+                date: data.date,
+                duration: data.duration || 60,
+                location: data.location,
+                notes: data.notes,
+                clientId: data.clientId || null,
+                projectId: data.projectId || null
+            }
+        })
+
+        // Dispatch email and WhatsApp reminders to managers asynchronously for the update
+        try {
+            await sendMeetingReminders(meeting.id, true)
+        } catch (reminderError) {
+            console.error("Failed to send meeting reminders:", reminderError)
+        }
+
+        revalidatePath("/calendar")
+        if (data.clientId) revalidatePath(`/clients/${data.clientId}`)
+        if (data.projectId) revalidatePath(`/projects/${data.projectId}`)
+
+        return { success: true, data: meeting }
+    } catch (error) {
+        console.error("Error updating meeting:", error)
+        return { success: false, error: "Failed to update meeting" }
+    }
+}
+

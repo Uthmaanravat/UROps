@@ -223,7 +223,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 variant="ghost"
                                 onClick={async () => {
                                     setSubmitted(false)
-                                    setItems([{ description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
+                                    setItems([{ code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
                                     const docNumber = await getQuoteSequenceAction();
                                     if (docNumber) setQuoteNumber(docNumber);
                                 }}
@@ -324,6 +324,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 <VoiceRecorder onParsed={(newItems) => {
                     if (newItems && newItems.length > 0) {
                         const formattedItems = newItems.map(i => ({
+                            code: i.code || "",
                             description: (i.description || "").toUpperCase(),
                             quantity: i.quantity || 1,
                             unit: (i.unit || "").toUpperCase(),
@@ -673,7 +674,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         <Book className="h-4 w-4" /> Catalog Viewer
                     </h3>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">
-                        {clients.find(c => c.id === clientId)?.name || "Selected Client"}'s Catalog
+                        {clients.find(c => c.id === clientId)?.name || "Selected Client"}&apos;s Catalog
                     </p>
                 </div>
             </div>

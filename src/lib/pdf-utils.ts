@@ -137,6 +137,11 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
         }
         if (report.client) {
             doc.text(`Client: ${report.client.name}`, 105, clientY);
+            clientY += 5;
+            if (report.client.vendorNumber) {
+                doc.text(`Vendor No: ${report.client.vendorNumber}`, 105, clientY);
+                clientY += 5;
+            }
         }
     }
 
@@ -358,7 +363,10 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
         propFields.push({ label: `${propertyTypeLabel}:`, val1: metadata.propertyType });
     }
     // Always include Client / Contact
-    propFields.push({ label: "Client / Contact:", val1: report.client?.name || "", val2: report.client?.email });
+    propFields.push({ label: "Client / Contact:", val1: report.client?.name || "", val2: report.client?.email || undefined });
+    if (report.client?.vendorNumber) {
+        propFields.push({ label: "Vendor Number:", val1: report.client.vendorNumber });
+    }
     
     if (report.type === "CONSTRUCTION") {
         if (showProjectPhase && metadata.projectPhase) {

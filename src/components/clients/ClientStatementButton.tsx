@@ -110,6 +110,10 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 doc.text(`VAT: ${client.vatNumber}`, 80, currentBillY);
                 currentBillY += 4.5;
             }
+            if (client.vendorNumber) {
+                doc.text(`VENDOR: ${client.vendorNumber}`, 80, currentBillY);
+                currentBillY += 4.5;
+            }
             if (client.registrationNumber) {
                 doc.text(`REG: ${client.registrationNumber}`, 80, currentBillY);
             }
@@ -352,6 +356,11 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             }
             if (client.vatNumber) {
                 worksheet.getCell(`C${billToRow}`).value = `VAT: ${client.vatNumber}`;
+                worksheet.getCell(`C${billToRow}`).font = { color: { argb: 'FF64748B' } };
+                billToRow++;
+            }
+            if (client.vendorNumber) {
+                worksheet.getCell(`C${billToRow}`).value = `VENDOR: ${client.vendorNumber}`;
                 worksheet.getCell(`C${billToRow}`).font = { color: { argb: 'FF64748B' } };
                 billToRow++;
             }

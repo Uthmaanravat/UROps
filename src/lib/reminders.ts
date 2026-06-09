@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { sendRealEmail } from "@/lib/email"
 import { sendWhatsAppMessage } from "@/lib/whatsapp"
 
-export async function sendMeetingReminders(meetingId: string) {
+export async function sendMeetingReminders(meetingId: string, isUpdate = false) {
     try {
         const meeting = await prisma.meeting.findUnique({
             where: { id: meetingId },
@@ -50,10 +50,12 @@ export async function sendMeetingReminders(meetingId: string) {
             const managerName = manager.name || manager.email.split('@')[0];
 
             // 1. Send Email Reminder
-            const emailSubject = `[Meeting Scheduled] ${meeting.title} - ${formattedDate}`;
+            const emailSubject = isUpdate 
+                ? `[Meeting Updated] ${meeting.title} - ${formattedDate}`
+                : `[Meeting Scheduled] ${meeting.title} - ${formattedDate}`;
             const emailBody = `Hi ${managerName},
 
-A new meeting has been scheduled.
+A meeting has been ${isUpdate ? 'updated / rescheduled' : 'scheduled'}.
 
 Details of the meeting:
 - Title: ${meeting.title}
@@ -75,7 +77,16 @@ The UROps Team`;
             });
 
             // 2. Send WhatsApp Reminder
-            const whatsappBody = `*Meeting Scheduled Reminder* 📅
+            const whatsappBody = isUpdate
+                ? `*Meeting Updated / Rescheduled* 📅
+
+*Title:* ${meeting.title}
+*Date/Time:* ${formattedDate}
+*Location:* ${meeting.location || 'N/A'}
+*Notes:* ${meeting.notes || 'N/A'}
+*Client:* ${clientName}
+*Project:* ${projectName}`
+                : `*Meeting Scheduled Reminder* 📅
 
 *Title:* ${meeting.title}
 *Date/Time:* ${formattedDate}
