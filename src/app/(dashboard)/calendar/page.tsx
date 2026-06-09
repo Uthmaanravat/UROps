@@ -1,18 +1,23 @@
 import { prisma } from "@/lib/prisma"
 import { CalendarView } from "@/components/calendar/CalendarView"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export const dynamic = 'force-dynamic'
 
 export default async function CalendarPage() {
+    const companyId = await ensureAuth()
+
     const [meetings, projects, clients] = await Promise.all([
-        (prisma as any).meeting.findMany({
+        prisma.meeting.findMany({
+            where: { companyId },
             include: { client: true, project: true }
         }),
-        (prisma as any).project.findMany({
-            where: { endDate: { not: null } },
+        prisma.project.findMany({
+            where: { endDate: { not: null }, companyId },
             include: { client: true }
         }),
         prisma.client.findMany({
+            where: { companyId },
             orderBy: { name: 'asc' },
             select: { id: true, name: true }
         })
@@ -29,3 +34,4 @@ export default async function CalendarPage() {
         </div>
     )
 }
+

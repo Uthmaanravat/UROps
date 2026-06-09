@@ -6,11 +6,14 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { deleteWBPAction } from "./actions";
 import { DeleteButton } from "@/components/ui/DeleteButton";
+import { ensureAuth } from "@/lib/auth-actions";
 
 export const dynamic = 'force-dynamic';
 
 export default async function WorkBreakdownPricingListPage() {
+    const companyId = await ensureAuth();
     const breakdowns = await prisma.workBreakdownPricing.findMany({
+        where: { companyId },
         include: {
             project: {
                 include: {
@@ -20,6 +23,7 @@ export default async function WorkBreakdownPricingListPage() {
         },
         orderBy: { updatedAt: 'desc' }
     });
+
 
     return (
         <div className="space-y-8 max-w-5xl mx-auto py-8 px-4">

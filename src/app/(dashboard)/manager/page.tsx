@@ -3,17 +3,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { PlusCircle, Mic, ListTodo } from "lucide-react"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export const dynamic = 'force-dynamic'
 
 export default async function ManagerDashboard() {
-    const activeProjects = await (prisma as any).project.findMany({
-        where: { status: 'IN_PROGRESS' },
+    const companyId = await ensureAuth()
+
+    const activeProjects = await prisma.project.findMany({
+        where: { status: 'IN_PROGRESS', companyId },
         take: 3,
         orderBy: { updatedAt: 'desc' }
     })
 
-    const recentSOWs = await (prisma as any).scopeOfWork.findMany({
+    const recentSOWs = await prisma.scopeOfWork.findMany({
+        where: { companyId },
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -22,6 +26,7 @@ export default async function ManagerDashboard() {
             }
         }
     })
+
 
     return (
         <div className="space-y-6 pb-20 max-w-lg mx-auto px-4">

@@ -47,8 +47,11 @@ export async function logSubmission(params: LogSubmissionParams) {
  * Get all submissions of a specific type
  */
 export async function getSubmissionsByType(type: SubmissionType) {
+    const companyId = await getAuthCompanyId()
+    if (!companyId) return []
+
     return await prisma.submissionLog.findMany({
-        where: { type },
+        where: { type, companyId },
         include: {
             project: true,
             client: true
@@ -61,7 +64,11 @@ export async function getSubmissionsByType(type: SubmissionType) {
  * Get all submissions
  */
 export async function getAllSubmissions() {
+    const companyId = await getAuthCompanyId()
+    if (!companyId) return []
+
     return await prisma.submissionLog.findMany({
+        where: { companyId },
         include: {
             project: true,
             client: true
@@ -69,3 +76,4 @@ export async function getAllSubmissions() {
         orderBy: { createdAt: 'desc' }
     })
 }
+

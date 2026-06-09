@@ -40,6 +40,19 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [commercialStatus, setCommercialStatus] = useState<any>(invoice.project?.commercialStatus || "AWAITING_PO");
     const [showStatusOnQuote, setShowStatusOnQuote] = useState(false);
 
+    useEffect(() => {
+        const isReactiveOrEmergency = 
+            invoice.project?.commercialStatus === 'REACTIVE_WORK' || 
+            invoice.project?.commercialStatus === 'EMERGENCY_WORK';
+            
+        const saved = localStorage.getItem(`showStatus_${invoice.id}`);
+        if (saved !== null) {
+            setShowStatusOnQuote(saved === 'true');
+        } else {
+            setShowStatusOnQuote(isReactiveOrEmergency);
+        }
+    }, [invoice.id, invoice.project?.commercialStatus]);
+
     const [firstPaymentOption, setFirstPaymentOption] = useState<string>(
         invoice.firstPaymentPercentage ? invoice.firstPaymentPercentage.toString() : "none"
     );
@@ -227,6 +240,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
         setLoading(true);
         setCommercialStatus(status);
+        if (status === 'REACTIVE_WORK' || status === 'EMERGENCY_WORK') {
+            setShowStatusOnQuote(true);
+            localStorage.setItem(`showStatus_${invoice.id}`, 'true');
+        } else {
+            setShowStatusOnQuote(false);
+            localStorage.setItem(`showStatus_${invoice.id}`, 'false');
+        }
         await updateProjectCommercialStatusAction(invoice.projectId, status);
         setLoading(false);
         router.refresh();
@@ -606,7 +626,18 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.setTextColor(71, 85, 105);
         doc.text(bankLines, 14, currentY + 8);
 
-        doc.save(`${numberLabel}.pdf`);
+        let pdfName = numberLabel;
+        if (invoice.projectId && commercialStatus) {
+            const statusMap: Record<string, string> = {
+                'AWAITING_PO': 'Awaiting PO',
+                'PO_RECEIVED': 'PO Received',
+                'EMERGENCY_WORK': 'Emergency Work',
+                'REACTIVE_WORK': 'Reactive Work'
+            };
+            const friendlyStatus = statusMap[commercialStatus] || commercialStatus.replace('_', ' ');
+            pdfName = `${numberLabel}_${friendlyStatus}`;
+        }
+        doc.save(`${pdfName}.pdf`);
     }
 
     const generateExcel = async () => {
@@ -854,7 +885,18 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
             // Write and Save
             const buffer = await workbook.xlsx.writeBuffer();
-            saveAs(new Blob([buffer]), `${numberLabel}.xlsx`);
+            let excelName = numberLabel;
+            if (invoice.projectId && commercialStatus) {
+                const statusMap: Record<string, string> = {
+                    'AWAITING_PO': 'Awaiting PO',
+                    'PO_RECEIVED': 'PO Received',
+                    'EMERGENCY_WORK': 'Emergency Work',
+                    'REACTIVE_WORK': 'Reactive Work'
+                };
+                const friendlyStatus = statusMap[commercialStatus] || commercialStatus.replace('_', ' ');
+                excelName = `${numberLabel}_${friendlyStatus}`;
+            }
+            saveAs(new Blob([buffer]), `${excelName}.xlsx`);
         } catch (e) {
             console.error("Excel generation error", e);
             alert("Failed to generate styled Excel document.");
@@ -1230,7 +1272,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                             id="show-status"
                                             type="checkbox"
                                             checked={showStatusOnQuote}
-                                            onChange={(e) => setShowStatusOnQuote(e.target.checked)}
+                                            onChange={(e) => {
+                                                const val = e.target.checked;
+                                                setShowStatusOnQuote(val);
+                                                localStorage.setItem(`showStatus_${invoice.id}`, String(val));
+                                            }}
                                             className="cursor-pointer mr-0 border-white/10 bg-transparent text-primary rounded outline-none w-3 h-3"
                                         />
                                     </div>

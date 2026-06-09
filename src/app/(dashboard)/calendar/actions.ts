@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export async function createMeeting(data: {
     title: string
@@ -13,8 +14,11 @@ export async function createMeeting(data: {
     projectId?: string
 }) {
     try {
-        const meeting = await (prisma as any).meeting.create({
+        const companyId = await ensureAuth()
+
+        const meeting = await prisma.meeting.create({
             data: {
+                companyId,
                 title: data.title,
                 date: data.date,
                 duration: data.duration || 60,
@@ -38,8 +42,13 @@ export async function createMeeting(data: {
 
 export async function deleteMeeting(id: string) {
     try {
-        await (prisma as any).meeting.delete({
-            where: { id }
+        const companyId = await ensureAuth()
+
+        await prisma.meeting.deleteMany({
+            where: {
+                id,
+                companyId
+            }
         })
         revalidatePath("/calendar")
         return { success: true }
@@ -48,3 +57,4 @@ export async function deleteMeeting(id: string) {
         return { success: false, error: "Failed to delete meeting" }
     }
 }
+

@@ -87,7 +87,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: { q?
                                 )}
                             </div>
                             <div className="mt-6 flex items-center justify-between border-t pt-4 text-xs text-muted-foreground">
-                                <span>{client._count.invoices} Projects</span>
+                                <span>{client._count.invoices} Invoices</span>
                                 <span>Joined {new Date(client.createdAt).toLocaleDateString()}</span>
                             </div>
                             <Link href={`/clients/${client.id}`} className="absolute inset-0">

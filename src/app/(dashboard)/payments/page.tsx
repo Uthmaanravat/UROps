@@ -1,12 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
+import { ensureAuth } from "@/lib/auth-actions";
 
 export const dynamic = 'force-dynamic';
 
 export default async function PaymentsPage() {
+    const companyId = await ensureAuth();
     let payments: any[] = [];
     try {
         payments = await prisma.payment.findMany({
+            where: { companyId },
             include: {
                 invoice: {
                     include: { client: true }
@@ -17,6 +20,7 @@ export default async function PaymentsPage() {
     } catch (e) {
         console.error("Payments DB Error:", e);
     }
+
 
     const totalRevenue = payments.reduce((acc, p) => acc + p.amount, 0);
 

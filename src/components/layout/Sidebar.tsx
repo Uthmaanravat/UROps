@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Users, FileText, FileCheck, CreditCard, Brain, LayoutDashboard, Briefcase, Calendar, Settings, Mic, ClipboardList, ClipboardCheck, LineChart, ChevronDown, ChevronRight, Activity, DollarSign, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as React from "react";
@@ -25,6 +25,7 @@ const navigation = [
             { title: "PM Dashboard", href: "/manager", roles: ["ADMIN", "MANAGER"] },
             { title: "CRM & Clients", href: "/clients" },
             { title: "Reports", href: "/reports" },
+            { title: "Calendar", href: "/calendar" },
         ]
     },
     {
@@ -55,6 +56,8 @@ const navigation = [
 
 export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onItemClick?: () => void }) {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const type = searchParams ? searchParams.get("type") : null;
     const [openGroups, setOpenGroups] = useState<string[]>(navigation.map(n => n.title));
 
     const toggleGroup = (title: string) => {
@@ -89,7 +92,17 @@ export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onIt
                                     if (item.roles && !item.roles.includes(role)) return null;
                                     if (role === 'MANAGER' && (item.title === 'AI Knowledge' || item.title === 'Settings')) return null;
 
-                                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                                    const hrefPath = item.href.split('?')[0];
+                                    const hasQuery = item.href.includes('?');
+                                    let isActive = false;
+
+                                    if (hasQuery) {
+                                        const urlParams = new URLSearchParams(item.href.split('?')[1]);
+                                        const itemType = urlParams.get("type");
+                                        isActive = pathname === hrefPath && type === itemType;
+                                    } else {
+                                        isActive = pathname === hrefPath || pathname.startsWith(hrefPath + "/");
+                                    }
 
                                     return (
                                         <Link
