@@ -6,6 +6,8 @@ import { updateClient } from "../../actions";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +56,10 @@ export default async function EditClientPage({ params }: { params: { id: string 
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="attentionTo">Attention To</Label>
+                            <Label htmlFor="attentionTo" className="flex items-center gap-1.5">
+                                Attention To
+                                <InfoTooltip content="You can list multiple contacts here separated by slashes (e.g. Gavin Hunter / Phindile Sodawe) and you will be able to select between them when creating quotes and invoices." />
+                            </Label>
                             <Input
                                 id="attentionTo"
                                 name="attentionTo"

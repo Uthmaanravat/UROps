@@ -704,6 +704,16 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const selectedClientObj = allClients.find(c => c.id === selectedClientId)
     const clientContacts = selectedClientObj?.contacts || []
 
+    const parseAttentionToNames = (attn: string | null | undefined): string[] => {
+        if (!attn) return [];
+        const names = attn.split(/[/,;|]+/).map(n => n.trim()).filter(Boolean);
+        return names.length > 1 ? names : [];
+    };
+
+    const attentionToNames = selectedClientObj ? parseAttentionToNames(selectedClientObj.attentionTo) : [];
+    const hasMultipleContacts = clientContacts.length > 0 || attentionToNames.length > 0;
+
+
     return (
         <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20">
             <div className="flex-1 w-full space-y-8">
@@ -882,22 +892,38 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-white/5">
-                            {clientContacts.length > 0 && (
+                            {hasMultipleContacts && (
                                 <div className="space-y-2">
                                     <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic flex items-center gap-1.5">
                                          Select Contact (Optional)
                                          <InfoTooltip content="Assign a specific contact person from the selected client." />
                                      </Label>
                                     <select
-                                        value={contactId}
+                                        value={contactId || (attentionToNames.includes(attentionTo) ? attentionTo : "")}
                                         onChange={(e) => {
-                                            setContactId(e.target.value)
-                                            const contact = clientContacts.find((c: any) => c.id === e.target.value)
-                                            setAttentionTo(contact ? contact.name : "")
+                                            const val = e.target.value;
+                                            const contact = clientContacts.find((c: any) => c.id === val);
+                                            if (contact) {
+                                                setContactId(contact.id);
+                                                setAttentionTo(contact.name);
+                                            } else {
+                                                setContactId("");
+                                                setAttentionTo(val || selectedClientObj?.attentionTo || "");
+                                            }
                                         }}
                                         className="flex h-12 w-full rounded-md border border-primary/20 bg-[#14141E] px-3 py-2 text-sm text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer hover:border-primary/40 transition-colors"
                                     >
                                         <option value="">-- Select Contact --</option>
+                                        {selectedClientObj?.attentionTo && (
+                                            <option value={selectedClientObj.attentionTo}>
+                                                [Default] {selectedClientObj.attentionTo}
+                                            </option>
+                                        )}
+                                        {attentionToNames.map((name: string) => (
+                                            <option key={name} value={name}>
+                                                {name}
+                                            </option>
+                                        ))}
                                         {clientContacts.map((c: any) => (
                                             <option key={c.id} value={c.id}>
                                                 {c.name} {c.role ? `(${c.role})` : ""}

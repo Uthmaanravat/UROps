@@ -44,6 +44,15 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [contactId, setContactId] = useState(invoice.contactId || "");
     const [attentionTo, setAttentionTo] = useState(invoice.attentionTo || "");
 
+    const parseAttentionToNames = (attn: string | null | undefined): string[] => {
+        if (!attn) return [];
+        const names = attn.split(/[/,;|]+/).map(n => n.trim()).filter(Boolean);
+        return names.length > 1 ? names : [];
+    };
+
+    const attentionToNames = parseAttentionToNames(invoice.client.attentionTo);
+
+
     useEffect(() => {
         const isReactiveOrEmergency = 
             invoice.project?.commercialStatus === 'REACTIVE_WORK' || 
@@ -1274,18 +1283,33 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Client Contact</span>
                                 <select
-                                    value={contactId}
+                                    value={contactId || (attentionToNames.includes(attentionTo) ? attentionTo : "")}
                                     onChange={(e) => {
-                                        const selectedContactId = e.target.value;
-                                        setContactId(selectedContactId);
-                                        const contact = invoice.client.contacts?.find((c: any) => c.id === selectedContactId);
-                                        setAttentionTo(contact ? contact.name : "");
+                                        const val = e.target.value;
+                                        const contact = invoice.client.contacts?.find((c: any) => c.id === val);
+                                        if (contact) {
+                                            setContactId(contact.id);
+                                            setAttentionTo(contact.name);
+                                        } else {
+                                            setContactId("");
+                                            setAttentionTo(val || invoice.client.attentionTo || "");
+                                        }
                                     }}
                                     onBlur={saveChanges}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[120px] md:max-w-[150px] text-[10px] md:text-xs cursor-pointer"
                                     disabled={invoice.status === 'PAID'}
                                 >
                                     <option value="" className="bg-[#1E293B]">Select Contact</option>
+                                    {invoice.client.attentionTo && (
+                                        <option value={invoice.client.attentionTo} className="bg-[#1E293B]">
+                                            [Default] {invoice.client.attentionTo}
+                                        </option>
+                                    )}
+                                    {attentionToNames.map((name: string) => (
+                                        <option key={name} value={name} className="bg-[#1E293B]">
+                                            {name}
+                                        </option>
+                                    ))}
                                     {invoice.client.contacts?.map((c: any) => (
                                         <option key={c.id} value={c.id} className="bg-[#1E293B]">
                                             {c.name} {c.role ? `(${c.role})` : ""}

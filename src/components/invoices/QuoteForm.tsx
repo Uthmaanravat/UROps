@@ -277,9 +277,17 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const clientCatalog = catalog.filter(item => 
         !item.clientId || item.clientId === clientId
     );
-
     const selectedClient = clients.find(c => c.id === clientId);
     const clientContacts = selectedClient?.contacts || [];
+
+    const parseAttentionToNames = (attn: string | null | undefined): string[] => {
+        if (!attn) return [];
+        const names = attn.split(/[/,;|]+/).map(n => n.trim()).filter(Boolean);
+        return names.length > 1 ? names : [];
+    };
+
+    const attentionToNames = selectedClient ? parseAttentionToNames(selectedClient.attentionTo) : [];
+    const hasMultipleContacts = clientContacts.length > 0 || attentionToNames.length > 0;
  
     return (
         <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20">
@@ -308,22 +316,38 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 ))}
                             </select>
                         </div>
-                        {clientContacts.length > 0 && (
+                        {hasMultipleContacts && (
                             <div className="space-y-2">
                                 <Label className="flex items-center gap-1.5">
                                     Select Contact (Optional)
-                                    <InfoTooltip content="Choose a specific contact person from this client's organization. Selecting one will auto-populate the 'Attention To' field." />
+                                    <InfoTooltip content="Choose a specific contact person from this client's organization or select from multiple Attention To names." />
                                 </Label>
                                 <select
                                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                    value={contactId}
+                                    value={contactId || (attentionToNames.includes(attentionTo) ? attentionTo : "")}
                                     onChange={(e) => {
-                                        setContactId(e.target.value);
-                                        const contact = clientContacts.find(c => c.id === e.target.value);
-                                        setAttentionTo(contact ? contact.name : "");
+                                        const val = e.target.value;
+                                        const contact = clientContacts.find(c => c.id === val);
+                                        if (contact) {
+                                            setContactId(contact.id);
+                                            setAttentionTo(contact.name);
+                                        } else {
+                                            setContactId("");
+                                            setAttentionTo(val || selectedClient?.attentionTo || "");
+                                        }
                                     }}
                                 >
                                     <option value="">-- Select Contact --</option>
+                                    {selectedClient?.attentionTo && (
+                                        <option value={selectedClient.attentionTo}>
+                                            [Default] {selectedClient.attentionTo}
+                                        </option>
+                                    )}
+                                    {attentionToNames.map(name => (
+                                        <option key={name} value={name}>
+                                            {name}
+                                        </option>
+                                    ))}
                                     {clientContacts.map(c => (
                                         <option key={c.id} value={c.id}>
                                             {c.name} {c.role ? `(${c.role})` : ""}
