@@ -30,7 +30,7 @@ Total Amount: R${invoice.total.toFixed(2)}
 Best regards,
 The UROps Team`
 
-        const settings = await prisma.companySettings.findUnique({ where: { id: "default" } });
+        const settings = await prisma.companySettings.findUnique({ where: { companyId: invoice.companyId } });
         const fromEmail = settings?.email || 'onboarding@resend.dev';
         const fromName = settings?.name || 'UROps';
 

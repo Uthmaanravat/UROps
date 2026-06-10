@@ -11,6 +11,7 @@ import { Plus, Trash2, ArrowLeft, Sparkles, Save, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { createMobileSOWAction, saveScopeDraftAction } from "@/app/(dashboard)/scope/actions"
 import { VoiceFieldInput } from "@/components/ui/VoiceFieldInput"
+import { InfoTooltip } from "@/components/ui/InfoTooltip"
 
 // Individual row component (removed memo to ensure fresh handlers/props)
 const ScopeItemRow = ({
@@ -442,7 +443,10 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                         </Button>
                     </Link>
                     <div>
-                        <h1 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase italic">Scope Entry</h1>
+                        <h1 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase italic flex items-center">
+                            Scope Entry
+                            <InfoTooltip content="Site requirement logging tool. Log multiple areas and tasks. You can record requirements using voice notes, which the AI automatically transcribes." />
+                        </h1>
                         <p className="text-[8px] md:text-[10px] font-bold text-primary uppercase tracking-[0.2em] md:tracking-[0.3em] -mt-1">Technical Requirement Capture</p>
                     </div>
                 </div>
@@ -453,6 +457,7 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                     <CardTitle className="text-xs md:text-sm font-black uppercase tracking-widest text-muted-foreground italic flex items-center gap-2">
                         <div className="h-1 w-3 md:w-4 bg-primary rounded-full" />
                         Project Context
+                        <InfoTooltip content="Define which client this work belongs to, the site address, and the recording date." />
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 md:p-6 pt-2 md:pt-4 space-y-4">
@@ -497,7 +502,10 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
 
             <div className="space-y-6 pt-4">
                 <div className="flex items-center justify-between px-2">
-                    <h2 className="text-lg font-black uppercase tracking-widest text-white italic">Technical Scopes</h2>
+                    <h2 className="text-lg font-black uppercase tracking-widest text-white italic flex items-center gap-2">
+                        Technical Scopes
+                        <InfoTooltip content="Divide your project into logical Areas (e.g., Rooms, Tasks) and list specific technical items or materials within each Area." />
+                    </h2>
                     <Button
                         type="button"
                         variant="outline"

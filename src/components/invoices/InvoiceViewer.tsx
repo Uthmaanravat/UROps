@@ -21,6 +21,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { InfoTooltip } from "@/components/ui/InfoTooltip"
+
 
 export function InvoiceViewer({ invoice, companySettings, availableProjects = [] }: { invoice: any, companySettings?: any, availableProjects?: any[] }) {
     const router = useRouter();
@@ -39,6 +41,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [projectName, setProjectName] = useState(invoice.project?.name || "");
     const [commercialStatus, setCommercialStatus] = useState<any>(invoice.project?.commercialStatus || "AWAITING_PO");
     const [showStatusOnQuote, setShowStatusOnQuote] = useState(false);
+    const [contactId, setContactId] = useState(invoice.contactId || "");
+    const [attentionTo, setAttentionTo] = useState(invoice.attentionTo || "");
 
     useEffect(() => {
         const isReactiveOrEmergency = 
@@ -213,8 +217,16 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
 
         const dbPct = invoice.firstPaymentPercentage;
-        if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct) {
-            promises.push(updateInvoiceDetailsAction(invoice.id, { site, reference, quoteNumber, date, firstPaymentPercentage: finalPct }));
+        if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "")) {
+            promises.push(updateInvoiceDetailsAction(invoice.id, { 
+                site, 
+                reference, 
+                quoteNumber, 
+                date, 
+                firstPaymentPercentage: finalPct,
+                contactId: contactId || null,
+                attentionTo: attentionTo || null
+            }));
         }
 
         if (promises.length > 0) {
@@ -941,7 +953,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     }
 
     const handlePayment = async () => {
-        const amountStr = prompt("Enter payment amount:", (invoice.total - invoice.payments.reduce((acc: number, p: any) => acc + p.amount, 0)).toFixed(2));
+        const paid = invoice.payments.reduce((acc: number, p: any) => acc + p.amount, 0);
+        let defaultSuggest = invoice.total - paid;
+        if (invoice.firstPaymentPercentage && paid === 0) {
+            defaultSuggest = invoice.total * (invoice.firstPaymentPercentage / 100);
+        }
+
+        const amountStr = prompt("Enter payment amount:", defaultSuggest.toFixed(2));
         if (!amountStr) return;
         const amount = parseFloat(amountStr);
         if (isNaN(amount)) return;
@@ -1190,6 +1208,35 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     ✓ VERIFIED / CHECKED
                                 </span>
                             )}
+                            {(() => {
+                                const paid = invoice.payments.reduce((acc: number, p: any) => acc + p.amount, 0);
+                                const firstPaymentRequired = invoice.firstPaymentPercentage ? (invoice.total * (invoice.firstPaymentPercentage / 100)) : 0;
+                                let displayStatus = invoice.status;
+                                let badgeColor = "bg-gray-500/10 text-gray-400 border-gray-500/20";
+                                
+                                if (paid >= invoice.total - 0.01) {
+                                    displayStatus = "PAID";
+                                    badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                                } else if (invoice.firstPaymentPercentage && paid >= firstPaymentRequired - 0.01) {
+                                    displayStatus = "DEPOSIT PAID";
+                                    badgeColor = "bg-blue-500/10 text-blue-400 border-blue-500/20";
+                                } else if (paid > 0) {
+                                    displayStatus = "PARTIAL PAYMENT";
+                                    badgeColor = "bg-orange-500/10 text-orange-400 border-orange-500/20";
+                                } else if (invoice.status === 'SENT') {
+                                    badgeColor = "bg-purple-500/10 text-purple-400 border-purple-500/20";
+                                } else if (invoice.status === 'DRAFT') {
+                                    badgeColor = "bg-gray-500/10 text-gray-400 border-gray-500/20";
+                                } else {
+                                    badgeColor = "bg-primary/10 text-primary border-primary/20";
+                                }
+                                
+                                return (
+                                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-widest mb-1 ${badgeColor}`}>
+                                        {displayStatus}
+                                    </span>
+                                );
+                            })()}
                             <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-[#1E293B]">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
                         </div>
                         <div className="flex items-center justify-center md:justify-end gap-1 md:gap-2 mt-1">
@@ -1209,7 +1256,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10 mb-8 md:mb-10 items-start">
                     {/* Column 1: Document Details & Settings */}
                     <div className="flex flex-col space-y-4">
-                        <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] text-center md:text-left">Details</h3>
+                        <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] text-center md:text-left flex items-center justify-center md:justify-start gap-1">
+                            Details
+                            <InfoTooltip content="Basic details of the document. You can modify these inline to automatically update the document." />
+                        </h3>
                         <div className="bg-[#1E293B] p-4 rounded-2xl w-full border border-white/5 space-y-2 group shadow-xl ring-1 ring-white/5">
                             <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Date Issued</span>
@@ -1218,6 +1268,39 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
+                                    disabled={invoice.status === 'PAID'}
+                                />
+                            </div>
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Client Contact</span>
+                                <select
+                                    value={contactId}
+                                    onChange={(e) => {
+                                        const selectedContactId = e.target.value;
+                                        setContactId(selectedContactId);
+                                        const contact = invoice.client.contacts?.find((c: any) => c.id === selectedContactId);
+                                        setAttentionTo(contact ? contact.name : "");
+                                    }}
+                                    onBlur={saveChanges}
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[120px] md:max-w-[150px] text-[10px] md:text-xs cursor-pointer"
+                                    disabled={invoice.status === 'PAID'}
+                                >
+                                    <option value="" className="bg-[#1E293B]">Select Contact</option>
+                                    {invoice.client.contacts?.map((c: any) => (
+                                        <option key={c.id} value={c.id} className="bg-[#1E293B]">
+                                            {c.name} {c.role ? `(${c.role})` : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Attention To</span>
+                                <input
+                                    value={attentionTo}
+                                    onChange={(e) => setAttentionTo(e.target.value)}
+                                    onBlur={saveChanges}
+                                    placeholder="e.g. Mr. Smith"
+                                    className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
                                     disabled={invoice.status === 'PAID'}
                                 />
                             </div>
@@ -1349,12 +1432,15 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
                     {/* Column 2: BILL TO (Client) */}
                     <div className="space-y-4">
-                        <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] text-center md:text-left">Bill To</h3>
+                        <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] text-center md:text-left flex items-center justify-center md:justify-start gap-1">
+                            Bill To
+                            <InfoTooltip content="Recipient of this document and the entity responsible for payment." />
+                        </h3>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/5 space-y-3 min-h-[160px] shadow-xl">
                             <div className="text-lg md:text-xl font-black text-white text-center md:text-left">{invoice.client.companyName || invoice.client.name}</div>
-                            {invoice.client.attentionTo && (
+                            {attentionTo && (
                                 <div className="text-[10px] md:text-xs font-bold text-gray-400 italic text-center md:text-left">
-                                    Attn: {invoice.client.attentionTo}
+                                    Attn: {attentionTo}
                                 </div>
                             )}
                             <div className="text-gray-400 leading-relaxed font-medium whitespace-pre-wrap text-[10px] md:text-sm text-center md:text-left">
@@ -1610,6 +1696,22 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 {company.bankDetails}
                             </div>
                         </div>
+                        {invoice.payments && invoice.payments.length > 0 && (
+                            <div className="mt-4">
+                                <h4 className="text-[9px] font-black uppercase tracking-[0.3em] text-gray-500 mb-2 flex items-center gap-1">
+                                    Payment History
+                                    <InfoTooltip content="All recorded partial or full payments for this document." />
+                                </h4>
+                                <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                                    {invoice.payments.map((p: any) => (
+                                        <div key={p.id} className="flex justify-between items-center text-[10px] md:text-xs bg-white/5 p-3 rounded-xl border border-white/5 font-bold font-mono">
+                                            <span className="text-gray-400">{new Date(p.date).toLocaleDateString('en-GB')} ({p.method})</span>
+                                            <span className="text-emerald-400">+{formatCurrency(p.amount, currencySymbol)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-4">
@@ -1627,6 +1729,19 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Total Amount</span>
                                 <span className="text-3xl md:text-4xl font-black text-white tracking-tighter">{formatCurrency(total, currencySymbol)}</span>
                             </div>
+                            {paidAmount > 0 && (
+                                <>
+                                    <div className="h-px bg-white/10 my-3" />
+                                    <div className="flex justify-between items-center text-sm md:text-base text-gray-400 font-bold">
+                                        <span>Total Paid</span>
+                                        <span className="text-emerald-400">{formatCurrency(paidAmount, currencySymbol)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm md:text-base text-gray-400 font-bold">
+                                        <span>Outstanding Balance</span>
+                                        <span className="text-red-400">{formatCurrency(balance, currencySymbol)}</span>
+                                    </div>
+                                </>
+                            )}
                             {(() => {
                                 let pct: number | undefined = undefined;
                                 if (firstPaymentOption === "20") pct = 20;

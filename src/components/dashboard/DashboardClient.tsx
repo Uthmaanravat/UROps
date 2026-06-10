@@ -37,6 +37,7 @@ import {
     TrendingUp as TrendIcon
 } from "lucide-react"
 import Link from "next/link"
+import { InfoTooltip } from "@/components/ui/InfoTooltip"
 import { 
     BarChart, 
     Bar, 
@@ -125,7 +126,10 @@ export function DashboardClient({ data }: DashboardClientProps) {
             {/* Header Section */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-4xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">Command Center</h1>
+                    <h1 className="text-4xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] flex items-center">
+                        Command Center
+                        <InfoTooltip content="Executive dashboard for business oversight, showing total receivables, ongoing operational projects, and urgent PM tasks." />
+                    </h1>
                     <p className="text-muted-foreground text-sm font-medium tracking-wide">Operational oversight and financial intelligence</p>
                 </div>
                 <div className="flex items-center gap-2 bg-[#14141E]/80 backdrop-blur-md p-2 rounded-2xl border border-white/10 shadow-2xl">
@@ -135,9 +139,11 @@ export function DashboardClient({ data }: DashboardClientProps) {
                             <Activity className="h-3 w-3" /> ONLINE
                         </span>
                     </div>
-                    <Button variant="ghost" size="icon" className="text-white hover:bg-white/5 rounded-xl">
-                        <Settings className="h-5 w-5" />
-                    </Button>
+                    <Link href="/settings">
+                        <Button variant="ghost" size="icon" className="text-white hover:bg-white/5 rounded-xl">
+                            <Settings className="h-5 w-5" />
+                        </Button>
+                    </Link>
                 </div>
             </div>
 
@@ -145,7 +151,10 @@ export function DashboardClient({ data }: DashboardClientProps) {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl hover:border-emerald-500/30 transition-all group">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Outstanding Revenue</CardTitle>
+                        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center">
+                            Outstanding Revenue
+                            <InfoTooltip content="Total unpaid invoices currently outstanding, taking deposit requirements into account." />
+                        </CardTitle>
                         <TrendingUp className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
@@ -158,7 +167,10 @@ export function DashboardClient({ data }: DashboardClientProps) {
 
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl hover:border-primary/30 transition-all group">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Active Operations</CardTitle>
+                        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center">
+                            Active Operations
+                            <InfoTooltip content="Count of all active projects currently in stages from Lead/SOW to Invoiced." />
+                        </CardTitle>
                         <Briefcase className="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
@@ -171,7 +183,10 @@ export function DashboardClient({ data }: DashboardClientProps) {
 
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl hover:border-orange-500/30 transition-all group">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Recent Sales</CardTitle>
+                        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center">
+                            Recent Sales
+                            <InfoTooltip content="Total quotes created across all client accounts in the current system state." />
+                        </CardTitle>
                         <FileText className="h-4 w-4 text-orange-500" />
                     </CardHeader>
                     <CardContent>
@@ -184,7 +199,10 @@ export function DashboardClient({ data }: DashboardClientProps) {
 
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl hover:border-red-500/30 transition-all group">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Urgent Actions</CardTitle>
+                        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center">
+                            Urgent Actions
+                            <InfoTooltip content="Scope of work entries submitted from site that require pricing details from the office." />
+                        </CardTitle>
                         <AlertTriangle className="h-4 w-4 text-red-500" />
                     </CardHeader>
                     <CardContent>

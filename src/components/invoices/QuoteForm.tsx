@@ -18,6 +18,8 @@ import { VoiceRecorder } from "@/components/voice/VoiceRecorder"
 import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-actions"
 import { Search, Book } from "lucide-react"
 import { useEffect } from "react"
+import { InfoTooltip } from "@/components/ui/InfoTooltip"
+
 
 interface QuoteFormProps {
     clients: {
@@ -287,7 +289,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label>Client</Label>
+                            <Label className="flex items-center gap-1.5">
+                                Client
+                                <InfoTooltip content="Select the client for whom this quotation is being created." />
+                            </Label>
                             <select
                                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 value={clientId}
@@ -305,7 +310,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         </div>
                         {clientContacts.length > 0 && (
                             <div className="space-y-2">
-                                <Label>Select Contact (Optional)</Label>
+                                <Label className="flex items-center gap-1.5">
+                                    Select Contact (Optional)
+                                    <InfoTooltip content="Choose a specific contact person from this client's organization. Selecting one will auto-populate the 'Attention To' field." />
+                                </Label>
                                 <select
                                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                     value={contactId}
@@ -325,7 +333,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             </div>
                         )}
                         <div className="space-y-2">
-                            <Label>Attention To</Label>
+                            <Label className="flex items-center gap-1.5">
+                                Attention To
+                                <InfoTooltip content="The name of the individual or department this document is addressed to." />
+                            </Label>
                             <Input
                                 placeholder="e.g. Mr. Smith"
                                 value={attentionTo}
@@ -654,7 +665,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 <div className="space-y-4 border-t pt-4">
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                            <Label>Partial Payment Option</Label>
+                            <Label className="flex items-center gap-1.5">
+                                Partial Payment Option
+                                <InfoTooltip content="Specify if a deposit/partial payment is required. If set, tracking will highlight when this percentage is met." />
+                            </Label>
                             <select
                                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 value={firstPaymentOption}

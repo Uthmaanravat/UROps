@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Badge } from "@/components/ui/badge"
 import { Check, Copy, ChevronRight, Building2, Mail, Users } from "lucide-react"
+import { InfoTooltip } from "@/components/ui/InfoTooltip"
+
 
 const COLORS = ['#10b981', '#f43f5e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
@@ -426,7 +428,10 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
 
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border border-white/5 shadow-2xl hover:border-orange-500/50 hover:shadow-[0_0_30px_rgba(249,115,22,0.15)] transition-all cursor-pointer group" onClick={() => setDrillDownType('OUTSTANDING')}>
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-orange-400 transition-colors">Outstanding Payments</CardTitle>
+                        <CardTitle className="text-[11px] font-black text-muted-foreground uppercase tracking-widest group-hover:text-orange-400 transition-colors flex items-center gap-1.5">
+                            Outstanding Payments
+                            <InfoTooltip content="Total unpaid balances across all invoices that are currently due/outstanding." />
+                        </CardTitle>
                         <div className="h-8 w-8 rounded-full bg-orange-500/10 flex items-center justify-center border border-orange-500/20 group-hover:bg-orange-500/20 transition-colors">
                             <AlertCircle className="h-4 w-4 text-orange-500" />
                         </div>
@@ -465,6 +470,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                     <CardHeader className="border-b border-white/5 pb-4">
                         <CardTitle className="uppercase tracking-widest text-white text-sm font-black flex items-center gap-2">
                             <Activity className="h-4 w-4 text-primary" /> Performance Over Time
+                            <InfoTooltip content="A 6-month historical graph displaying incoming revenue, outgoing operational expenses, and net profit margins." />
                         </CardTitle>
                         <CardDescription className="text-muted-foreground/70 font-medium">Income, Expenses, and Profit margins over the last 6 months</CardDescription>
                     </CardHeader>
@@ -602,6 +608,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                             <div>
                                 <CardTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
                                     <Users className="h-5 w-5 text-primary" /> Receivables Intelligence
+                                    <InfoTooltip content="A detailed breakdown of outstanding payments sorted by client, showing who owes the business and their percentage share of total receivables." />
                                 </CardTitle>
                                 <CardDescription className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Outstanding revenue receivables broken down per client</CardDescription>
                             </div>

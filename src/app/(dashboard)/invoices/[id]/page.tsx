@@ -12,7 +12,11 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         prisma.invoice.findFirst({
             where: { id: params.id, companyId },
             include: {
-                client: true,
+                client: {
+                    include: {
+                        contacts: true
+                    }
+                },
                 items: true,
                 payments: true,
                 project: true

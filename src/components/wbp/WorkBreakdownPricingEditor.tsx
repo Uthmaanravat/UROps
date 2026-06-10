@@ -16,6 +16,8 @@ import { updateClientJsonAction, getClientsAction } from "@/app/(dashboard)/clie
 import { updateProject, updateProjectCommercialStatus } from "@/app/(dashboard)/projects/actions"
 import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-actions"
 import { VoiceRecorder } from "@/components/voice/VoiceRecorder"
+import { InfoTooltip } from "@/components/ui/InfoTooltip"
+
 
 // Memoized individual item row to prevent full-table re-renders
 const WbpItemRow = memo(({
@@ -839,7 +841,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Select Client from CRM</Label>
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic flex items-center gap-1.5">
+                                     Select Client from CRM
+                                     <InfoTooltip content="Choose the client associated with this work breakdown structure." />
+                                 </Label>
                                 <select
                                     value={selectedClientId}
                                     onChange={(e) => handleClientSwitch(e.target.value)}
@@ -879,7 +884,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-white/5">
                             {clientContacts.length > 0 && (
                                 <div className="space-y-2">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Select Contact (Optional)</Label>
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic flex items-center gap-1.5">
+                                         Select Contact (Optional)
+                                         <InfoTooltip content="Assign a specific contact person from the selected client." />
+                                     </Label>
                                     <select
                                         value={contactId}
                                         onChange={(e) => {
@@ -899,7 +907,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                 </div>
                             )}
                             <div className="space-y-2 md:col-span-2">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic">Attention To</Label>
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-primary italic flex items-center gap-1.5">
+                                     Attention To
+                                     <InfoTooltip content="Department or name of person this breakdown is addressed to." />
+                                 </Label>
                                 <Input
                                     value={attentionTo}
                                     onChange={(e) => setAttentionTo(e.target.value)}
@@ -941,7 +952,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                             <div className="bg-primary/5 border-y border-white/5 px-8 py-4 relative">
                                 <div className="flex items-center gap-3 mb-3">
                                     <Book className="h-4 w-4 text-primary" />
-                                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground italic">Quick-Add from Standard Catalog</h3>
+                                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground italic flex items-center gap-1.5">
+                                        Quick-Add from Standard Catalog
+                                        <InfoTooltip content="Quickly search and append items from your predefined catalog of pricing rates." />
+                                    </h3>
                                 </div>
                                 <div className="relative group max-w-2xl">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
