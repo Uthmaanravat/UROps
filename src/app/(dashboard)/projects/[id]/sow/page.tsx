@@ -47,7 +47,7 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
                         <p className="text-muted-foreground text-sm">{project.name}</p>
                     </div>
                 </div>
-                {latestScope && latestScope.items && latestScope.items.length > 0 && (
+                {!isDraft && latestScope && (
                     <SOWChecklistButton 
                         project={project as any} 
                         latestScope={latestScope as any} 
@@ -93,13 +93,14 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
             {/* Editor if Draft or New */}
             {isDraft && (
                 <ScopeEditor
-                    projectId={project.id}
+                    project={project as any}
                     initialItems={latestScope?.items.map((i: any) => ({
                         description: i.description,
                         quantity: i.quantity,
                         unit: i.unit,
                         notes: i.notes
                     }))}
+                    settings={settings}
                 />
             )}
         </div>

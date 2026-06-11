@@ -31,9 +31,10 @@ interface SOWChecklistButtonProps {
         }[]
     }
     settings?: any
+    className?: string
 }
 
-export function SOWChecklistButton({ project, latestScope, settings }: SOWChecklistButtonProps) {
+export function SOWChecklistButton({ project, latestScope, settings, className }: SOWChecklistButtonProps) {
     const [loading, setLoading] = useState(false)
 
     const company = {
@@ -115,7 +116,15 @@ export function SOWChecklistButton({ project, latestScope, settings }: SOWCheckl
 
             // Build Rows (exclude pricing)
             const rows: any[] = []
-            latestScope.items.forEach((item) => {
+            const validItems = latestScope.items.filter(item => item.description && item.description.trim() !== "")
+            
+            if (validItems.length === 0) {
+                alert("Please add at least one item with a description before downloading.")
+                setLoading(false)
+                return
+            }
+
+            validItems.forEach((item) => {
                 rows.push([
                     "", // Checkbox placeholder (drawn vectorally)
                     item.area || "GENERAL",
@@ -178,12 +187,14 @@ export function SOWChecklistButton({ project, latestScope, settings }: SOWCheckl
         }
     }
 
+    const hasValidItems = latestScope.items.some(item => item.description && item.description.trim() !== "")
+
     return (
         <Button 
             variant="outline" 
             onClick={generateChecklistPdf} 
-            disabled={loading}
-            className="border-primary/20 hover:bg-primary/10 text-white font-bold backdrop-blur-sm"
+            disabled={loading || !hasValidItems}
+            className={className || "border-primary/20 hover:bg-primary/10 text-white font-bold backdrop-blur-sm"}
         >
             {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

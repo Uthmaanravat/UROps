@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,15 +10,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Trash2, ArrowLeft, Sparkles, Save, Mic, Loader2, CheckCircle2, ExternalLink } from "lucide-react"
 import { VoiceFieldInput } from "@/components/ui/VoiceFieldInput"
 import { submitScopeAction, saveSOWDraftAction } from "./actions"
+import { SOWChecklistButton } from "./SOWChecklistButton"
 import Link from "next/link"
-import { useEffect } from "react"
 
 interface ScopeEditorProps {
-    projectId: string
+    project: any
     initialItems?: any[]
+    settings?: any
 }
 
-export function ScopeEditor({ projectId, initialItems }: ScopeEditorProps) {
+export function ScopeEditor({ project, initialItems, settings }: ScopeEditorProps) {
+    const projectId = project.id
     const router = useRouter()
     const [items, setItems] = useState(initialItems || [{ description: "", quantity: 1, unit: "", notes: "" }])
     const [site, setSite] = useState("")
@@ -283,6 +285,23 @@ export function ScopeEditor({ projectId, initialItems }: ScopeEditorProps) {
                     <ArrowLeft className="mr-2 h-4 w-4" /> Discard Changes
                 </Button>
                 <div className="flex gap-4">
+                    <SOWChecklistButton 
+                        project={project}
+                        latestScope={{
+                            id: "draft",
+                            site: site,
+                            items: items.map((item, index) => ({
+                                id: item.id || `temp-${index}`,
+                                area: item.area,
+                                description: item.description,
+                                quantity: item.quantity,
+                                unit: item.unit,
+                                notes: item.notes
+                            }))
+                        }}
+                        settings={settings}
+                        className="border-primary/20 hover:bg-primary/5 text-primary font-black px-8 h-14 rounded-xl transition-all shadow-xl backdrop-blur-sm"
+                    />
                     <Button
                         variant="outline"
                         size="lg"
