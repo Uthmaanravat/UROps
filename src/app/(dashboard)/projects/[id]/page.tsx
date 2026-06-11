@@ -3,13 +3,14 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Pencil, FileText, Calendar, DollarSign, CheckCircle, Sparkles, Trophy } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, cn } from "@/lib/utils"
 import { WorkflowTracker } from "@/components/workflow/WorkflowTracker"
 import { updateProjectStatus, deleteProject } from "@/app/(dashboard)/projects/actions"
 import { deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { DeleteButton } from "@/components/ui/DeleteButton"
 import { deleteSOWAction } from "./sow/actions"
 import { ensureAuth } from "@/lib/auth-actions"
+import { SOWChecklistButton } from "./sow/SOWChecklistButton"
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +41,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     })
 
     if (!project) notFound()
+
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId: project.companyId }
+    })
 
     const latestScope = project.scopes[0]
     const latestWbp = project.workBreakdowns[0]
@@ -218,6 +223,42 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    {latestScope && (
+                                        <tr className="border-b hover:bg-muted/30 transition-colors">
+                                            <td className="p-3">{new Date(latestScope.createdAt).toLocaleDateString()}</td>
+                                            <td className="p-3 font-mono font-bold text-white">
+                                                SOW-V{latestScope.version}
+                                            </td>
+                                            <td className="p-3">
+                                                <span className="font-bold text-[10px] uppercase bg-blue-500/20 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                                                    SOW
+                                                </span>
+                                            </td>
+                                            <td className="p-3">
+                                                <span className={cn(
+                                                    "font-bold text-[10px] uppercase border px-2 py-0.5 rounded-full",
+                                                    latestScope.status === 'SUBMITTED' ? "bg-purple-500/20 text-purple-400 border-purple-500/20" : "bg-amber-500/20 text-amber-400 border-amber-500/20"
+                                                )}>
+                                                    {latestScope.status}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-right text-muted-foreground">-</td>
+                                            <td className="p-3 text-right">
+                                                <div className="flex justify-end gap-2 items-center">
+                                                    <SOWChecklistButton 
+                                                        project={project as any} 
+                                                        latestScope={latestScope as any} 
+                                                        settings={settings}
+                                                        compact={true}
+                                                        className="h-8 w-8 p-0 border-white/10 hover:bg-primary/10 text-primary transition-all rounded-md"
+                                                    />
+                                                    <Button asChild variant="ghost" size="sm" className="hover:bg-primary/10 hover:text-primary transition-all font-bold">
+                                                        <Link href={`/projects/${project.id}/sow`}>View</Link>
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
                                     {project.invoices.map((inv: any) => (
                                         <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                                             <td className="p-3">{new Date(inv.date).toLocaleDateString()}</td>

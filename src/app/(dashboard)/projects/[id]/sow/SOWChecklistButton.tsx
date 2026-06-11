@@ -32,9 +32,10 @@ interface SOWChecklistButtonProps {
     }
     settings?: any
     className?: string
+    compact?: boolean
 }
 
-export function SOWChecklistButton({ project, latestScope, settings, className }: SOWChecklistButtonProps) {
+export function SOWChecklistButton({ project, latestScope, settings, className, compact }: SOWChecklistButtonProps) {
     const [loading, setLoading] = useState(false)
 
     const company = {
@@ -195,13 +196,14 @@ export function SOWChecklistButton({ project, latestScope, settings, className }
             onClick={generateChecklistPdf} 
             disabled={loading || !hasValidItems}
             className={className || "border-primary/20 hover:bg-primary/10 text-white font-bold backdrop-blur-sm"}
+            title="Download SOW Checklist (Laborers)"
         >
             {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className={compact ? "h-4 w-4 animate-spin" : "mr-2 h-4 w-4 animate-spin"} />
             ) : (
-                <ClipboardList className="mr-2 h-4 w-4 text-primary" />
+                <ClipboardList className={compact ? "h-4 w-4 text-primary" : "mr-2 h-4 w-4 text-primary"} />
             )}
-            Download Checklist (Laborers)
+            {!compact && "Download Checklist (Laborers)"}
         </Button>
     )
 }
