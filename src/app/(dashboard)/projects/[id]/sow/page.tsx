@@ -47,7 +47,7 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
                         <p className="text-muted-foreground text-sm">{project.name}</p>
                     </div>
                 </div>
-                {!isDraft && latestScope && (
+                {latestScope && latestScope.items && latestScope.items.length > 0 && (
                     <SOWChecklistButton 
                         project={project as any} 
                         latestScope={latestScope as any} 
