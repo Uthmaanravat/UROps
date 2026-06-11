@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { SOWChecklistButton } from "./SOWChecklistButton"
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,7 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
     const project = await (prisma as any).project.findUnique({
         where: { id: params.id },
         include: {
+            client: true,
             scopes: {
                 orderBy: { version: 'desc' },
                 include: { items: true },
@@ -23,6 +25,10 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
 
     if (!project) notFound()
 
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId: project.companyId }
+    })
+
     const latestScope = project.scopes[0]
     const isDraft = !latestScope || latestScope.status === 'DRAFT'
 
@@ -31,14 +37,23 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-4">
-                <Link href={`/projects/${project.id}`}>
-                    <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-                </Link>
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Scope of Work</h1>
-                    <p className="text-muted-foreground text-sm">{project.name}</p>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Link href={`/projects/${project.id}`}>
+                        <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+                    </Link>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">Scope of Work</h1>
+                        <p className="text-muted-foreground text-sm">{project.name}</p>
+                    </div>
                 </div>
+                {!isDraft && latestScope && (
+                    <SOWChecklistButton 
+                        project={project as any} 
+                        latestScope={latestScope as any} 
+                        settings={settings} 
+                    />
+                )}
             </div>
 
             {/* Read-only Summary if Submitted */}
