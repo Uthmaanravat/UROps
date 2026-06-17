@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
@@ -33,6 +33,25 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
     const [topFocus, setTopFocus] = useState<'EMERGENCY' | 'WAITING_PO' | 'ACTIVE' | 'NONE'>('EMERGENCY')
     const [isPending, startTransition] = useTransition()
     const router = useRouter()
+
+    useEffect(() => {
+        const saved = localStorage.getItem('ops_board_columns')
+        if (saved) {
+            try {
+                setVisibleColumns(JSON.parse(saved))
+            } catch (e) {
+                // Ignore parsing errors
+            }
+        }
+    }, [])
+
+    const handleColumnToggle = (colId: string) => {
+        setVisibleColumns(prev => {
+            const next = prev.includes(colId) ? prev.filter(id => id !== colId) : [...prev, colId];
+            localStorage.setItem('ops_board_columns', JSON.stringify(next));
+            return next;
+        });
+    }
 
     const columns = ALL_COLUMNS.filter(col => visibleColumns.includes(col.id));
 
@@ -103,11 +122,7 @@ export function ProjectDashboardClient({ projects: initialProjects }: { projects
                                 <div className="space-y-2">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1">Toggle Columns</p>
                                     {ALL_COLUMNS.map(col => (
-                                        <div key={col.id} className="flex items-center space-x-2 px-2 py-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer" onClick={() => {
-                                            setVisibleColumns(prev =>
-                                                prev.includes(col.id) ? prev.filter(id => id !== col.id) : [...prev, col.id]
-                                            )
-                                        }}>
+                                        <div key={col.id} className="flex items-center space-x-2 px-2 py-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer" onClick={() => handleColumnToggle(col.id)}>
                                             <Checkbox
                                                 id={`col-${col.id}`}
                                                 checked={visibleColumns.includes(col.id)}
