@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle, FileText } from "lucide-react"
 import Link from "next/link"
 import { WorkBreakdownPricingEditor } from "@/components/wbp/WorkBreakdownPricingEditor"
 import { cn, formatCurrency } from "@/lib/utils"
+import { unlockWBPAction } from "../actions"
 
 export const dynamic = 'force-dynamic'
 
@@ -66,9 +67,19 @@ export default async function WorkBreakdownPricingPage({ params }: { params: { i
                     </div>
                 </div>
                 {isApproved && (
-                    <div className="bg-primary/10 border border-primary/20 rounded-xl px-6 py-3 flex items-center gap-3 text-primary shadow-lg shadow-primary/5">
-                        <CheckCircle className="h-5 w-5 animate-pulse" />
-                        <span className="font-black text-xs uppercase tracking-widest">Pricing Locked & Approved</span>
+                    <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 border border-primary/20 rounded-xl px-6 py-3 flex items-center gap-3 text-primary shadow-lg shadow-primary/5">
+                            <CheckCircle className="h-5 w-5 animate-pulse" />
+                            <span className="font-black text-xs uppercase tracking-widest">Pricing Locked & Approved</span>
+                        </div>
+                        <form action={async () => {
+                            'use server'
+                            await unlockWBPAction(wbp.id)
+                        }}>
+                            <Button type="submit" variant="outline" className="border-red-500/20 text-red-400 hover:bg-red-500/10 font-bold uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl">
+                                Unlock for Editing
+                            </Button>
+                        </form>
                     </div>
                 )}
             </div>

@@ -1131,7 +1131,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 </DialogContent>
                             </Dialog>
                         )}
-                        {!isPaid && (
+                        {(invoice.status === 'PAID' || !isPaid) && (
                             <Button
                                 variant="outline"
                                 onClick={async () => {

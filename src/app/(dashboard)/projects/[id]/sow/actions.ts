@@ -139,3 +139,13 @@ export async function saveSOWDraftAction(projectId: string, items: any[], site?:
     revalidatePath(`/projects/${projectId}/sow`)
     return { success: true }
 }
+
+export async function unlockSOWAction(id: string, projectId: string) {
+    const companyId = await ensureAuth()
+    await prisma.scopeOfWork.update({
+        where: { id, projectId, companyId },
+        data: { status: 'DRAFT' }
+    })
+    revalidatePath(`/projects/${projectId}/sow`)
+    revalidatePath("/projects")
+}

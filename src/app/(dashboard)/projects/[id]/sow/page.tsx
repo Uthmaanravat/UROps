@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { SOWChecklistButton } from "./SOWChecklistButton"
+import { unlockSOWAction } from "./actions"
 
 export const dynamic = 'force-dynamic'
 
@@ -56,17 +57,26 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
                 )}
             </div>
 
-            {/* Read-only Summary if Submitted */}
             {!isDraft && latestScope && (
                 <div className="space-y-6">
                     <div className={cn(
-                        "border rounded-lg p-4 flex items-center gap-2",
+                        "border rounded-lg p-4 flex items-center justify-between gap-4",
                         latestScope.status === 'SUBMITTED' ? "bg-blue-50 border-blue-200 text-blue-800" : "bg-green-50 border-green-200 text-green-800"
                     )}>
-                        <CheckCircle className="h-5 w-5" />
-                        <span className="font-semibold">
-                            {latestScope.status === 'SUBMITTED' ? "SOW Submitted - Requirements Frozen" : `SOW Finalized (Version ${latestScope.version})`}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <CheckCircle className="h-5 w-5" />
+                            <span className="font-semibold">
+                                {latestScope.status === 'SUBMITTED' ? "SOW Submitted - Requirements Frozen" : `SOW Finalized (Version ${latestScope.version})`}
+                            </span>
+                        </div>
+                        <form action={async () => {
+                            'use server'
+                            await unlockSOWAction(latestScope.id, project.id)
+                        }}>
+                            <Button type="submit" variant="outline" className="border-red-500/20 text-red-600 hover:bg-red-500/10 font-bold uppercase tracking-widest text-[10px] h-10 px-4 rounded-xl">
+                                Unlock SOW
+                            </Button>
+                        </form>
                     </div>
 
                     <div className="border rounded-lg bg-card overflow-hidden">

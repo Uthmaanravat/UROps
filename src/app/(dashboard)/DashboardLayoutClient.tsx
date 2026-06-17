@@ -68,7 +68,7 @@ export default function DashboardLayoutClient({
                         <span className="text-sm font-bold text-white truncate leading-tight">{settings?.name || "UROps"}</span>
                     </div>
                 </div>
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
                     <Sidebar role={user.role} />
                 </div>
                 <div className="border-t border-white/5 pt-6 space-y-4">
@@ -189,7 +189,7 @@ export default function DashboardLayoutClient({
                         <X className="h-4 w-4" />
                     </Button>
                 </div>
-                <div className="flex-1 overflow-hidden py-2">
+                <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
                     <Sidebar role={user.role} onItemClick={() => setIsMobileMenuOpen(false)} />
                 </div>
                 <div className="p-4 border-t bg-white/[0.02] space-y-4">

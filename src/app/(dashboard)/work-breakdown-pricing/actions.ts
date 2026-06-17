@@ -13,3 +13,13 @@ export async function deleteWBPAction(id: string) {
     revalidatePath("/work-breakdown-pricing")
     revalidatePath("/projects")
 }
+
+export async function unlockWBPAction(id: string) {
+    const companyId = await ensureAuth()
+    await prisma.workBreakdownPricing.update({
+        where: { id, companyId },
+        data: { status: 'DRAFT' }
+    })
+    revalidatePath(`/work-breakdown-pricing/${id}`)
+    revalidatePath("/projects")
+}

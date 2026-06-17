@@ -65,7 +65,7 @@ export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onIt
     }
 
     return (
-        <div className="flex-1 overflow-y-auto scrollbar-hide px-3 py-4 space-y-6">
+        <div className="px-3 py-4 space-y-6">
             {navigation.map((group) => {
                 if (group.roles && !group.roles.includes(role)) return null;
 
