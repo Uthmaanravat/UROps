@@ -17,6 +17,14 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
 
     const updatedItemIds = items.filter(i => !i.id.startsWith('new-')).map(i => i.id)
 
+    // Delete items not in updated list (done first so new items aren't deleted)
+    await prisma.invoiceItem.deleteMany({
+        where: {
+            invoiceId,
+            id: { notIn: updatedItemIds }
+        }
+    })
+
     // Process updates and creations
     for (const item of items) {
         if (item.id.startsWith('new-')) {
@@ -50,14 +58,6 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
         }
     }
 
-    // Delete items not in updated list
-    await prisma.invoiceItem.deleteMany({
-        where: {
-            invoiceId,
-            id: { notIn: updatedItemIds }
-        }
-    })
-
     // Now update invoice totals
     const finalItems = await prisma.invoiceItem.findMany({ where: { invoiceId } })
     const newSubtotal = finalItems.reduce((acc, item) => acc + item.total, 0)
@@ -74,6 +74,7 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
     })
 
     revalidatePath(`/invoices/${invoiceId}`)
+    return finalItems;
 }
 
 export async function finalizeQuoteAction(quoteId: string) {

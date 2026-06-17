@@ -196,57 +196,68 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     const saveChanges = async () => {
         setLoading(true);
-        // Map local items to the format expected by the server action
-        const updates = items.map(item => ({
-            id: item.id,
-            description: item.description,
-            area: item.area,
-            quantity: item.quantity,
-            unit: item.unit,
-            unitPrice: item.unitPrice
-        }));
-
-        const promises = [];
-        if (updates.length > 0) {
-            promises.push(updateInvoiceItemsAction(invoice.id, updates));
-        }
-
-        // Always save note if it's different
-        if (note !== invoice.notes) {
-            promises.push(updateInvoiceNoteAction(invoice.id, note));
-        }
-
-        // Handle Project/Site/Ref/QuoteNumber updates
-        let finalPct: number | null = null;
-        if (firstPaymentOption === "20") finalPct = 20;
-        else if (firstPaymentOption === "50") finalPct = 50;
-        else if (firstPaymentOption === "75") finalPct = 75;
-        else if (firstPaymentOption === "custom") {
-            const parsed = parseFloat(customFirstPaymentPercentage);
-            if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
-                finalPct = parsed;
-            }
-        }
-
-        const dbPct = invoice.firstPaymentPercentage;
-        if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "")) {
-            promises.push(updateInvoiceDetailsAction(invoice.id, { 
-                site, 
-                reference, 
-                quoteNumber, 
-                date, 
-                firstPaymentPercentage: finalPct,
-                contactId: contactId || null,
-                attentionTo: attentionTo || null
+        try {
+            // Map local items to the format expected by the server action
+            const updates = items.map(item => ({
+                id: item.id,
+                description: item.description,
+                area: item.area,
+                quantity: item.quantity,
+                unit: item.unit,
+                unitPrice: item.unitPrice
             }));
-        }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+            let savedItems = null;
+            if (updates.length > 0) {
+                savedItems = await updateInvoiceItemsAction(invoice.id, updates);
+            }
 
-        setLoading(false);
-        router.refresh();
+            const promises = [];
+
+            // Always save note if it's different
+            if (note !== invoice.notes) {
+                promises.push(updateInvoiceNoteAction(invoice.id, note));
+            }
+
+            // Handle Project/Site/Ref/QuoteNumber updates
+            let finalPct: number | null = null;
+            if (firstPaymentOption === "20") finalPct = 20;
+            else if (firstPaymentOption === "50") finalPct = 50;
+            else if (firstPaymentOption === "75") finalPct = 75;
+            else if (firstPaymentOption === "custom") {
+                const parsed = parseFloat(customFirstPaymentPercentage);
+                if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                    finalPct = parsed;
+                }
+            }
+
+            const dbPct = invoice.firstPaymentPercentage;
+            if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "")) {
+                promises.push(updateInvoiceDetailsAction(invoice.id, { 
+                    site, 
+                    reference, 
+                    quoteNumber, 
+                    date, 
+                    firstPaymentPercentage: finalPct,
+                    contactId: contactId || null,
+                    attentionTo: attentionTo || null
+                }));
+            }
+
+            if (promises.length > 0) {
+                await Promise.all(promises);
+            }
+
+            if (savedItems) {
+                setItems(savedItems);
+            }
+        } catch (error) {
+            console.error("Error saving changes:", error);
+            alert("Failed to save changes. Please try again.");
+        } finally {
+            setLoading(false);
+            router.refresh();
+        }
     }
 
     const handleProjectChange = async (newProjectId: string) => {
