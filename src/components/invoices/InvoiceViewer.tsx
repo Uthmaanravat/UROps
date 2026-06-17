@@ -172,8 +172,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
     }, [invoice.id, invoice.type, invoice.quoteNumber]);
 
-    // Allow editing unless it's fully paid
-    const isPricingMode = invoice.status !== 'PAID';
+    // Lock document if finalized/sent/approved (for Quotes) or paid/checked (for Invoices)
+    const isLocked = invoice.type === 'QUOTE'
+        ? ['SENT', 'ACCEPTED', 'REJECTED'].includes(invoice.status)
+        : ['PAID', 'CHECKED'].includes(invoice.status);
+    const isPricingMode = !isLocked;
 
     const handleItemUpdate = (id: string, field: string, value: any) => {
         setItems(prev => prev.map(item => {
@@ -310,6 +313,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
 
         setLoading(true);
+        await saveChanges();
         const res = await sendInvoiceEmail(invoice.id, emails);
         setLoading(false);
         if (res.success) {
@@ -1077,10 +1081,16 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
                         <div className="w-px h-6 bg-white/10 self-center mx-1" />
 
-                        <Button variant="ghost" size="sm" onClick={generateExcel} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
+                        <Button variant="ghost" size="sm" onClick={async () => {
+                            await saveChanges();
+                            await generateExcel();
+                        }} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
                             <Download className="mr-2 h-4 w-4 text-emerald-500" /> Excel
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={generatePDF} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
+                        <Button variant="ghost" size="sm" onClick={async () => {
+                            await saveChanges();
+                            await generatePDF();
+                        }} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
                             <Download className="mr-2 h-4 w-4 text-rose-500" /> PDF
                         </Button>
                         
@@ -1158,25 +1168,40 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 </DialogContent>
                             </Dialog>
                         )}
-                        {(invoice.status === 'PAID' || !isPaid) && (
+                        {isLocked ? (
                             <Button
                                 variant="outline"
                                 onClick={async () => {
-                                    if (!window.confirm(`Are you sure you want to ${invoice.status === 'PAID' ? 'unlock' : 'mark as paid and lock'} this document?`)) return;
+                                    if (!window.confirm(`Are you sure you want to unlock this ${invoice.type.toLowerCase()} for editing?`)) return;
                                     setLoading(true);
                                     const { updateInvoiceStatus } = await import("@/app/(dashboard)/invoices/actions");
-                                    await updateInvoiceStatus(invoice.id, invoice.status === 'PAID' ? 'DRAFT' : 'PAID');
+                                    await updateInvoiceStatus(invoice.id, 'DRAFT');
                                     setLoading(false);
                                     router.refresh();
                                 }}
                                 disabled={loading}
-                                className={cn(
-                                    invoice.status === 'PAID' ? "text-red-500 border-red-500/20 bg-red-500/5 hover:bg-red-500/10" : "text-green-500 border-green-500/20 bg-green-500/5 hover:bg-green-500/10"
-                                )}
+                                className="text-red-500 border-red-500/20 bg-red-500/5 hover:bg-red-500/10 font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl"
                             >
-                                {invoice.status === 'PAID' ? <Unlock className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
-                                {invoice.status === 'PAID' ? "Unlock" : "Mark as Paid (Lock)"}
+                                <Unlock className="mr-2 h-4 w-4" /> Unlock
                             </Button>
+                        ) : (
+                            invoice.type === 'INVOICE' && (
+                                <Button
+                                    variant="outline"
+                                    onClick={async () => {
+                                        if (!window.confirm("Are you sure you want to mark this invoice as paid and lock it?")) return;
+                                        setLoading(true);
+                                        const { updateInvoiceStatus } = await import("@/app/(dashboard)/invoices/actions");
+                                        await updateInvoiceStatus(invoice.id, 'PAID');
+                                        setLoading(false);
+                                        router.refresh();
+                                    }}
+                                    disabled={loading}
+                                    className="text-green-500 border-green-500/20 bg-green-500/5 hover:bg-green-500/10 font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl"
+                                >
+                                    <Lock className="mr-2 h-4 w-4" /> Mark as Paid (Lock)
+                                </Button>
+                            )
                         )}
 
                         {invoice.status !== 'PAID' && (
@@ -1282,7 +1307,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 onChange={(e) => setQuoteNumber(e.target.value)}
                                 onBlur={saveChanges}
                                 className="bg-transparent border-none text-primary font-mono font-black text-sm md:text-xl w-32 md:w-48 text-center md:text-right outline-none focus:ring-2 focus:ring-primary/20 rounded-lg transition-all"
-                                disabled={invoice.status === 'PAID'}
+                                disabled={isLocked}
                             />
                         </div>
                     </div>
@@ -1304,7 +1329,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
-                                    disabled={invoice.status === 'PAID'}
+                                    disabled={isLocked}
                                 />
                             </div>
                             <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
@@ -1324,7 +1349,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     }}
                                     onBlur={saveChanges}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[120px] md:max-w-[150px] text-[10px] md:text-xs cursor-pointer"
-                                    disabled={invoice.status === 'PAID'}
+                                    disabled={isLocked}
                                 >
                                     <option value="" className="bg-[#1E293B]">Select Contact</option>
                                     {invoice.client.attentionTo && (
@@ -1352,7 +1377,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     onBlur={saveChanges}
                                     placeholder="e.g. Mr. Smith"
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
-                                    disabled={invoice.status === 'PAID'}
+                                    disabled={isLocked}
                                 />
                             </div>
                             <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
@@ -1361,7 +1386,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     value={projectId}
                                     onChange={(e) => handleProjectChange(e.target.value)}
                                     className="bg-transparent border-none text-right font-black text-primary outline-none focus:ring-0 max-w-[120px] md:max-w-[150px] text-[10px] md:text-xs cursor-pointer"
-                                    disabled={invoice.status === 'PAID'}
+                                    disabled={isLocked}
                                 >
                                     <option value="" className="bg-[#1E293B]">Select Project</option>
                                     {availableProjects.map((p: any) => (
@@ -1383,7 +1408,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                             }
                                         }}
                                         className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
-                                        disabled={invoice.status === 'PAID'}
+                                        disabled={isLocked}
                                     />
                                 </div>
                             )}
@@ -1401,7 +1426,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                     commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 text-primary mr-[-8px]" :
                                                         "text-white"
                                             )}
-                                            disabled={invoice.status === 'PAID'}
+                                            disabled={isLocked}
                                         >
                                             <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
                                             <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
@@ -1433,7 +1458,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     onBlur={saveChanges}
                                     placeholder="Enter Site..."
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
-                                    disabled={invoice.status === 'PAID'}
+                                    disabled={isLocked}
                                 />
                             </div>
                             <div className="flex justify-between items-center text-xs pb-1.5 transition-all group-hover:border-primary/20">
@@ -1444,7 +1469,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     onBlur={saveChanges}
                                     placeholder="Customer Ref"
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
-                                    disabled={invoice.status === 'PAID'}
+                                    disabled={isLocked}
                                 />
                             </div>
                             <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1.5 pb-1.5 transition-all group-hover:border-primary/20">
@@ -1454,7 +1479,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     onChange={(e) => setFirstPaymentOption(e.target.value)}
                                     onBlur={saveChanges}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer font-bold"
-                                    disabled={invoice.status === 'PAID'}
+                                    disabled={isLocked}
                                 >
                                     <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
                                     <option value="20" className="bg-[#1E293B]">20% Partial Payment</option>
@@ -1474,7 +1499,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                         onChange={(e) => setCustomFirstPaymentPercentage(e.target.value)}
                                         onBlur={saveChanges}
                                         className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-16"
-                                        disabled={invoice.status === 'PAID'}
+                                        disabled={isLocked}
                                     />
                                 </div>
                             )}
