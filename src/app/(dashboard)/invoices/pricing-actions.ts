@@ -26,7 +26,8 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
     })
 
     // Process updates and creations
-    for (const item of items) {
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         if (item.id.startsWith('new-')) {
             // Create new item
             await prisma.invoiceItem.create({
@@ -37,7 +38,8 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                     unitPrice: item.unitPrice || 0,
                     unit: item.unit || "ea",
                     area: item.area || "",
-                    total: (item.quantity || 1) * (item.unitPrice || 0)
+                    total: (item.quantity || 1) * (item.unitPrice || 0),
+                    position: i
                 }
             })
         } else {
@@ -52,7 +54,8 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                     area: item.area,
                     total: (item.quantity !== undefined && item.unitPrice !== undefined)
                         ? item.quantity * item.unitPrice
-                        : undefined
+                        : undefined,
+                    position: i
                 }
             })
         }

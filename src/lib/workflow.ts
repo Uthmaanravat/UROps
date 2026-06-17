@@ -253,14 +253,15 @@ export async function generateQuotationFromWBP(
                 attentionTo: options?.attentionTo || null,
                 items: {
                     deleteMany: {}, // Clear placeholder/old items
-                    create: items.map(i => ({
+                    create: items.map((i, idx) => ({
                         area: i.area,
                         description: i.description,
                         quantity: i.quantity,
                         unit: i.unit,
                         unitPrice: i.unitPrice,
                         total: i.quantity * i.unitPrice,
-                        notes: i.notes
+                        notes: i.notes,
+                        position: idx
                     }))
                 }
             }
@@ -287,14 +288,15 @@ export async function generateQuotationFromWBP(
                 contactId: options?.contactId || null,
                 attentionTo: options?.attentionTo || null,
                 items: {
-                    create: items.map(i => ({
+                    create: items.map((i, idx) => ({
                         area: i.area,
                         description: i.description,
                         quantity: i.quantity,
                         unit: i.unit,
                         unitPrice: i.unitPrice,
                         total: i.quantity * i.unitPrice,
-                        notes: i.notes
+                        notes: i.notes,
+                        position: idx
                     }))
                 }
             }

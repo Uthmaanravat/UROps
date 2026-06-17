@@ -17,7 +17,9 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                         contacts: true
                     }
                 },
-                items: true,
+                items: {
+                    orderBy: { position: 'asc' }
+                },
                 payments: true,
                 project: true
             } as any

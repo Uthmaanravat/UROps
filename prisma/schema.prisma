@@ -272,6 +272,7 @@ model InvoiceItem {
   unitPrice   Float   @default(0)
   total       Float   @default(0)
   notes       String?
+  position    Int     @default(0)
   invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 

@@ -138,13 +138,14 @@ export async function createInvoiceAction(data: {
             paymentNotes: data.paymentNotes,
             firstPaymentPercentage: data.firstPaymentPercentage,
             items: {
-                create: data.items.map(item => ({
+                create: data.items.map((item, idx) => ({
                     description: item.description,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
                     area: (item.area || ""),
                     unit: (item.unit || ""),
-                    total: item.quantity * item.unitPrice
+                    total: item.quantity * item.unitPrice,
+                    position: idx
                 }))
             }
         }
