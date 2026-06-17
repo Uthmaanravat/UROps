@@ -328,9 +328,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         const currencySymbol = companySettings?.currency || "R";
 
         // 1. Header Bar (Shared)
-        const numberLabel = invoice.quoteNumber
-            ? invoice.quoteNumber
-            : (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
+        const numberLabel = quoteNumber
+            ? quoteNumber
+            : (invoice.type === 'QUOTE' ? `Q-${new Date(date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
         
         const badge = invoice.status === 'CHECKED' ? '✓ VERIFIED / CHECKED' : undefined;
         const nextY = await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel, badge);
@@ -351,7 +351,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.text("Date Issued:", 14, detailY);
         doc.setTextColor(30, 41, 59);
         doc.setFont("helvetica", "bold");
-        doc.text(new Date(invoice.date).toLocaleDateString('en-GB'), 36, detailY);
+        doc.text(new Date(date).toLocaleDateString('en-GB'), 36, detailY);
         detailY += 6;
 
         const combinedProjectRef = reference || invoice.project?.name;
@@ -366,8 +366,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             detailY += (projectLines.length * 4.5);
         }
 
-        if (invoice.site) {
-            const siteLines = doc.splitTextToSize(invoice.site, 45);
+        if (site) {
+            const siteLines = doc.splitTextToSize(site, 45);
             doc.setTextColor(100, 116, 139); // slate-500
             doc.setFont("helvetica", "normal");
             doc.text("Site:", 14, detailY);
@@ -410,10 +410,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.setFont("helvetica", "normal");
         
         let clientLegalY = gridY + 11;
-        // @ts-ignore
-        if (invoice.client.attentionTo) {
-            // @ts-ignore
-            doc.text(`Attn: ${invoice.client.attentionTo}`, 85, clientLegalY);
+        const attnVal = attentionTo || invoice.client.attentionTo;
+        if (attnVal) {
+            doc.text(`Attn: ${attnVal}`, 85, clientLegalY);
             clientLegalY += 4.5;
         }
 
@@ -580,31 +579,42 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.setTextColor(71, 85, 105);
         doc.setFont("helvetica", "normal");
         doc.text(`Subtotal:`, 140, currentY);
-        doc.text(formatCurrency(invoice.subtotal, currencySymbol), 196, currentY, { align: 'right' });
+        doc.text(formatCurrency(subtotal, currencySymbol), 196, currentY, { align: 'right' });
 
         doc.text(`VAT (15%):`, 140, currentY + 6);
-        doc.text(formatCurrency(invoice.taxAmount, currencySymbol), 196, currentY + 6, { align: 'right' });
+        doc.text(formatCurrency(taxAmount, currencySymbol), 196, currentY + 6, { align: 'right' });
 
         doc.setFontSize(11);
         doc.setTextColor(20, 20, 30);
         doc.setFont("helvetica", "bold");
         doc.text(`TOTAL DUE:`, 140, currentY + 14);
-        doc.text(formatCurrency(invoice.total, currencySymbol), 196, currentY + 14, { align: 'right' });
+        doc.text(formatCurrency(total, currencySymbol), 196, currentY + 14, { align: 'right' });
 
-        if (invoice.firstPaymentPercentage && invoice.firstPaymentPercentage > 0 && invoice.firstPaymentPercentage < 100) {
+        let currentPct: number | undefined = undefined;
+        if (firstPaymentOption === "20") currentPct = 20;
+        else if (firstPaymentOption === "50") currentPct = 50;
+        else if (firstPaymentOption === "75") currentPct = 75;
+        else if (firstPaymentOption === "custom") {
+            const parsed = parseFloat(customFirstPaymentPercentage);
+            if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                currentPct = parsed;
+            }
+        }
+
+        if (currentPct && currentPct > 0 && currentPct < 100) {
             currentY += 6;
             doc.setFontSize(9.5);
             doc.setTextColor(16, 185, 129); // Emerald-500
             doc.setFont("helvetica", "bold");
-            doc.text(`First Payment (${invoice.firstPaymentPercentage}%):`, 140, currentY + 14);
-            doc.text(formatCurrency(invoice.total * (invoice.firstPaymentPercentage / 100), currencySymbol), 196, currentY + 14, { align: 'right' });
+            doc.text(`First Payment (${currentPct}%):`, 140, currentY + 14);
+            doc.text(formatCurrency(total * (currentPct / 100), currencySymbol), 196, currentY + 14, { align: 'right' });
 
             currentY += 5;
             doc.setFontSize(8.5);
             doc.setTextColor(100, 116, 139); // Slate-500
             doc.setFont("helvetica", "normal");
-            doc.text(`Remaining Balance (${100 - invoice.firstPaymentPercentage}%):`, 140, currentY + 14);
-            doc.text(formatCurrency(invoice.total * ((100 - invoice.firstPaymentPercentage) / 100), currencySymbol), 196, currentY + 14, { align: 'right' });
+            doc.text(`Remaining Balance (${100 - currentPct}%):`, 140, currentY + 14);
+            doc.text(formatCurrency(total * ((100 - currentPct) / 100), currencySymbol), 196, currentY + 14, { align: 'right' });
         }
 
         // 5. Notes & Banking (Professional Footer)
@@ -732,17 +742,17 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             let currentRow = 8;
             
             worksheet.getCell(`A${currentRow}`).value = 'DATE:';
-            worksheet.getCell(`B${currentRow}`).value = new Date(invoice.date).toLocaleDateString('en-GB');
+            worksheet.getCell(`B${currentRow}`).value = new Date(date).toLocaleDateString('en-GB');
             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
             currentRow++;
 
             worksheet.getCell(`A${currentRow}`).value = 'PROJECT/REF:';
-            worksheet.getCell(`B${currentRow}`).value = invoice.reference || invoice.project?.name || 'N/A';
+            worksheet.getCell(`B${currentRow}`).value = reference || invoice.project?.name || 'N/A';
             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
             currentRow++;
 
             worksheet.getCell(`A${currentRow}`).value = 'SITE:';
-            worksheet.getCell(`B${currentRow}`).value = invoice.site || 'N/A';
+            worksheet.getCell(`B${currentRow}`).value = site || 'N/A';
             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
             currentRow++;
 
@@ -753,6 +763,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             worksheet.getCell(`A${currentRow}`).value = invoice.client.companyName || invoice.client.name;
             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
             currentRow++;
+            const attnVal = attentionTo || invoice.client.attentionTo;
+            if (attnVal) {
+                worksheet.getCell(`A${currentRow}`).value = `Attn: ${attnVal}`;
+                worksheet.getCell(`A${currentRow}`).font = { italic: true, size: 10 };
+                currentRow++;
+            }
             worksheet.mergeCells(`A${currentRow}:B${currentRow+1}`);
             worksheet.getCell(`A${currentRow}`).value = invoice.client.address;
             worksheet.getCell(`A${currentRow}`).alignment = { wrapText: true, vertical: 'top' };
@@ -869,23 +885,34 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             totalRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
             totalRow.getCell(7).alignment = { horizontal: 'right' };
 
-            if (invoice.firstPaymentPercentage && invoice.firstPaymentPercentage > 0 && invoice.firstPaymentPercentage < 100) {
+            let currentPct: number | undefined = undefined;
+            if (firstPaymentOption === "20") currentPct = 20;
+            else if (firstPaymentOption === "50") currentPct = 50;
+            else if (firstPaymentOption === "75") currentPct = 75;
+            else if (firstPaymentOption === "custom") {
+                const parsed = parseFloat(customFirstPaymentPercentage);
+                if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                    currentPct = parsed;
+                }
+            }
+
+            if (currentPct && currentPct > 0 && currentPct < 100) {
                 currentRow++;
                 const depRow = worksheet.getRow(currentRow);
-                depRow.getCell(6).value = `First Payment (${invoice.firstPaymentPercentage}%)`;
+                depRow.getCell(6).value = `First Payment (${currentPct}%)`;
                 depRow.getCell(6).font = { bold: true, size: 10, color: { argb: 'FF10B981' } };
                 depRow.getCell(6).alignment = { horizontal: 'right' };
-                depRow.getCell(7).value = total * (invoice.firstPaymentPercentage / 100);
+                depRow.getCell(7).value = total * (currentPct / 100);
                 depRow.getCell(7).font = { bold: true, size: 10, color: { argb: 'FF10B981' } };
                 depRow.getCell(7).numFmt = '"R"#,##0.00';
                 depRow.getCell(7).alignment = { horizontal: 'right' };
 
                 currentRow++;
                 const remRow = worksheet.getRow(currentRow);
-                remRow.getCell(6).value = `Remaining Balance (${100 - invoice.firstPaymentPercentage}%)`;
+                remRow.getCell(6).value = `Remaining Balance (${100 - currentPct}%)`;
                 remRow.getCell(6).font = { size: 9, color: { argb: 'FF64748B' } };
                 remRow.getCell(6).alignment = { horizontal: 'right' };
-                remRow.getCell(7).value = total * ((100 - invoice.firstPaymentPercentage) / 100);
+                remRow.getCell(7).value = total * ((100 - currentPct) / 100);
                 remRow.getCell(7).font = { size: 9, color: { argb: 'FF64748B' } };
                 remRow.getCell(7).numFmt = '"R"#,##0.00';
                 remRow.getCell(7).alignment = { horizontal: 'right' };
