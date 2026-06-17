@@ -53,6 +53,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     const invoice = project.invoices.find((i: any) => i.type === 'INVOICE')
     const paidAmount = invoice?.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
 
+    const hasInvoice = project.invoices.some((i: any) => i.type === 'INVOICE');
+    const hasQuote = project.invoices.some((i: any) => i.type === 'QUOTE');
+
+    let effectiveStage = project.workflowStage || 'SOW';
+    if (hasInvoice && (effectiveStage === 'SOW' || effectiveStage === 'QUOTATION')) {
+        effectiveStage = 'INVOICE';
+    } else if (hasQuote && effectiveStage === 'SOW') {
+        effectiveStage = 'QUOTATION';
+    }
+
     // Role Simulation (demo purposes)
     const isAdmin = true;
 
@@ -100,32 +110,32 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                     <h2 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-6 inline-flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/5">
                         <Sparkles className="w-3 h-3" /> Project Lifecycle
                     </h2>
-                    <WorkflowTracker currentStage={project.workflowStage || 'SOW'} />
+                    <WorkflowTracker currentStage={effectiveStage || 'SOW'} />
 
                     {/* Action Center - Navy themed */}
                     <div className="mt-8 p-6 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between backdrop-blur-sm">
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shadow-inner border border-primary/20">
-                                {project.workflowStage === 'SOW' && <Sparkles className="w-6 h-6 animate-pulse" />}
-                                {project.workflowStage === 'QUOTATION' && <FileText className="w-6 h-6" />}
-                                {project.workflowStage === 'INVOICE' && <FileText className="w-6 h-6" />}
-                                {project.workflowStage === 'PAYMENT' && <DollarSign className="w-6 h-6" />}
-                                {(project.workflowStage === 'COMPLETED' || project.status === 'COMPLETED') && <CheckCircle className="w-6 h-6 text-primary" />}
+                                {effectiveStage === 'SOW' && <Sparkles className="w-6 h-6 animate-pulse" />}
+                                {effectiveStage === 'QUOTATION' && <FileText className="w-6 h-6" />}
+                                {effectiveStage === 'INVOICE' && <FileText className="w-6 h-6" />}
+                                {effectiveStage === 'PAYMENT' && <DollarSign className="w-6 h-6" />}
+                                {(effectiveStage === 'COMPLETED' || project.status === 'COMPLETED') && <CheckCircle className="w-6 h-6 text-primary" />}
                             </div>
                             <div>
                                 <h3 className="font-black text-lg text-white">Current Milestone</h3>
                                 <p className="text-sm text-muted-foreground font-medium">
-                                    {project.workflowStage === 'SOW' && !latestScope && "Action Required: Define Initial Scope of Work."}
-                                    {project.workflowStage === 'SOW' && latestScope?.status === 'SUBMITTED' && "Scope Submitted. Technical lead is preparing commercial breakdown."}
-                                    {project.workflowStage === 'QUOTATION' && "Quotation Live. Awaiting client authorization."}
-                                    {project.workflowStage === 'INVOICE' && "Invoiced. Monitoring for payment receipt."}
-                                    {project.workflowStage === 'PAYMENT' && "Payment Received. Final compliance check."}
-                                    {(project.workflowStage === 'COMPLETED' || project.status === 'COMPLETED') && "Project lifecycle complete. Mission successful."}
+                                    {effectiveStage === 'SOW' && !latestScope && "Action Required: Define Initial Scope of Work."}
+                                    {effectiveStage === 'SOW' && latestScope?.status === 'SUBMITTED' && "Scope Submitted. Technical lead is preparing commercial breakdown."}
+                                    {effectiveStage === 'QUOTATION' && "Quotation Live. Awaiting client authorization."}
+                                    {effectiveStage === 'INVOICE' && "Invoiced. Monitoring for payment receipt."}
+                                    {effectiveStage === 'PAYMENT' && "Payment Received. Final compliance check."}
+                                    {(effectiveStage === 'COMPLETED' || project.status === 'COMPLETED') && "Project lifecycle complete. Mission successful."}
                                 </p>
                             </div>
                         </div>
                         <div className="flex gap-3">
-                            {project.workflowStage === 'SOW' && (
+                            {effectiveStage === 'SOW' && (
                                 <>
                                     {!latestScope || latestScope.status === 'DRAFT' ? (
                                         <Link href={`/projects/${project.id}/sow`}>
@@ -176,14 +186,14 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                     )}
                                 </>
                             )}
-                            {project.workflowStage === 'QUOTATION' && (
+                            {effectiveStage === 'QUOTATION' && (
                                 <Link href={latestDoc ? `/invoices/${latestDoc.id}` : `/projects/${project.id}/sow`}>
                                     <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-xl shadow-primary/20">
                                         {latestDoc ? "Analyze Quotation" : "Generate Documentation"}
                                     </Button>
                                 </Link>
                             )}
-                            {(project.workflowStage === 'INVOICE' || project.workflowStage === 'PAYMENT') && latestDoc && (
+                            {(effectiveStage === 'INVOICE' || effectiveStage === 'PAYMENT') && latestDoc && (
                                 <Link href={`/invoices/${latestDoc.id}`}>
                                     <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-black shadow-xl shadow-primary/20">
                                         Manage Financials

@@ -170,7 +170,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             };
             fetchSuggested();
         }
-    }, [invoice.id, invoice.type, invoice.quoteNumber]);
+    }, [invoice.id, invoice.type, invoice.quoteNumber, quoteNumber]);
 
     // Lock document if finalized/sent/approved (for Quotes) or paid/checked (for Invoices)
     const isLocked = invoice.type === 'QUOTE'
@@ -685,9 +685,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet(invoice.type === 'QUOTE' ? 'Quote' : 'Invoice');
 
-            const numberLabel = invoice.quoteNumber
-                ? invoice.quoteNumber
-                : (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
+            const numberLabel = quoteNumber
+                ? quoteNumber
+                : (invoice.type === 'QUOTE' ? `Q-${new Date(date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
 
             // 1. Set Column Widths
             worksheet.columns = [
@@ -1035,7 +1035,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             {/* Header Actions */}
             {/* Professional Action Bar */}
             <div className="flex flex-col xl:flex-row justify-between items-center gap-6 py-8 print:hidden border-b border-white/5 pb-10">
-                <Link href="/work-breakdown-pricing">
+                <Link href={`/invoices?type=${invoice.type}`}>
                     <Button variant="ghost" className="hover:bg-white/5 text-muted-foreground font-black uppercase tracking-widest text-[10px]">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workspace
                     </Button>

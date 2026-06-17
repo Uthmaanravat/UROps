@@ -152,9 +152,21 @@ export async function createInvoiceAction(data: {
 
     if (effectiveProjectId) {
         if (invoice.status === 'PENDING_SCOPE') {
-            await updateProjectStatus(effectiveProjectId, 'SOW')
+            await prisma.project.update({
+                where: { id: effectiveProjectId, companyId },
+                data: {
+                    status: 'SOW',
+                    workflowStage: 'SOW'
+                }
+            });
         } else {
-            await updateProjectStatus(effectiveProjectId, 'QUOTATION')
+            await prisma.project.update({
+                where: { id: effectiveProjectId, companyId },
+                data: {
+                    status: isInvoice ? 'INVOICED' : 'QUOTED',
+                    workflowStage: isInvoice ? 'INVOICE' : 'QUOTATION'
+                }
+            });
         }
     }
 
