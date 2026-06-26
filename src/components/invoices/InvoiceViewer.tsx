@@ -31,6 +31,21 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [items, setItems] = useState<any[]>(invoice.items);
     const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
     const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(invoice.type === 'QUOTE');
+    const [logoAspectRatio, setLogoAspectRatio] = useState(1);
+
+    useEffect(() => {
+        if (!companySettings?.logoUrl) {
+            setLogoAspectRatio(1);
+            return;
+        }
+        const img = new Image();
+        img.onload = () => {
+            if (img.naturalHeight > 0) {
+                setLogoAspectRatio(img.naturalWidth / img.naturalHeight);
+            }
+        };
+        img.src = companySettings.logoUrl;
+    }, [companySettings?.logoUrl]);
 
     // Header edit state
     const [site, setSite] = useState(invoice.site || "");
@@ -308,7 +323,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         logoUrl: companySettings?.logoUrl || "",
         vatNumber: companySettings?.taxId || "",
         paymentTerms: companySettings?.paymentTerms || "",
-        bankDetails: companySettings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510"
+        bankDetails: companySettings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510",
+        layoutPreferences: companySettings?.layoutPreferences
     };
 
     const handleSendEmail = async () => {
@@ -510,7 +526,16 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 tableBody.push([{ content: group.area.toUpperCase(), colSpan: 6, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 7.5, halign: 'left', cellPadding: 1.5 } }]);
             }
             group.items.forEach((item: any, iIdx: number) => {
-                const desc = item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description;
+                let desc = item.description;
+                if (item.notes) {
+                    const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
+                    const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
+                    if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
+                        // Omit redundant notes
+                    } else {
+                        desc = `${item.description}\n(Notes: ${item.notes})`;
+                    }
+                }
                 tableBody.push([
                     globalStartIndex + iIdx + 1,
                     desc,
@@ -847,10 +872,20 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 group.items.forEach((item: any, iIdx: number) => {
                     const row = worksheet.getRow(currentRow);
                     row.height = 18; // Even more compact
+                    let desc = item.description;
+                    if (item.notes) {
+                        const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
+                        const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
+                        if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
+                            // Omit redundant notes
+                        } else {
+                            desc = `${item.description}\n(Notes: ${item.notes})`;
+                        }
+                    }
                     row.values = [
                         globalStartIndex + iIdx + 1,
                         '',
-                        item.notes ? `${item.description}\n(Notes: ${item.notes})` : item.description,
+                        desc,
                         item.quantity,
                         item.unit || '',
                         item.unitPrice,
@@ -1042,7 +1077,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const total = subtotal + taxAmount;
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 px-4 md:px-0 pb-20">
+        <div className="max-w-7xl mx-auto space-y-6 px-4 md:px-0 pb-20">
             {/* Header Actions */}
             {/* Professional Action Bar */}
             <div className="flex flex-col xl:flex-row justify-between items-center gap-6 py-8 print:hidden border-b border-white/5 pb-10">
@@ -1261,11 +1296,46 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 <div className="bg-white -mx-4 -mt-4 md:-mx-8 md:-mt-8 p-4 md:p-10 mb-5 md:mb-8 flex flex-col md:flex-row justify-between items-center gap-3 md:gap-5 border-b border-gray-200">
                     <div className="flex flex-col md:flex-row items-center gap-3 md:gap-8 text-center md:text-left">
                         {company.logoUrl ? (
-                            <img src={company.logoUrl} alt="Logo" className="h-14 md:h-20 w-auto object-contain" />
+                            <div 
+                                style={{ 
+                                    height: `${company.layoutPreferences?.logoSize ?? 80}px`,
+                                    width: `${(company.layoutPreferences?.logoSize ?? 80) * logoAspectRatio * (company.layoutPreferences?.logoWidthFactor ?? 1.0)}px`,
+                                    marginLeft: `${company.layoutPreferences?.logoContainerTranslateX ?? 0}px`,
+                                    overflow: 'hidden',
+                                    position: 'relative',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                className="max-w-full bg-transparent shrink-0 transition-[margin-left] duration-75"
+                            >
+                                <img
+                                    src={company.logoUrl}
+                                    alt="Logo"
+                                    onLoad={(e) => {
+                                        const img = e.currentTarget;
+                                        setLogoAspectRatio(img.naturalWidth / img.naturalHeight);
+                                    }}
+                                    style={{ 
+                                        height: '100%',
+                                        width: '100%',
+                                        objectFit: 'contain',
+                                        transform: `scale(${company.layoutPreferences?.logoScale ?? 1.0}) translate(${company.layoutPreferences?.logoTranslateX ?? 0}px, ${company.layoutPreferences?.logoTranslateY ?? 0}px)`,
+                                        transformOrigin: 'center'
+                                    }}
+                                    className="transition-transform duration-75"
+                                />
+                            </div>
                         ) : (
                             <div className="h-14 w-14 md:h-16 md:w-16 bg-primary flex items-center justify-center font-black text-[#0F172A] text-xl md:text-2xl rounded-lg md:rounded-xl shadow-lg rotate-3 outline outline-2 outline-primary/20">LR</div>
                         )}
-                        <div>
+                        <div 
+                            style={{ 
+                                transform: `translate(${company.layoutPreferences?.businessNameTranslateX ?? 0}px, ${company.layoutPreferences?.businessNameTranslateY ?? 0}px)`,
+                                position: 'relative'
+                            }}
+                            className="transition-transform duration-75"
+                        >
                             <h1 className="text-xl md:text-3xl font-black tracking-tight text-[#1E293B]">{company.name}</h1>
                             <div className="flex flex-col items-center md:items-start mt-1 md:mt-2 space-y-0.5">
                                 <p className="text-gray-500 text-[9px] md:text-xs font-semibold uppercase tracking-wider">{company.phone}</p>
@@ -1574,186 +1644,271 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     </div>
                 </div>
 
-                {/* Items Table - Modern High-Contrast Style */}
-                <div className="mb-10 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
-                    <table className="w-full min-w-[600px] md:min-w-full">
-                        <thead>
-                            <tr className="border-b border-white/10">
-                                <th className="py-4 text-center w-8 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">#</th>
-                                <th className="py-4 text-left font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Service Description</th>
-                                <th className="py-4 text-center w-24 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Qty</th>
-                                <th className="py-4 text-right w-36 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Unit Price</th>
-                                <th className="py-4 text-right w-40 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Line Total</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                            {(() => {
-                                const sequentialGroups: { area: string, items: any[] }[] = [];
-                                items.forEach((item: any, index: number) => {
-                                    const area = item.area?.trim() || "GENERAL"
-                                    const lastGroup = sequentialGroups[sequentialGroups.length - 1];
-                                    if (lastGroup && lastGroup.area === area) {
-                                        lastGroup.items.push({ ...item, originalIndex: index });
-                                    } else {
-                                        sequentialGroups.push({ area, items: [{ ...item, originalIndex: index }] });
-                                    }
-                                });
+                {/* Items Section - Modern High-Contrast Style */}
+                {isPricingMode ? (
+                    <div className="mb-10 min-h-[400px] space-y-6">
+                        {(() => {
+                            const sequentialGroups: { area: string, items: any[] }[] = [];
+                            items.forEach((item: any, index: number) => {
+                                const area = item.area?.trim() || "GENERAL"
+                                const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+                                if (lastGroup && lastGroup.area === area) {
+                                    lastGroup.items.push({ ...item, originalIndex: index });
+                                } else {
+                                    sequentialGroups.push({ area, items: [{ ...item, originalIndex: index }] });
+                                }
+                            });
 
-                                return sequentialGroups.map((group: any, gIdx: number) => {
-                                    // Calculate global start index for this group
-                                    let globalStartIndex = 0;
-                                    for (let i = 0; i < gIdx; i++) {
-                                        globalStartIndex += sequentialGroups[i].items.length;
-                                    }
+                            return sequentialGroups.map((group: any, gIdx: number) => {
+                                // Calculate global start index for this group
+                                let globalStartIndex = 0;
+                                for (let i = 0; i < gIdx; i++) {
+                                    globalStartIndex += sequentialGroups[i].items.length;
+                                }
 
-                                    return (
-                                        <Fragment key={`group-${group.area}-${gIdx}`}>
-                                            <tr key={`header-${group.area}`} className="bg-white/5 border-y border-white/5">
-                                                <td colSpan={5} className="py-1 px-4 md:px-6">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="h-2 w-2 rounded-full bg-primary" />
-                                                    {isPricingMode ? (
-                                                        <Input
-                                                            value={group.area}
-                                                            onChange={(e) => {
-                                                                const newArea = e.target.value;
-                                                                setItems(prev => prev.map((i, idx) => {
-                                                                    if (group.items.some((gi: any) => gi.originalIndex === idx)) {
-                                                                        return { ...i, area: newArea };
-                                                                    }
-                                                                    return i;
-                                                                }));
-                                                            }}
-                                                            className="h-6 w-64 bg-transparent border-none text-[10px] font-black uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0"
-                                                            placeholder="HEADING (OPTIONAL)"
-                                                        />
-                                                    ) : (
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{group.area ? group.area : "GENERAL"}</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
+                                return (
+                                    <div key={`edit-group-${group.area}-${gIdx}`} className="space-y-4 bg-white/[0.01] p-5 rounded-2xl border border-white/5 shadow-sm">
+                                        {/* Group Heading Header */}
+                                        <div className="flex items-center gap-3 pb-3 border-b border-white/5">
+                                            <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                                            <Input
+                                                value={group.area}
+                                                onChange={(e) => {
+                                                    const newArea = e.target.value;
+                                                    setItems(prev => prev.map((i, idx) => {
+                                                        if (group.items.some((gi: any) => gi.originalIndex === idx)) {
+                                                            return { ...i, area: newArea };
+                                                        }
+                                                        return i;
+                                                    }));
+                                                }}
+                                                className="h-9 w-80 bg-[#14141E] border-white/10 focus:border-primary/50 text-[11px] font-black uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-3 rounded-lg"
+                                                placeholder="HEADING (OPTIONAL)"
+                                            />
+                                            <span className="text-[10px] text-muted-foreground font-semibold italic ml-auto">
+                                                {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+                                            </span>
+                                        </div>
+
+                                        {/* Table-like Header Row (hidden on mobile) */}
+                                        <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 select-none">
+                                            <div className="w-12 text-center">#</div>
+                                            <div className="flex-1">Service Description</div>
+                                            <div className="w-16 text-center">Qty</div>
+                                            <div className="w-16 text-center">Unit</div>
+                                            <div className="w-28 text-right">Price</div>
+                                            <div className="w-28 text-right">Total</div>
+                                            <div className="w-28"></div> {/* Actions spacer */}
+                                        </div>
+
+                                        {/* Group Items Rows */}
+                                        <div className="space-y-2">
                                             {group.items.map((item: any, iIdx: number) => {
                                                 const originalIndex = item.originalIndex;
                                                 return (
-                                                <tr 
-                                                    key={item.id} 
-                                                    draggable={isPricingMode}
-                                                    onDragStart={(e) => handleDragStart(e, originalIndex)}
-                                                    onDragEnter={(e) => handleDragEnter(e, originalIndex)}
-                                                    onDragOver={(e) => e.preventDefault()}
-                                                    onDragEnd={handleDragEnd}
-                                                    className={`group hover:bg-white/[0.02] transition-colors border-b border-white/[0.02] ${dragOverIndex === originalIndex ? 'border-t-2 border-t-primary' : ''}`}
-                                                >
-                                                    <td className="py-2.5 text-center align-top relative">
-                                                        {isPricingMode && (
-                                                            <div className="absolute left-0 top-3 text-white/20 hover:text-primary cursor-grab active:cursor-grabbing">
-                                                                <GripVertical className="h-4 w-4" />
+                                                    <div
+                                                        key={item.id}
+                                                        draggable={isPricingMode}
+                                                        onDragStart={(e) => handleDragStart(e, originalIndex)}
+                                                        onDragEnter={(e) => handleDragEnter(e, originalIndex)}
+                                                        onDragOver={(e) => e.preventDefault()}
+                                                        onDragEnd={handleDragEnd}
+                                                        className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row relative ${dragOverIndex === originalIndex ? 'border-t-2 border-t-primary' : ''}`}
+                                                    >
+                                                        {/* Heading Input placed ON TOP of each item */}
+                                                        <div className="flex items-center gap-2 px-1">
+                                                            <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest select-none">Heading:</span>
+                                                            <Input
+                                                                value={item.area || ""}
+                                                                onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
+                                                                className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
+                                                                placeholder="HEADING"
+                                                            />
+                                                        </div>
+
+                                                        {/* Main Row Inputs */}
+                                                        <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3">
+                                                            {/* Drag Handle & # */}
+                                                            <div className="md:w-12 flex items-center gap-1 pt-2 md:pt-2 select-none justify-start md:justify-center">
+                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
+                                                                <div className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-1 rounded hover:bg-white/5 transition-colors">
+                                                                    <GripVertical className="h-4 w-4" />
+                                                                </div>
+                                                                <span className="text-[10px] font-black text-gray-500 w-5 text-center">{globalStartIndex + iIdx + 1}</span>
                                                             </div>
-                                                        )}
-                                                        <span className="text-[10px] font-black text-gray-600 pl-4">{globalStartIndex + iIdx + 1}</span>
-                                                    </td>
-                                                    <td className="py-2.5 pr-8">
-                                                        {isPricingMode ? (
-                                                            <div className="flex gap-3">
-                                                                <div className="flex-1">
-                                                                    <Textarea
-                                                                        value={item.description}
-                                                                        onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
-                                                                        className="min-h-[40px] bg-transparent border-white/10 focus:border-primary text-[13px] md:text-sm font-bold text-white tracking-tight resize-none p-2"
-                                                                        placeholder="Item Description"
-                                                                    />
-                                                                </div>
-                                                                <div className="w-1/3 max-w-[120px]">
-                                                                    <Input
-                                                                        value={item.area || ""}
-                                                                        onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
-                                                                        className="h-8 bg-transparent border-white/10 focus:border-primary text-[9px] font-bold text-primary uppercase tracking-widest"
-                                                                        placeholder="HEADING"
-                                                                    />
-                                                                </div>
-                                                                <div className="flex flex-col md:flex-row items-center gap-1 self-center">
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-white/10"
-                                                                        onClick={() => moveItemUp(originalIndex)}
-                                                                        title="Move Up"
-                                                                    >
-                                                                        <ArrowUp className="h-4 w-4" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-white/10"
-                                                                        onClick={() => moveItemDown(originalIndex)}
-                                                                        title="Move Down"
-                                                                    >
-                                                                        <ArrowDown className="h-4 w-4" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8 text-red-500 hover:bg-red-500/10"
-                                                                        onClick={() => handleDeleteItem(item.id)}
-                                                                        title="Delete Item"
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4" />
-                                                                    </Button>
-                                                                </div>
+
+                                                            {/* Description */}
+                                                            <div className="flex-1 flex flex-col md:block">
+                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Service Description</span>
+                                                                <Textarea
+                                                                    value={item.description}
+                                                                    onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
+                                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
+                                                                    placeholder="Item Description"
+                                                                    required
+                                                                />
                                                             </div>
-                                                        ) : (
-                                                            <div className="text-[13px] md:text-sm font-bold text-white tracking-tight leading-snug">{item.description}</div>
-                                                        )}
-                                                    </td>
-                                                    <td className="py-2.5 text-center align-top">
-                                                        {isPricingMode ? (
-                                                            <div className="flex flex-col gap-0.5 items-center">
+
+                                                            {/* Qty */}
+                                                            <div className="md:w-16 flex flex-col md:block">
+                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Qty</span>
                                                                 <Input
                                                                     type="number"
                                                                     value={item.quantity}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                    className="w-12 h-7 text-center bg-transparent border-white/10 font-bold p-0 text-xs"
+                                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs"
+                                                                    required
                                                                 />
+                                                            </div>
+
+                                                            {/* Unit */}
+                                                            <div className="md:w-16 flex flex-col md:block">
+                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Unit</span>
                                                                 <Input
                                                                     value={item.unit || ""}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'unit', e.target.value)}
-                                                                    placeholder="Unit"
-                                                                    className="w-12 h-4 text-center text-[8px] uppercase bg-transparent border-none opacity-50 p-0"
+                                                                    placeholder="ea"
+                                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center h-9 w-full text-xs"
                                                                 />
                                                             </div>
-                                                        ) : (
-                                                            <span className="text-xs font-black text-gray-400">{item.quantity} <span className="text-[9px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></span>
-                                                        )}
-                                                    </td>
-                                                    <td className="py-2.5 text-right align-top">
-                                                        {isPricingMode ? (
-                                                            <div className="inline-flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
-                                                                <span className="text-gray-500 font-bold text-[10px]">{currencySymbol}</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-20 bg-transparent text-right text-white font-bold outline-none no-spinner text-xs"
-                                                                    value={item.unitPrice}
-                                                                    onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                                />
+
+                                                            {/* Price */}
+                                                            <div className="md:w-28 flex flex-col md:block">
+                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Price</span>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[9px] font-black text-muted-foreground/30">{currencySymbol}</span>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={item.unitPrice}
+                                                                        onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                                                        className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs"
+                                                                        required
+                                                                    />
+                                                                </div>
                                                             </div>
-                                                        ) : (
-                                                            <span className="text-xs font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="py-2.5 text-right font-black text-[13px] md:text-sm text-white align-top">
-                                                        {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
+
+                                                            {/* Total */}
+                                                            <div className="md:w-28 flex items-center justify-between md:justify-end gap-2 md:gap-0 mt-2 md:mt-0 pt-2 md:pt-0 border-t border-white/5 md:border-none">
+                                                                <span className="text-[9px] uppercase font-black text-primary/60 md:hidden block">Line Total</span>
+                                                                <span className="text-sm font-black text-white pr-2 text-right md:w-full block md:pt-2">
+                                                                    {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Actions */}
+                                                            <div className="md:w-28 flex items-center justify-end md:justify-center gap-1 mt-2 md:mt-0 md:pt-1">
+                                                                <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10"
+                                                                onClick={() => moveItemUp(originalIndex)}
+                                                                title="Move Up"
+                                                            >
+                                                                <ArrowUp className="h-4.5 w-4.5" />
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10"
+                                                                onClick={() => moveItemDown(originalIndex)}
+                                                                title="Move Down"
+                                                            >
+                                                                <ArrowDown className="h-4.5 w-4.5" />
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 rounded-lg text-red-500 hover:bg-red-500/10"
+                                                                onClick={() => handleDeleteItem(item.id)}
+                                                                title="Delete Item"
+                                                            >
+                                                                <Trash2 className="h-4.5 w-4.5" />
+                                                            </Button>
+                                                        </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            });
+                        })()}
+                    </div>
+                ) : (
+                    <div className="mb-10 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                        <table className="w-full min-w-[600px] md:min-w-full">
+                            <thead>
+                                <tr className="border-b border-white/10">
+                                    <th className="py-4 text-center w-8 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">#</th>
+                                    <th className="py-4 text-left font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Service Description</th>
+                                    <th className="py-4 text-center w-24 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Qty</th>
+                                    <th className="py-4 text-right w-36 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Unit Price</th>
+                                    <th className="py-4 text-right w-40 font-black text-[10px] uppercase tracking-[0.2em] text-gray-500">Line Total</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {(() => {
+                                    const sequentialGroups: { area: string, items: any[] }[] = [];
+                                    items.forEach((item: any, index: number) => {
+                                        const area = item.area?.trim() || "GENERAL"
+                                        const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+                                        if (lastGroup && lastGroup.area === area) {
+                                            lastGroup.items.push({ ...item, originalIndex: index });
+                                        } else {
+                                            sequentialGroups.push({ area, items: [{ ...item, originalIndex: index }] });
+                                        }
+                                    });
+
+                                    return sequentialGroups.map((group: any, gIdx: number) => {
+                                        // Calculate global start index for this group
+                                        let globalStartIndex = 0;
+                                        for (let i = 0; i < gIdx; i++) {
+                                            globalStartIndex += sequentialGroups[i].items.length;
+                                        }
+
+                                        return (
+                                            <Fragment key={`group-${group.area}-${gIdx}`}>
+                                                <tr key={`header-${group.area}`} className="bg-white/5 border-y border-white/5">
+                                                    <td colSpan={5} className="py-1 px-4 md:px-6">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="h-2 w-2 rounded-full bg-primary" />
+                                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary italic">{group.area ? group.area : "GENERAL"}</span>
+                                                        </div>
                                                     </td>
                                                 </tr>
-                                            )
-                                        })}
-                                        </Fragment>
-                                    );
-                                });
-                            })()}
-                        </tbody>
-                    </table>
-                </div>
+                                                {group.items.map((item: any, iIdx: number) => {
+                                                    return (
+                                                        <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors border-b border-white/[0.02]">
+                                                            <td className="py-2.5 text-center align-top relative">
+                                                                <span className="text-[10px] font-black text-gray-600 pl-4">{globalStartIndex + iIdx + 1}</span>
+                                                            </td>
+                                                            <td className="py-2.5 pr-8">
+                                                                <div className="text-[13px] md:text-sm font-bold text-white tracking-tight leading-snug">{item.description}</div>
+                                                            </td>
+                                                            <td className="py-2.5 text-center align-top">
+                                                                <span className="text-xs font-black text-gray-400">{item.quantity} <span className="text-[9px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></span>
+                                                            </td>
+                                                            <td className="py-2.5 text-right align-top">
+                                                                <span className="text-xs font-bold text-white">{formatCurrency(item.unitPrice, currencySymbol)}</span>
+                                                            </td>
+                                                            <td className="py-2.5 text-right font-black text-[13px] md:text-sm text-white align-top">
+                                                                {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </Fragment>
+                                        );
+                                    });
+                                })()}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
                 {/* Footer UI - Modernized with conditional payment terms Logic */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-14 mt-8 md:mt-10 pt-8 md:pt-10 border-t border-white/10">

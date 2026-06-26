@@ -271,7 +271,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         </div>
                     </CardContent>
                 </Card>
-            </div >
+            </div>
         )
     }
     const clientCatalog = catalog.filter(item => 
@@ -576,12 +576,38 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                     </div>
 
                     <div className="space-y-3">
-                        <div className="space-y-4">
+                        {/* Table-like Header Row (hidden on mobile) */}
+                        <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 select-none">
+                            <div className="w-24">Code</div>
+                            <div className="flex-1">Service Description & Details</div>
+                            <div className="w-16 text-center">Qty</div>
+                            <div className="w-16 text-center">Unit</div>
+                            <div className="w-28 text-right">Price</div>
+                            <div className="w-28 text-right">Total</div>
+                            <div className="w-10"></div> {/* Delete spacer */}
+                        </div>
+
+                        {/* List of Rows */}
+                        <div className="space-y-3">
                             {items.map((item, index) => (
-                                <div key={index} className="flex flex-col md:flex-row gap-4 md:gap-3 items-start p-4 md:p-0 rounded-2xl border md:border-none bg-white/[0.02] md:bg-transparent shadow-sm md:shadow-none border-white/5 md:border-transparent group/row">
-                                    <div className="flex-1 w-full space-y-2 md:space-y-0 flex gap-2">
-                                        <div className="w-24 shrink-0">
-                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Code</Label>
+                                <div key={index} className="flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row">
+                                    {/* Heading Input placed ON TOP of each item */}
+                                    <div className="flex items-center gap-2 px-1">
+                                        <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest select-none">Heading:</span>
+                                        <Input
+                                            placeholder="SECTION/HEADING (E.G. PREPARATIONS, ROOM 1)"
+                                            // @ts-ignore
+                                            value={item.area || ""}
+                                            onChange={(e) => updateItem(index, 'area', e.target.value)}
+                                            className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
+                                        />
+                                    </div>
+
+                                    {/* Main Row Inputs */}
+                                    <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3">
+                                        {/* Code */}
+                                        <div className="md:w-24 flex flex-col md:block">
+                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Code</span>
                                             <Input
                                                 placeholder="Code"
                                                 // @ts-ignore
@@ -600,84 +626,84 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                         updateItem(index, 'unitPrice', matched.unitPrice);
                                                     }
                                                 }}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-mono uppercase text-center font-bold"
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-mono uppercase text-center font-bold h-9 w-full text-xs"
                                             />
                                         </div>
-                                        <div className="flex-1">
-                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Description & Details</Label>
-                                            <Input
+
+                                        {/* Description */}
+                                        <div className="flex-1 flex flex-col md:block">
+                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Description & Details</span>
+                                            <Textarea
                                                 placeholder="Item description..."
                                                 value={item.description}
                                                 onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium"
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
                                                 required
                                             />
                                         </div>
-                                        <div className="w-1/3 max-w-[120px]">
-                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-primary/70">Heading</Label>
-                                            <Input
-                                                placeholder="HEADING (OPTIONAL)"
-                                                // @ts-ignore
-                                                value={item.area || ""}
-                                                onChange={(e) => updateItem(index, 'area', e.target.value)}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-[10px] font-bold text-primary uppercase tracking-widest"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-3 w-full md:w-auto">
-                                        <div className="space-y-2 md:space-y-0 md:w-20">
-                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-muted-foreground/60">Qty</Label>
+
+                                        {/* Qty */}
+                                        <div className="md:w-16 flex flex-col md:block">
+                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Qty</span>
                                             <Input
                                                 type="number"
                                                 placeholder="1"
                                                 value={item.quantity}
                                                 onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center"
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs"
                                                 required
                                             />
                                         </div>
-                                        <div className="space-y-2 md:space-y-0 md:w-24">
-                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-muted-foreground/60">Unit</Label>
+
+                                        {/* Unit */}
+                                        <div className="md:w-16 flex flex-col md:block">
+                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Unit</span>
                                             <Input
                                                 placeholder="ea"
                                                 // @ts-ignore
                                                 value={item.unit || ""}
                                                 onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center"
+                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center h-9 w-full text-xs"
                                             />
                                         </div>
-                                        <div className="space-y-2 md:space-y-0 md:w-32">
-                                            <Label className="md:hidden text-[10px] uppercase font-black tracking-widest text-muted-foreground/60">R Price</Label>
+
+                                        {/* Price */}
+                                        <div className="md:w-28 flex flex-col md:block">
+                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Price</span>
                                             <div className="relative">
-                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground/30">R</span>
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground/30">R</span>
                                                 <Input
                                                     type="number"
                                                     placeholder="0.00"
                                                     value={item.unitPrice}
                                                     onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
-                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6"
+                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs"
                                                     required
                                                 />
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center justify-between w-full md:w-auto md:pt-1">
-                                        <div className="md:hidden text-[10px] font-black uppercase tracking-widest text-primary drop-shadow-[0_0_10px_rgba(var(--primary),0.2)]">Line Total</div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="text-lg md:text-sm font-black text-white md:w-28 text-right">
+
+                                        {/* Total */}
+                                        <div className="md:w-28 flex items-center justify-between md:justify-end gap-2 md:gap-0 mt-2 md:mt-0 pt-2 md:pt-0 border-t border-white/5 md:border-none">
+                                            <span className="text-[9px] uppercase font-black text-primary/60 md:hidden block">Line Total</span>
+                                            <span className="text-sm font-black text-white pr-2 text-right md:w-full block md:pt-2">
                                                 {formatCurrency(item.quantity * item.unitPrice)}
-                                            </div>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                                                onClick={() => removeItem(index)}
-                                                disabled={items.length === 1}
-                                            >
-                                                <Trash className="h-4 w-4" />
-                                            </Button>
+                                            </span>
                                         </div>
+
+                                        {/* Delete action */}
+                                        <div className="md:w-10 flex justify-end md:justify-center items-center mt-2 md:mt-0 md:pt-1">
+                                            <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                                            onClick={() => removeItem(index)}
+                                            disabled={items.length === 1}
+                                        >
+                                            <Trash className="h-4.5 w-4.5" />
+                                        </Button>
+                                    </div>
                                     </div>
                                 </div>
                             ))}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { updateCompanySettings } from "@/app/(dashboard)/settings/actions"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,78 @@ import {
 } from "@/components/ui/dialog"
 // import { toast } from "sonner" // Removed as not in package.json
 
+function trimImageMargins(img: HTMLImageElement): string {
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return img.src;
+
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+
+        let minX = canvas.width;
+        let minY = canvas.height;
+        let maxX = 0;
+        let maxY = 0;
+
+        // Scan pixels for transparent or white background
+        for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+                const index = (y * canvas.width + x) * 4;
+                const r = data[index];
+                const g = data[index + 1];
+                const b = data[index + 2];
+                const a = data[index + 3];
+
+                const isTransparent = a < 15;
+                const isWhite = r > 240 && g > 240 && b > 240;
+
+                if (!isTransparent && !isWhite) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+
+        // If no non-background pixels found (entire image is white/transparent), return original
+        if (maxX < minX || maxY < minY) {
+            return img.src;
+        }
+
+        // Add padding (5 pixels)
+        const padding = 5;
+        minX = Math.max(0, minX - padding);
+        minY = Math.max(0, minY - padding);
+        maxX = Math.min(canvas.width - 1, maxX + padding);
+        maxY = Math.min(canvas.height - 1, maxY + padding);
+
+        const croppedWidth = maxX - minX + 1;
+        const croppedHeight = maxY - minY + 1;
+
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = croppedWidth;
+        croppedCanvas.height = croppedHeight;
+        const croppedCtx = croppedCanvas.getContext('2d');
+        if (!croppedCtx) return img.src;
+
+        croppedCtx.drawImage(
+            canvas,
+            minX, minY, croppedWidth, croppedHeight,
+            0, 0, croppedWidth, croppedHeight
+        );
+
+        return croppedCanvas.toDataURL('image/png');
+    } catch (err) {
+        console.warn("Could not crop image margins", err);
+        return img.src;
+    }
+}
+
 interface SettingsFormProps {
     initialSettings: any
 }
@@ -30,6 +102,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
     const router = useRouter()
     const [loading, setLoading] = useState(false)
     const [confirmText, setConfirmText] = useState("")
+    const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
     const [formData, setFormData] = useState({
         name: initialSettings?.name || "",
         address: initialSettings?.address || "",
@@ -44,7 +117,17 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         currency: initialSettings?.currency || "R",
         theme: initialSettings?.theme || "dark",
         aiEnabled: initialSettings?.aiEnabled ?? true,
-        layoutPreferences: initialSettings?.layoutPreferences || {
+        layoutPreferences: initialSettings?.layoutPreferences ? {
+            logoSize: 80,
+            logoScale: 1.0,
+            logoTranslateX: 0,
+            logoTranslateY: 0,
+            logoWidthFactor: 1.0,
+            logoContainerTranslateX: 0,
+            businessNameTranslateX: 0,
+            businessNameTranslateY: 0,
+            ...initialSettings.layoutPreferences
+        } : {
             sidebar: [
                 "/dashboard",
                 "/manager",
@@ -67,9 +150,31 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                     { id: "feed_main", label: "Main Feed (Meetings)", visible: true },
                     { id: "feed_side", label: "Side Feed (Activity)", visible: true }
                 ]
-            }
+            },
+            logoSize: 80,
+            logoScale: 1.0,
+            logoTranslateX: 0,
+            logoTranslateY: 0,
+            logoWidthFactor: 1.0,
+            logoContainerTranslateX: 0,
+            businessNameTranslateX: 0,
+            businessNameTranslateY: 0
         },
     })
+
+    useEffect(() => {
+        if (!formData.logoUrl) {
+            setPreviewAspectRatio(1);
+            return;
+        }
+        const img = new Image();
+        img.onload = () => {
+            if (img.naturalHeight > 0) {
+                setPreviewAspectRatio(img.naturalWidth / img.naturalHeight);
+            }
+        };
+        img.src = formData.logoUrl;
+    }, [formData.logoUrl]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
@@ -202,14 +307,33 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
 
                         <div className="space-y-4">
                             <Label>Company Logo</Label>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-start gap-4">
                                 {formData.logoUrl && (
-                                    <div className="relative h-20 w-20 rounded-md border overflow-hidden bg-white">
-                                        <img
-                                            src={formData.logoUrl}
-                                            alt="Logo Preview"
-                                            className="h-full w-full object-contain"
-                                        />
+                                    <div className="flex flex-col items-center gap-2">
+                                        <div className="relative h-20 w-20 rounded-md border overflow-hidden bg-white">
+                                            <img
+                                                src={formData.logoUrl}
+                                                alt="Logo Preview"
+                                                className="h-full w-full object-contain"
+                                            />
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-[9px] h-6 px-1.5 bg-primary/10 border-primary/20 hover:bg-primary/20 text-primary uppercase font-bold tracking-wider"
+                                            onClick={() => {
+                                                const img = new Image();
+                                                img.crossOrigin = "Anonymous";
+                                                img.onload = () => {
+                                                    const cropped = trimImageMargins(img);
+                                                    setFormData(prev => ({ ...prev, logoUrl: cropped }));
+                                                };
+                                                img.src = formData.logoUrl;
+                                            }}
+                                        >
+                                            Autocrop margins
+                                        </Button>
                                     </div>
                                 )}
                                 <div className="flex-1 space-y-2">
@@ -221,7 +345,12 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                             if (file) {
                                                 const reader = new FileReader();
                                                 reader.onloadend = () => {
-                                                    setFormData(prev => ({ ...prev, logoUrl: reader.result as string }));
+                                                    const img = new Image();
+                                                    img.onload = () => {
+                                                        const cropped = trimImageMargins(img);
+                                                        setFormData(prev => ({ ...prev, logoUrl: cropped }));
+                                                    };
+                                                    img.src = reader.result as string;
                                                 };
                                                 reader.readAsDataURL(file);
                                             }
@@ -241,6 +370,308 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                 onChange={handleChange}
                                 placeholder="https://example.com/logo.png"
                             />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="logoSize">Logo Bounding Box Height</Label>
+                            <div className="flex items-center gap-4">
+                                <input
+                                    type="range"
+                                    id="logoSize"
+                                    name="logoSize"
+                                    min="30"
+                                    max="300"
+                                    value={formData.layoutPreferences?.logoSize ?? 80}
+                                    onChange={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            layoutPreferences: {
+                                                ...prev.layoutPreferences,
+                                                logoSize: val
+                                            }
+                                        }));
+                                    }}
+                                    className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                />
+                                <span className="text-sm font-bold bg-[#14141E] px-3 py-1 rounded-md border border-white/5 w-16 text-center text-white">
+                                    {formData.layoutPreferences?.logoSize ?? 80}px
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">Adjust the height of the logo container box (default 80px).</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="logoWidthFactor">Logo Container Width Adjust</Label>
+                            <div className="flex items-center gap-4">
+                                <input
+                                    type="range"
+                                    id="logoWidthFactor"
+                                    name="logoWidthFactor"
+                                    min="0.5"
+                                    max="5.0"
+                                    step="0.05"
+                                    value={formData.layoutPreferences?.logoWidthFactor ?? 1.0}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            layoutPreferences: {
+                                                ...prev.layoutPreferences,
+                                                logoWidthFactor: val
+                                            }
+                                        }));
+                                    }}
+                                    className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                />
+                                <span className="text-sm font-bold bg-[#14141E] px-3 py-1 rounded-md border border-white/5 w-16 text-center text-white">
+                                    {Math.round((formData.layoutPreferences?.logoWidthFactor ?? 1.0) * 100)}%
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">Adjust the width of the logo container box (50% to 500% of original aspect ratio width).</p>
+                        </div>
+
+                        <div className="space-y-4 border-t border-white/5 pt-4">
+                            <Label className="text-xs font-black uppercase tracking-widest text-primary block">Logo Zoom & Positioning (Crop Margins)</Label>
+                            
+                            <div className="space-y-2">
+                                <Label htmlFor="logoScale">Zoom / Scale Factor</Label>
+                                <div className="flex items-center gap-4">
+                                    <input
+                                        type="range"
+                                        id="logoScale"
+                                        name="logoScale"
+                                        min="1"
+                                        max="15"
+                                        step="0.1"
+                                        value={formData.layoutPreferences?.logoScale ?? 1.0}
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.target.value);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                layoutPreferences: {
+                                                    ...prev.layoutPreferences,
+                                                    logoScale: val
+                                                }
+                                            }));
+                                        }}
+                                        className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                    />
+                                    <span className="text-sm font-bold bg-[#14141E] px-3 py-1 rounded-md border border-white/5 w-16 text-center text-white">
+                                        {Math.round((formData.layoutPreferences?.logoScale ?? 1.0) * 100)}%
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">Zoom into the logo graphic to crop empty white space margins (100% to 1500%).</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="logoTranslateX">Horizontal Position (Shift X)</Label>
+                                    <div className="flex items-center gap-4">
+                                        <input
+                                            type="range"
+                                            id="logoTranslateX"
+                                            name="logoTranslateX"
+                                            min="-600"
+                                            max="600"
+                                            step="1"
+                                            value={formData.layoutPreferences?.logoTranslateX ?? 0}
+                                            onChange={(e) => {
+                                                const val = parseInt(e.target.value, 10);
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    layoutPreferences: {
+                                                        ...prev.layoutPreferences,
+                                                        logoTranslateX: val
+                                                    }
+                                                }));
+                                            }}
+                                            className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        />
+                                        <span className="text-sm font-bold bg-[#14141E] px-3 py-1 rounded-md border border-white/5 w-16 text-center text-white">
+                                            {formData.layoutPreferences?.logoTranslateX ?? 0}px
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="logoTranslateY">Vertical Position (Shift Y)</Label>
+                                    <div className="flex items-center gap-4">
+                                        <input
+                                            type="range"
+                                            id="logoTranslateY"
+                                            name="logoTranslateY"
+                                            min="-600"
+                                            max="600"
+                                            step="1"
+                                            value={formData.layoutPreferences?.logoTranslateY ?? 0}
+                                            onChange={(e) => {
+                                                const val = parseInt(e.target.value, 10);
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    layoutPreferences: {
+                                                        ...prev.layoutPreferences,
+                                                        logoTranslateY: val
+                                                    }
+                                                }));
+                                            }}
+                                            className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        />
+                                        <span className="text-sm font-bold bg-[#14141E] px-3 py-1 rounded-md border border-white/5 w-16 text-center text-white">
+                                            {formData.layoutPreferences?.logoTranslateY ?? 0}px
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 border-t border-white/5 pt-4 mt-4">
+                                <Label htmlFor="logoContainerTranslateX">Logo Container Shift X</Label>
+                                <div className="flex items-center gap-4">
+                                    <input
+                                        type="range"
+                                        id="logoContainerTranslateX"
+                                        name="logoContainerTranslateX"
+                                        min="-600"
+                                        max="600"
+                                        step="1"
+                                        value={formData.layoutPreferences?.logoContainerTranslateX ?? 0}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value, 10);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                layoutPreferences: {
+                                                    ...prev.layoutPreferences,
+                                                    logoContainerTranslateX: val
+                                                }
+                                            }));
+                                        }}
+                                        className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                    />
+                                    <span className="text-sm font-bold bg-[#14141E] px-3 py-1 rounded-md border border-white/5 w-16 text-center text-white">
+                                        {formData.layoutPreferences?.logoContainerTranslateX ?? 0}px
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">Shift the entire logo container block left or right (adds spacing or adjusts layout).</p>
+                            </div>
+
+                            <div className="space-y-4 border-t border-white/5 pt-4 mt-4">
+                                <Label className="text-xs font-black uppercase tracking-widest text-primary block">Business Details Positioning (Fix Overlaps)</Label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="businessNameTranslateX">Business Details Shift X</Label>
+                                        <div className="flex items-center gap-4">
+                                            <input
+                                                type="range"
+                                                id="businessNameTranslateX"
+                                                name="businessNameTranslateX"
+                                                min="-600"
+                                                max="600"
+                                                step="1"
+                                                value={formData.layoutPreferences?.businessNameTranslateX ?? 0}
+                                                onChange={(e) => {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        layoutPreferences: {
+                                                            ...prev.layoutPreferences,
+                                                            businessNameTranslateX: val
+                                                        }
+                                                    }));
+                                                }}
+                                                className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                            />
+                                            <span className="text-sm font-bold bg-[#14141E] px-3 py-1 rounded-md border border-white/5 w-16 text-center text-white">
+                                                {formData.layoutPreferences?.businessNameTranslateX ?? 0}px
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="businessNameTranslateY">Business Details Shift Y</Label>
+                                        <div className="flex items-center gap-4">
+                                            <input
+                                                type="range"
+                                                id="businessNameTranslateY"
+                                                name="businessNameTranslateY"
+                                                min="-600"
+                                                max="600"
+                                                step="1"
+                                                value={formData.layoutPreferences?.businessNameTranslateY ?? 0}
+                                                onChange={(e) => {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        layoutPreferences: {
+                                                            ...prev.layoutPreferences,
+                                                            businessNameTranslateY: val
+                                                        }
+                                                    }));
+                                                }}
+                                                className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                            />
+                                            <span className="text-sm font-bold bg-[#14141E] px-3 py-1 rounded-md border border-white/5 w-16 text-center text-white">
+                                                {formData.layoutPreferences?.businessNameTranslateY ?? 0}px
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Live Document Header Preview */}
+                        <div className="mt-4 p-4 rounded-xl border border-white/5 bg-[#09090F]/50 space-y-2 animate-in fade-in duration-200">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Live Document Header Preview</span>
+                            <div className="p-4 bg-white rounded-lg border border-gray-200 flex justify-between items-center text-[#1E293B] min-h-[100px] overflow-hidden">
+                                <div className="flex items-center gap-4">
+                                    {formData.logoUrl ? (
+                                        <div 
+                                            style={{ 
+                                                height: `${formData.layoutPreferences?.logoSize ?? 80}px`,
+                                                width: `${(formData.layoutPreferences?.logoSize ?? 80) * previewAspectRatio * (formData.layoutPreferences?.logoWidthFactor ?? 1.0)}px`,
+                                                marginLeft: `${formData.layoutPreferences?.logoContainerTranslateX ?? 0}px`,
+                                                overflow: 'hidden',
+                                                position: 'relative',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}
+                                            className="max-w-full bg-transparent shrink-0 transition-[margin-left] duration-75"
+                                        >
+                                            <img
+                                                src={formData.logoUrl}
+                                                alt="Live Logo Preview"
+                                                onLoad={(e) => {
+                                                    const img = e.currentTarget;
+                                                    setPreviewAspectRatio(img.naturalWidth / img.naturalHeight);
+                                                }}
+                                                style={{ 
+                                                    height: '100%',
+                                                    width: '100%',
+                                                    objectFit: 'contain',
+                                                    transform: `scale(${formData.layoutPreferences?.logoScale ?? 1.0}) translate(${formData.layoutPreferences?.logoTranslateX ?? 0}px, ${formData.layoutPreferences?.logoTranslateY ?? 0}px)`,
+                                                    transformOrigin: 'center'
+                                                }}
+                                                className="transition-transform duration-75"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="h-12 w-12 bg-primary flex items-center justify-center font-black text-[#0F172A] text-lg rounded-lg shadow-lg rotate-3">LR</div>
+                                    )}
+                                    <div 
+                                        style={{ 
+                                            transform: `translate(${formData.layoutPreferences?.businessNameTranslateX ?? 0}px, ${formData.layoutPreferences?.businessNameTranslateY ?? 0}px)`,
+                                            position: 'relative'
+                                        }}
+                                        className="text-left transition-transform duration-75"
+                                    >
+                                        <h4 className="text-sm font-black tracking-tight text-[#1E293B] leading-none">{formData.name || "Company Name"}</h4>
+                                        <p className="text-[8px] text-gray-400 mt-1 font-semibold uppercase">{formData.phone || "000 000 0000"}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <span className="text-[10px] font-black tracking-wider text-gray-300">QUOTATION</span>
+                                </div>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -300,6 +731,25 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                     <option value="light-blue">Light (Blue)</option>
                                     <option value="light-orange">Light (Orange)</option>
                                     <option value="light-violet">Light (Violet)</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="dashboardView">Default Dashboard View</Label>
+                                <select
+                                    id="dashboardView"
+                                    name="dashboardView"
+                                    value={formData.layoutPreferences?.dashboardView || "maintenance"}
+                                    onChange={(e) => setFormData(prev => ({
+                                        ...prev,
+                                        layoutPreferences: {
+                                            ...prev.layoutPreferences,
+                                            dashboardView: e.target.value
+                                        }
+                                    }))}
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <option value="maintenance">Maintenance Command Center</option>
+                                    <option value="drone">Drone Operations Dashboard</option>
                                 </select>
                             </div>
                         </div>

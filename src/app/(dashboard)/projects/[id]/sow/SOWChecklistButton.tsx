@@ -46,7 +46,8 @@ export function SOWChecklistButton({ project, latestScope, settings, className, 
         logoUrl: settings?.logoUrl || "",
         vatNumber: settings?.vatNumber || "",
         paymentTerms: settings?.paymentTerms || "",
-        bankDetails: settings?.bankDetails || ""
+        bankDetails: settings?.bankDetails || "",
+        layoutPreferences: settings?.layoutPreferences
     }
 
     const generateChecklistPdf = async () => {

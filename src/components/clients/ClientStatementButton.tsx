@@ -22,7 +22,8 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
         logoUrl: settings?.logoUrl || "",
         vatNumber: settings?.vatNumber || "",
         paymentTerms: settings?.paymentTerms || "",
-        bankDetails: settings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510"
+        bankDetails: settings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510",
+        layoutPreferences: settings?.layoutPreferences
     };
 
     const generateStatement = async () => {

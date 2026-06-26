@@ -30,6 +30,8 @@ model Company {
   reports        Report[]
   statements     Statement[]
   transactions   Transaction[]
+  leads          Lead[]
+  optOuts        OptOut[]
 }
 
 model User {
@@ -123,6 +125,7 @@ model Project {
   submissionLogs   SubmissionLog[]
   workBreakdowns   WorkBreakdownPricing[]
   reports          Report[]
+  lead             Lead?
 }
 
 model ScopeOfWork {
@@ -473,3 +476,95 @@ model ClientContact {
   invoices  Invoice[]
   wbps      WorkBreakdownPricing[]
 }
+
+model Lead {
+  id                     String    @id @default(uuid())
+  latitude               Float
+  longitude              Float
+  address                String?
+  companyName            String?
+  contactName            String?
+  contactEmail           String?
+  biologicalGrowthScore  Float     @default(0)
+  surfaceStainingScore   Float     @default(0)
+  maxConfidenceScore     Float     @default(0)
+  satelliteImageUrl      String?
+  processedImageUrl      String?
+  pdfReportUrl           String?
+  status                 String    @default("discovered")
+  outreachAttempts       Int       @default(0)
+  lastOutreachAt         DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  companyId              String
+  company                Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  // Job links & timeline
+  projectId              String?   @unique
+  project                Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  history                Json?
+  
+  // Pricing & Quote settings
+  estimatedArea          Float     @default(500)
+  roofPitch              String    @default("medium") // flat, medium, steep
+  serviceType            String    @default("standard") // standard, chemical, solar
+  highDust               Boolean   @default(false)
+  streetViewImageUrl     String?
+
+  // Window Cleaning & Drone Window washing metrics
+  windowHaziness       Float     @default(0.0) // haziness_% (0 to 100)
+  visibleStreaks       Int       @default(0) // visible_streak_count (int)
+  spotCoverage         Float     @default(0.0) // spot_coverage_% (0 to 100)
+  frameDirtScore       Float     @default(0.0) // frame_darkness_score (0 to 100)
+  groundFloorPriority  String    @default("LOW") // HIGH, MEDIUM, LOW
+  windowNeedsCleaning  Boolean   @default(false)
+  detectionReason      String?   // Reasons: e.g. "Haziness detected", "Water spots/streaks visible", etc.
+  priorityLevel        String    @default("low") // same-day, high, medium, low
+  buildingType         String?   // retail, restaurant, office, hotel, industrial, apartment, etc.
+  yearBuilt            Int?      // year built (to compute building age)
+  storeys              Int?      // number of storeys/height (3+ storeys only)
+  coastalBonus         Boolean   @default(false)
+}
+
+model OptOut {
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  domain    String?
+  reason    String?
+  createdAt DateTime @default(now())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model RawProperty {
+  id                   String   @id @default(uuid())
+  address              String?
+  latitude             Float
+  longitude            Float
+  buildingType         String?
+  yearBuilt            Int?
+  storeys              Int?
+  agentEmail           String?
+  sourceUrl            String?
+  coastalBonus         Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  buildingHeightListed String?
+  buildingHeightVisual Int?
+  heightVerified       Boolean  @default(false)
+  rejectionReason      String?
+  status               String   @default("discovered")
+}
+
+model OutreachTracking {
+  id                  String    @id @default(uuid())
+  leadId              String
+  emailSentDate       DateTime?
+  detectionReasonSent String?
+  agentReplied        Boolean   @default(false)
+  repliedDate         DateTime?
+  jobBooked           Boolean   @default(false)
+  jobDate             DateTime?
+  createdAt           DateTime  @default(now())
+}
+
+

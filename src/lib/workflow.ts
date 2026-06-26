@@ -11,26 +11,41 @@ export async function submitScopeOfWork(projectId: string, items: { description:
 
     // 1. Create DRAFT Invoice Record to reserve the Number immediately
     const year = new Date().getFullYear()
-    let nextNumber: number
-    let suggestedQuoteNumber: string
+    let nextNumber = 0
+    let suggestedQuoteNumber = ""
     const client = project!.client
     const codePrefix = client.codePrefix
 
-    if (codePrefix) {
-        const updatedClient = await prisma.client.update({
-            where: { id: client.id },
-            data: { lastQuoteNumber: { increment: 1 } }
+    let isUnique = false
+    while (!isUnique) {
+        if (codePrefix) {
+            const updatedClient = await prisma.client.update({
+                where: { id: client.id },
+                data: { lastQuoteNumber: { increment: 1 } }
+            })
+            nextNumber = updatedClient.lastQuoteNumber
+            suggestedQuoteNumber = `${codePrefix}-Q-${year}-${nextNumber.toString().padStart(3, '0')}`
+        } else {
+            const settings = await prisma.companySettings.update({
+                where: { companyId: project!.companyId },
+                data: { lastQuoteNumber: { increment: 1 } }
+            })
+            nextNumber = settings.lastQuoteNumber
+            suggestedQuoteNumber = `Q-${year}-${nextNumber.toString().padStart(3, '0')}`
+        }
+
+        const existing = await prisma.invoice.findFirst({
+            where: {
+                companyId: project!.companyId,
+                quoteNumber: suggestedQuoteNumber,
+                type: 'QUOTE'
+            }
         })
-        nextNumber = updatedClient.lastQuoteNumber
-        suggestedQuoteNumber = `${codePrefix}-Q-${year}-${nextNumber.toString().padStart(3, '0')}`
-    } else {
-        const settings = await prisma.companySettings.update({
-            where: { companyId: project!.companyId },
-            data: { lastQuoteNumber: { increment: 1 } }
-        })
-        nextNumber = settings.lastQuoteNumber
-        suggestedQuoteNumber = `Q-${year}-${nextNumber.toString().padStart(3, '0')}`
+        if (!existing) {
+            isUnique = true
+        }
     }
+
 
     const invoice = await prisma.invoice.create({
         data: {
@@ -201,37 +216,104 @@ export async function generateQuotationFromWBP(
     })
 
     // 3. Update Existing Draft Invoice to Official Quote (SENT)
-    // Robustness: Try to find the existing PROVISIONAL invoice created at SOW stage
+    // Robustness: Try to find the existing PROVISIONAL invoice created at SOW stage.
+    // Exclude REJECTED, CANCELLED, or ACCEPTED quotes so we do not reuse or overwrite them.
     let quote = await prisma.invoice.findFirst({
-        where: { wbpId: wbpId }
+        where: { 
+            wbpId: wbpId,
+            status: { notIn: ['REJECTED', 'CANCELLED', 'ACCEPTED'] }
+        }
     })
-
     let finalNumber = quote?.number || 0;
+    let suggestedQuoteNumber = quote?.quoteNumber || "";
+
+    if (!quote) {
+        // Generate new sequential number as the previous one was rejected/cancelled/accepted
+        const year = new Date().getFullYear()
+        const client = wbp.project.client
+        const codePrefix = client.codePrefix
+
+        let isUnique = false
+        while (!isUnique) {
+            if (codePrefix) {
+                const updatedClient = await prisma.client.update({
+                    where: { id: client.id },
+                    data: { lastQuoteNumber: { increment: 1 } }
+                })
+                finalNumber = updatedClient.lastQuoteNumber
+                suggestedQuoteNumber = `${codePrefix}-Q-${year}-${finalNumber.toString().padStart(3, '0')}`
+            } else {
+                const settings = await prisma.companySettings.update({
+                    where: { companyId: wbp.project.companyId },
+                    data: { lastQuoteNumber: { increment: 1 } }
+                })
+                finalNumber = settings.lastQuoteNumber
+                suggestedQuoteNumber = `Q-${year}-${finalNumber.toString().padStart(3, '0')}`
+            }
+
+            const existing = await prisma.invoice.findFirst({
+                where: {
+                    companyId: wbp.project.companyId,
+                    quoteNumber: suggestedQuoteNumber,
+                    type: 'QUOTE'
+                }
+            })
+            if (!existing) {
+                isUnique = true
+            }
+        }
+    }
+
     const manualQuoteNumber = options?.quoteNumber;
 
     if (manualQuoteNumber) {
+        // Check uniqueness of manual number
+        const existing = await prisma.invoice.findFirst({
+            where: {
+                companyId: wbp.project.companyId,
+                quoteNumber: manualQuoteNumber,
+                id: quote ? { not: quote.id } : undefined,
+                type: 'QUOTE'
+            }
+        })
+        if (existing) {
+            throw new Error(`Quotation number ${manualQuoteNumber} has already been used. Please use a new number.`)
+        }
+
         // Parse numeric suffix to sync system sequence if manually entered
         const match = manualQuoteNumber.match(/(\d+)$/);
         if (match) {
             const manualSeq = parseInt(match[1]);
             finalNumber = manualSeq;
 
-            // Always sync client sequence if client has codePrefix, otherwise company settings
+            // Only sync lastQuoteNumber forward; never allow it to go backward to prevent duplicate numbers
             if (wbp.project.client.codePrefix) {
-                await prisma.client.update({
+                const currentClient = await prisma.client.findUnique({
                     where: { id: wbp.project.clientId },
-                    data: { lastQuoteNumber: manualSeq }
+                    select: { lastQuoteNumber: true }
                 });
+                if (!currentClient || manualSeq > currentClient.lastQuoteNumber) {
+                    await prisma.client.update({
+                        where: { id: wbp.project.clientId },
+                        data: { lastQuoteNumber: manualSeq }
+                    });
+                }
             } else {
-                await prisma.companySettings.update({
+                const currentSettings = await prisma.companySettings.findUnique({
                     where: { companyId: wbp.project.companyId },
-                    data: { lastQuoteNumber: manualSeq }
+                    select: { lastQuoteNumber: true }
                 });
+                if (!currentSettings || manualSeq > currentSettings.lastQuoteNumber) {
+                    await prisma.companySettings.update({
+                        where: { companyId: wbp.project.companyId },
+                        data: { lastQuoteNumber: manualSeq }
+                    });
+                }
             }
         }
     }
 
-    const provisionalNumber = wbp.quoteNumber; // e.g. Q-123
+    const provisionalNumber = options?.quoteNumber || suggestedQuoteNumber || wbp.quoteNumber; // e.g. Q-123
 
     if (quote) {
         // Update the existing reservation
@@ -282,7 +364,7 @@ export async function generateQuotationFromWBP(
                 total,
                 number: finalNumber,
                 site: options?.site || wbp.site,
-                quoteNumber: options?.quoteNumber,
+                quoteNumber: options?.quoteNumber || suggestedQuoteNumber,
                 reference: options?.reference,
                 notes: options?.notes,
                 contactId: options?.contactId || null,
@@ -304,10 +386,10 @@ export async function generateQuotationFromWBP(
     }
 
     // Sync back to WBP so the projects page (which might list WBP records) stays accurate
-    if (options?.quoteNumber) {
+    if (options?.quoteNumber || suggestedQuoteNumber) {
         await prisma.workBreakdownPricing.update({
             where: { id: wbpId },
-            data: { quoteNumber: options.quoteNumber }
+            data: { quoteNumber: options?.quoteNumber || suggestedQuoteNumber }
         })
     }
 
@@ -352,36 +434,49 @@ export async function approveQuote(quoteId: string) {
 
     const client = quote.client;
     const codePrefix = client.codePrefix;
-    let nextInvoiceNumber: number;
+    let nextInvoiceNumber = 0;
+    const year = new Date().getFullYear();
+    let formattedInvoiceNumber = "";
 
     // 1. Get the next invoice number based on client prefix or settings
-    if (codePrefix) {
-        const lastInvoice = await prisma.invoice.findFirst({
-            where: { companyId: quote.companyId, clientId: quote.clientId, type: 'INVOICE' },
-            orderBy: { number: 'desc' }
-        });
-        nextInvoiceNumber = Math.max(client.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
-        await prisma.client.update({
-            where: { id: quote.clientId },
-            data: { lastInvoiceNumber: nextInvoiceNumber }
-        });
-    } else {
-        const lastInvoice = await prisma.invoice.findFirst({
-            where: { companyId: quote.companyId, type: 'INVOICE' },
-            orderBy: { number: 'desc' }
-        });
-        const settings = await prisma.companySettings.findUnique({ where: { companyId: quote.companyId } });
-        nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
-        await prisma.companySettings.update({
-            where: { companyId: quote.companyId },
-            data: { lastInvoiceNumber: nextInvoiceNumber }
-        });
-    }
+    let isUnique = false;
+    while (!isUnique) {
+        if (codePrefix) {
+            const lastInvoice = await prisma.invoice.findFirst({
+                where: { companyId: quote.companyId, clientId: quote.clientId, type: 'INVOICE' },
+                orderBy: { number: 'desc' }
+            });
+            nextInvoiceNumber = Math.max(client.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+            await prisma.client.update({
+                where: { id: quote.clientId },
+                data: { lastInvoiceNumber: nextInvoiceNumber }
+            });
+            formattedInvoiceNumber = `${codePrefix}-INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+        } else {
+            const lastInvoice = await prisma.invoice.findFirst({
+                where: { companyId: quote.companyId, type: 'INVOICE' },
+                orderBy: { number: 'desc' }
+            });
+            const settings = await prisma.companySettings.findUnique({ where: { companyId: quote.companyId } });
+            nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+            await prisma.companySettings.update({
+                where: { companyId: quote.companyId },
+                data: { lastInvoiceNumber: nextInvoiceNumber }
+            });
+            formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+        }
 
-    const year = new Date().getFullYear();
-    const formattedInvoiceNumber = codePrefix 
-        ? `${codePrefix}-INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`
-        : `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+        const existing = await prisma.invoice.findFirst({
+            where: {
+                companyId: quote.companyId,
+                quoteNumber: formattedInvoiceNumber,
+                type: 'INVOICE'
+            }
+        });
+        if (!existing) {
+            isUnique = true;
+        }
+    }
 
     // 3. Create NEW separate Invoice record
     const invoice = await prisma.invoice.create({
@@ -411,7 +506,7 @@ export async function approveQuote(quoteId: string) {
                     unit: "UNIT",
                     unitPrice: quote.subtotal,
                     total: quote.subtotal,
-                    notes: `Reference Quote: ${quote.quoteNumber}`
+                    notes: null
                 }]
             }
         }

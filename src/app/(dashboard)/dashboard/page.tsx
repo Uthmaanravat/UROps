@@ -1,12 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { ensureAuth } from "@/lib/auth-actions";
 import { DashboardClient } from "@/components/dashboard/DashboardClient";
+import { DroneDashboardClient } from "@/components/dashboard/DroneDashboardClient";
+import { getCompanySettings } from "../settings/actions";
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
     try {
         const companyId = await ensureAuth();
+        
+        // Standard Maintenance Command Center always rendered at /dashboard
         
         const [
             clientCount,

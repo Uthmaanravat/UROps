@@ -1,5 +1,71 @@
 import jsPDF from "jspdf";
 
+export async function getTransformedLogoDataUrl(
+    logoUrl: string,
+    layoutPreferences?: {
+        logoSize?: number;
+        logoScale?: number;
+        logoTranslateX?: number;
+        logoTranslateY?: number;
+        logoWidthFactor?: number;
+    }
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
+    try {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.src = logoUrl;
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+        });
+
+        const originalWidth = img.naturalWidth;
+        const originalHeight = img.naturalHeight;
+        if (!originalWidth || !originalHeight) return null;
+
+        const logoScale = layoutPreferences?.logoScale ?? 1.0;
+        const logoTranslateX = layoutPreferences?.logoTranslateX ?? 0;
+        const logoTranslateY = layoutPreferences?.logoTranslateY ?? 0;
+        const logoSizePx = layoutPreferences?.logoSize ?? 80;
+        const logoWidthFactor = layoutPreferences?.logoWidthFactor ?? 1.0;
+
+        if (logoScale === 1.0 && logoTranslateX === 0 && logoTranslateY === 0 && logoWidthFactor === 1.0) {
+            return { dataUrl: logoUrl, width: originalWidth, height: originalHeight };
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = originalWidth * logoWidthFactor;
+        canvas.height = originalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+
+        ctx.fillStyle = 'rgba(0,0,0,0)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Center transform operations:
+        // 1. Move to canvas center
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        
+        // 2. Apply scale
+        ctx.scale(logoScale, logoScale);
+        
+        // 3. Apply translation
+        const scaleFactor = originalHeight / logoSizePx;
+        const tx = logoTranslateX * scaleFactor;
+        const ty = logoTranslateY * scaleFactor;
+        ctx.translate(tx, ty);
+
+        // 4. Draw the image centered
+        ctx.drawImage(img, -originalWidth / 2, -originalHeight / 2, originalWidth, originalHeight);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        return { dataUrl, width: canvas.width, height: canvas.height };
+    } catch (e) {
+        console.error("Error transforming logo image for PDF", e);
+        return null;
+    }
+}
+
 export async function drawPdfHeader(doc: jsPDF, company: any, title: string, numberLabel: string, badge?: string) {
     // 1. Branding Bars
     // Top-most solid Navy bar (8mm)
@@ -11,34 +77,78 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
     doc.rect(0, 8, 210, 2, 'F');
 
     // Logo & Company Name (Left)
+    let logoWidthMm = 25;
+    let logoHeightMm = 25;
+
+    // Apply logo container horizontal shift (1px = 0.264583mm)
+    const logoContainerTranslateXMm = (company.layoutPreferences?.logoContainerTranslateX ?? 0) * 0.264583;
+    const logoStartX = 14 + logoContainerTranslateXMm;
+
     if (company.logoUrl) {
         try {
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-            img.src = company.logoUrl;
-            await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = reject;
-            });
-            const ext = company.logoUrl.split('.').pop()?.toUpperCase() || 'PNG';
-            doc.addImage(img, ext, 14, 16, 25, 25, undefined, 'FAST');
-        } catch (err) { console.warn(err); }
+            const transformedResult = await getTransformedLogoDataUrl(company.logoUrl, company.layoutPreferences);
+            if (transformedResult) {
+                const { dataUrl, width, height } = transformedResult;
+                const logoSizePx = company.layoutPreferences?.logoSize || 80;
+                logoHeightMm = logoSizePx * 0.264583;
+                const aspectRatio = width / height;
+                
+                const maxLogoWidthMm = 100;
+                logoWidthMm = logoHeightMm * aspectRatio;
+                if (logoWidthMm > maxLogoWidthMm) {
+                    logoWidthMm = maxLogoWidthMm;
+                    logoHeightMm = logoWidthMm / aspectRatio;
+                }
+                
+                doc.addImage(dataUrl, 'PNG', logoStartX, 16, logoWidthMm, logoHeightMm, undefined, 'FAST');
+            } else {
+                // Fallback to normal rendering if transform fails
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.src = company.logoUrl;
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                });
+                const ext = company.logoUrl.split('.').pop()?.toUpperCase() || 'PNG';
+                
+                const logoSizePx = company.layoutPreferences?.logoSize || 80;
+                logoHeightMm = logoSizePx * 0.264583;
+                const aspectRatio = img.width / img.height;
+                const logoWidthFactor = company.layoutPreferences?.logoWidthFactor ?? 1.0;
+                
+                const maxLogoWidthMm = 100;
+                logoWidthMm = logoHeightMm * aspectRatio * logoWidthFactor;
+                if (logoWidthMm > maxLogoWidthMm) {
+                    logoWidthMm = maxLogoWidthMm;
+                    logoHeightMm = logoWidthMm / (aspectRatio * logoWidthFactor);
+                }
+                
+                doc.addImage(img, ext, logoStartX, 16, logoWidthMm, logoHeightMm, undefined, 'FAST');
+            }
+        } catch (err) { console.warn("Failed to add logo", err); }
     } else {
         // Fallback logo box
         doc.setFillColor(163, 230, 53);
-        doc.roundedRect(14, 16, 20, 20, 3, 3, 'F');
+        doc.roundedRect(logoStartX, 16, 20, 20, 3, 3, 'F');
         doc.setTextColor(15, 23, 42);
         doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
-        doc.text("LR", 24, 29, { align: 'center' });
+        doc.text("LR", logoStartX + 10, 29, { align: 'center' });
+        logoWidthMm = 20;
     }
 
-    const nameX = company.logoUrl ? 44 : 38;
+    const nameX = logoStartX + logoWidthMm + 5;
     
+    // Apply horizontal & vertical shifts for business name positioning (1px = 0.264583mm)
+    const nameXTranslate = (company.layoutPreferences?.businessNameTranslateX ?? 0) * 0.264583;
+    const nameYTranslate = (company.layoutPreferences?.businessNameTranslateY ?? 0) * 0.264583;
+    const finalNameX = nameX + nameXTranslate;
+
     doc.setTextColor(30, 41, 59); // slate-800 (#1E293B)
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
-    doc.text(company.name, nameX, 26);
+    doc.text(company.name, finalNameX, 26 + nameYTranslate);
     
     // Company Contact details below name
     doc.setTextColor(100, 116, 139); // slate-500
@@ -46,11 +156,11 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
     doc.setFont("helvetica", "normal");
     let contactY = 31.5;
     if (company.phone) {
-        doc.text(company.phone, nameX, contactY);
+        doc.text(company.phone, finalNameX, contactY + nameYTranslate);
         contactY += 4.5;
     }
     if (company.email) {
-        doc.text(company.email, nameX, contactY);
+        doc.text(company.email, finalNameX, contactY + nameYTranslate);
     }
 
     // Document Title, Number & Badge (Right)
@@ -280,29 +390,71 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     doc.rect(0, 8, 210, 2, 'F');
 
     // Logo
+    let logoWidthMm = 25;
+    let logoHeightMm = 25;
+
+    // Apply logo container horizontal shift (1px = 0.264583mm)
+    const logoContainerTranslateXMm = (company.layoutPreferences?.logoContainerTranslateX ?? 0) * 0.264583;
+    const logoStartX = 14 + logoContainerTranslateXMm;
+
     if (company.logoUrl) {
         try {
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-            img.src = company.logoUrl;
-            await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
-            const ext = company.logoUrl.split('.').pop()?.toUpperCase() || 'PNG';
-            doc.addImage(img, ext, 14, 16, 25, 25, undefined, 'FAST');
-        } catch (err) { console.warn(err); }
+            const transformedResult = await getTransformedLogoDataUrl(company.logoUrl, company.layoutPreferences);
+            if (transformedResult) {
+                const { dataUrl, width, height } = transformedResult;
+                const logoSizePx = company.layoutPreferences?.logoSize || 80;
+                logoHeightMm = logoSizePx * 0.264583;
+                const aspectRatio = width / height;
+                
+                const maxLogoWidthMm = 100;
+                logoWidthMm = logoHeightMm * aspectRatio;
+                if (logoWidthMm > maxLogoWidthMm) {
+                    logoWidthMm = maxLogoWidthMm;
+                    logoHeightMm = logoWidthMm / aspectRatio;
+                }
+                
+                doc.addImage(dataUrl, 'PNG', logoStartX, 16, logoWidthMm, logoHeightMm, undefined, 'FAST');
+            } else {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.src = company.logoUrl;
+                await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
+                const ext = company.logoUrl.split('.').pop()?.toUpperCase() || 'PNG';
+                
+                const logoSizePx = company.layoutPreferences?.logoSize || 80;
+                logoHeightMm = logoSizePx * 0.264583;
+                const aspectRatio = img.width / img.height;
+                const logoWidthFactor = company.layoutPreferences?.logoWidthFactor ?? 1.0;
+                
+                const maxLogoWidthMm = 100;
+                logoWidthMm = logoHeightMm * aspectRatio * logoWidthFactor;
+                if (logoWidthMm > maxLogoWidthMm) {
+                    logoWidthMm = maxLogoWidthMm;
+                    logoHeightMm = logoWidthMm / (aspectRatio * logoWidthFactor);
+                }
+                
+                doc.addImage(img, ext, logoStartX, 16, logoWidthMm, logoHeightMm, undefined, 'FAST');
+            }
+        } catch (err) { console.warn("Failed to add report logo", err); }
     }
 
-    const nameX = company.logoUrl ? 44 : 14;
+    const nameX = logoStartX + logoWidthMm + 5;
     
+    // Apply horizontal & vertical shifts for business name positioning (1px = 0.264583mm)
+    const nameXTranslate = (company.layoutPreferences?.businessNameTranslateX ?? 0) * 0.264583;
+    const nameYTranslate = (company.layoutPreferences?.businessNameTranslateY ?? 0) * 0.264583;
+    const finalNameX = nameX + nameXTranslate;
+
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
-    doc.text(company.name, nameX, 26);
+    doc.text(company.name, finalNameX, 26 + nameYTranslate);
     
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     if (company.slogan) {
-        doc.text(company.slogan.toUpperCase(), nameX, 32);
+        doc.text(company.slogan.toUpperCase(), finalNameX, 32 + nameYTranslate);
     }
 
     // Right side - just "REPORT"

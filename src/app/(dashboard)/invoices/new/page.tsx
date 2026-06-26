@@ -23,7 +23,7 @@ export default async function NewQuotePage({
     const aiEnabled = settings?.aiEnabled ?? true;
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-7xl mx-auto space-y-6">
             <h1 className="text-2xl font-bold">Create New Quote</h1>
             <QuoteForm
                 clients={clients}

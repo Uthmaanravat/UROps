@@ -46,7 +46,8 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
         phone: settings?.phone || "082 448 7490",
         logoUrl: settings?.logoUrl || "",
         slogan: settings?.slogan || "",
-        vatNumber: settings?.taxId || "" // Fixed mapping from schema taxId
+        vatNumber: settings?.taxId || "", // Fixed mapping from schema taxId
+        layoutPreferences: settings?.layoutPreferences
     }
 
     const serializedReport = JSON.parse(JSON.stringify(report));

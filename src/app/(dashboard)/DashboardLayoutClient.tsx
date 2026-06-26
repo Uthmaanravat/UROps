@@ -69,7 +69,7 @@ export default function DashboardLayoutClient({
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
-                    <Sidebar role={user.role} />
+                    <Sidebar role={user.role} settings={settings} />
                 </div>
                 <div className="border-t border-white/5 pt-6 space-y-4">
                     <div className="flex items-center gap-3 px-2">
@@ -190,7 +190,7 @@ export default function DashboardLayoutClient({
                     </Button>
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
-                    <Sidebar role={user.role} onItemClick={() => setIsMobileMenuOpen(false)} />
+                    <Sidebar role={user.role} settings={settings} onItemClick={() => setIsMobileMenuOpen(false)} />
                 </div>
                 <div className="p-4 border-t bg-white/[0.02] space-y-4">
                     <button

@@ -24,7 +24,7 @@ export async function createInvoiceAction(data: {
 }) {
     const companyId = await ensureAuth()
     const year = new Date().getFullYear();
-    let nextNumber: number;
+    let nextNumber = 0;
     let formattedQuoteNumber = data.quoteNumber;
     const isInvoice = data.type === 'INVOICE';
     
@@ -44,25 +44,58 @@ export async function createInvoiceAction(data: {
             const match = manualNumber.match(/(\d+)$/);
             if (match) {
                 const manualSeq = parseInt(match[1]);
-                await prisma.client.update({
-                    where: { id: data.clientId },
-                    data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
+                const currentClient = await prisma.client.findFirst({
+                    where: { id: data.clientId, companyId }
                 });
+                const currentSeq = isInvoice ? (currentClient?.lastInvoiceNumber || 0) : (currentClient?.lastQuoteNumber || 0);
+                if (manualSeq > currentSeq) {
+                    await prisma.client.update({
+                        where: { id: data.clientId },
+                        data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
+                    });
+                }
                 nextNumber = manualSeq;
             } else {
                 nextNumber = (isInvoice ? (clientObj.lastInvoiceNumber || 0) : (clientObj.lastQuoteNumber || 0)) + 1;
             }
-        } else {
-            const updatedClient = await prisma.client.update({
-                where: { id: data.clientId },
-                data: isInvoice
-                    ? { lastInvoiceNumber: { increment: 1 } }
-                    : { lastQuoteNumber: { increment: 1 } }
+            formattedQuoteNumber = data.quoteNumber;
+
+            // Check uniqueness of manual number
+            const existing = await prisma.invoice.findFirst({
+                where: {
+                    companyId,
+                    quoteNumber: formattedQuoteNumber,
+                    type: data.type || 'QUOTE'
+                }
             });
-            nextNumber = isInvoice ? updatedClient.lastInvoiceNumber : updatedClient.lastQuoteNumber;
-            formattedQuoteNumber = isInvoice
-                ? `${codePrefix}-INV-${year}-${nextNumber.toString().padStart(3, '0')}`
-                : `${codePrefix}-Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+            if (existing) {
+                throw new Error(`${data.type || 'QUOTE'} number ${formattedQuoteNumber} has already been used. Please use a new number.`);
+            }
+        } else {
+            let isUnique = false;
+            while (!isUnique) {
+                const updatedClient = await prisma.client.update({
+                    where: { id: data.clientId },
+                    data: isInvoice
+                        ? { lastInvoiceNumber: { increment: 1 } }
+                        : { lastQuoteNumber: { increment: 1 } }
+                });
+                nextNumber = isInvoice ? updatedClient.lastInvoiceNumber : updatedClient.lastQuoteNumber;
+                formattedQuoteNumber = isInvoice
+                    ? `${codePrefix}-INV-${year}-${nextNumber.toString().padStart(3, '0')}`
+                    : `${codePrefix}-Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+
+                const existing = await prisma.invoice.findFirst({
+                    where: {
+                        companyId,
+                        quoteNumber: formattedQuoteNumber,
+                        type: data.type || 'QUOTE'
+                    }
+                });
+                if (!existing) {
+                    isUnique = true;
+                }
+            }
         }
     } else {
         if (data.quoteNumber) {
@@ -70,28 +103,57 @@ export async function createInvoiceAction(data: {
             const match = manualNumber.match(/(\d+)$/);
             if (match) {
                 const manualSeq = parseInt(match[1]);
-                await prisma.companySettings.update({
-                    where: { companyId },
-                    data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
-                });
+                const currentSeq = isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0);
+                if (manualSeq > currentSeq) {
+                    await prisma.companySettings.update({
+                        where: { companyId },
+                        data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
+                    });
+                }
                 nextNumber = manualSeq;
             } else {
                 nextNumber = (isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0)) + 1;
             }
-        } else {
-            const updatedSettings = await prisma.companySettings.update({
-                where: { companyId },
-                data: isInvoice
-                    ? { lastInvoiceNumber: { increment: 1 } }
-                    : { lastQuoteNumber: { increment: 1 } }
+            formattedQuoteNumber = data.quoteNumber;
+
+            // Check uniqueness of manual number
+            const existing = await prisma.invoice.findFirst({
+                where: {
+                    companyId,
+                    quoteNumber: formattedQuoteNumber,
+                    type: data.type || 'QUOTE'
+                }
             });
-            nextNumber = isInvoice ? updatedSettings.lastInvoiceNumber : updatedSettings.lastQuoteNumber;
-            formattedQuoteNumber = isInvoice
-                ? `INV-${year}-${nextNumber.toString().padStart(3, '0')}`
-                : `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+            if (existing) {
+                throw new Error(`${data.type || 'QUOTE'} number ${formattedQuoteNumber} has already been used. Please use a new number.`);
+            }
+        } else {
+            let isUnique = false;
+            while (!isUnique) {
+                const updatedSettings = await prisma.companySettings.update({
+                    where: { companyId },
+                    data: isInvoice
+                        ? { lastInvoiceNumber: { increment: 1 } }
+                        : { lastQuoteNumber: { increment: 1 } }
+                });
+                nextNumber = isInvoice ? updatedSettings.lastInvoiceNumber : updatedSettings.lastQuoteNumber;
+                formattedQuoteNumber = isInvoice
+                    ? `INV-${year}-${nextNumber.toString().padStart(3, '0')}`
+                    : `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
+
+                const existing = await prisma.invoice.findFirst({
+                    where: {
+                        companyId,
+                        quoteNumber: formattedQuoteNumber,
+                        type: data.type || 'QUOTE'
+                    }
+                });
+                if (!existing) {
+                    isUnique = true;
+                }
+            }
         }
     }
-
     let effectiveProjectId = data.projectId;
 
     // Always create a project for new quotes if not already linked
@@ -271,36 +333,49 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
 
     const client = quote.client;
     const codePrefix = client.codePrefix;
-    let nextInvoiceNumber: number;
+    let nextInvoiceNumber = 0;
+    const year = new Date().getFullYear();
+    let formattedInvoiceNumber = "";
 
     // 2. Get the next invoice number based on client prefix or settings
-    if (codePrefix) {
-        const lastInvoice = await prisma.invoice.findFirst({
-            where: { companyId, clientId: quote.clientId, type: 'INVOICE' },
-            orderBy: { number: 'desc' }
-        });
-        nextInvoiceNumber = Math.max(client.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
-        await prisma.client.update({
-            where: { id: quote.clientId },
-            data: { lastInvoiceNumber: nextInvoiceNumber }
-        });
-    } else {
-        const lastInvoice = await prisma.invoice.findFirst({
-            where: { companyId, type: 'INVOICE' },
-            orderBy: { number: 'desc' }
-        });
-        const settings = await prisma.companySettings.findUnique({ where: { companyId } });
-        nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
-        await prisma.companySettings.update({
-            where: { companyId },
-            data: { lastInvoiceNumber: nextInvoiceNumber }
-        });
-    }
+    let isUnique = false;
+    while (!isUnique) {
+        if (codePrefix) {
+            const lastInvoice = await prisma.invoice.findFirst({
+                where: { companyId, clientId: quote.clientId, type: 'INVOICE' },
+                orderBy: { number: 'desc' }
+            });
+            nextInvoiceNumber = Math.max(client.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+            await prisma.client.update({
+                where: { id: quote.clientId },
+                data: { lastInvoiceNumber: nextInvoiceNumber }
+            });
+            formattedInvoiceNumber = `${codePrefix}-INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+        } else {
+            const lastInvoice = await prisma.invoice.findFirst({
+                where: { companyId, type: 'INVOICE' },
+                orderBy: { number: 'desc' }
+            });
+            const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+            nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+            await prisma.companySettings.update({
+                where: { companyId },
+                data: { lastInvoiceNumber: nextInvoiceNumber }
+            });
+            formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+        }
 
-    const year = new Date().getFullYear();
-    const formattedInvoiceNumber = codePrefix 
-        ? `${codePrefix}-INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`
-        : `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+        const existing = await prisma.invoice.findFirst({
+            where: {
+                companyId,
+                quoteNumber: formattedInvoiceNumber,
+                type: 'INVOICE'
+            }
+        });
+        if (!existing) {
+            isUnique = true;
+        }
+    }
 
     // 4. Create the NEW separate Invoice record
     const invoice = await prisma.invoice.create({
@@ -332,7 +407,7 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
                     unit: "UNIT",
                     unitPrice: quote.subtotal,
                     total: quote.subtotal,
-                    notes: `Reference Quote: ${quote.quoteNumber}`
+                    notes: null
                 }]
             }
         }

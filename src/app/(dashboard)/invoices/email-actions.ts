@@ -3,7 +3,7 @@
 import { sendRealEmail } from "@/lib/email"
 import { prisma } from "@/lib/prisma"
 
-export async function sendInvoiceEmail(invoiceId: string, recipients?: string[]) {
+export async function sendInvoiceEmail(invoiceId: string, recipients?: string[], customBody?: string) {
     try {
         const invoice = await prisma.invoice.findUnique({
             where: { id: invoiceId },
@@ -22,7 +22,7 @@ export async function sendInvoiceEmail(invoiceId: string, recipients?: string[])
 
         const formattedNumber = invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
         const subject = `${invoice.type} ${formattedNumber} from UROps`
-        const body = `Hi ${invoice.client.name},
+        const body = customBody || `Hi ${invoice.client.name},
 
 Please find attached your ${invoice.type.toLowerCase()} ${formattedNumber}.
 Total Amount: R${invoice.total.toFixed(2)}

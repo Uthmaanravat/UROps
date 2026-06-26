@@ -54,7 +54,7 @@ const navigation = [
     }
 ];
 
-export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onItemClick?: () => void }) {
+export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANAGER', settings?: any, onItemClick?: () => void }) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const type = searchParams ? searchParams.get("type") : null;
@@ -64,9 +64,27 @@ export function Sidebar({ role, onItemClick }: { role: 'ADMIN' | 'MANAGER', onIt
         setOpenGroups(prev => prev.includes(title) ? prev.filter(g => g !== title) : [...prev, title]);
     }
 
+    const isDroneEnabled = settings?.layoutPreferences?.dashboardView === "drone";
+
+    const dynamicNavigation = navigation.map(group => {
+        if (group.title === "Dashboard" && isDroneEnabled) {
+            const hasDroneItem = group.items.some(item => item.title === "Drone Operations");
+            if (!hasDroneItem) {
+                return {
+                    ...group,
+                    items: [
+                        ...group.items,
+                        { title: "Drone Operations", href: "/drone" }
+                    ]
+                };
+            }
+        }
+        return group;
+    });
+
     return (
         <div className="px-3 py-4 space-y-6">
-            {navigation.map((group) => {
+            {dynamicNavigation.map((group) => {
                 if (group.roles && !group.roles.includes(role)) return null;
 
                 const GroupIcon = group.icon;
