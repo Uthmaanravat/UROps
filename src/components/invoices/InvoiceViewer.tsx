@@ -474,9 +474,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         doc.setFontSize(11);
         doc.setTextColor(30, 41, 59);
         let fromY = gridY + 6;
-        doc.text(company.name, 196, fromY, { align: 'right' });
-        
-        fromY += 5;
+        const companyNameLines = doc.splitTextToSize(company.name, 55);
+        doc.text(companyNameLines, 196, fromY, { align: 'right' });
+        fromY += (companyNameLines.length * 4.5) + 0.5;
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
         doc.setTextColor(100, 116, 139);

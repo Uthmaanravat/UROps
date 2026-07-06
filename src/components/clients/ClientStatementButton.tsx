@@ -127,12 +127,13 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             
             doc.setFontSize(11);
             doc.setTextColor(30, 41, 59);
-            doc.text(company.name, 196, gridY + 6, { align: 'right' });
+            const companyNameLines = doc.splitTextToSize(company.name, 50);
+            doc.text(companyNameLines, 196, gridY + 6, { align: 'right' });
             
             doc.setFontSize(9);
             doc.setTextColor(100, 116, 139);
             doc.setFont("helvetica", "normal");
-            let currentFromY = gridY + 11;
+            let currentFromY = gridY + 6 + (companyNameLines.length * 4.5) + 0.5;
             if (company.vatNumber) {
                 doc.text(`VAT: ${company.vatNumber}`, 196, currentFromY, { align: 'right' });
                 currentFromY += 4.5;

@@ -146,21 +146,39 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
     const finalNameX = nameX + nameXTranslate;
 
     doc.setTextColor(30, 41, 59); // slate-800 (#1E293B)
-    doc.setFontSize(22);
+    
+    // Dynamically adjust font size for company name if it is long to prevent overlapping with document title
+    let nameFontSize = 22;
+    if (company.name.length > 30) {
+        nameFontSize = 16;
+    }
+    if (company.name.length > 40) {
+        nameFontSize = 14;
+    }
+    doc.setFontSize(nameFontSize);
     doc.setFont("helvetica", "bold");
-    doc.text(company.name, finalNameX, 26 + nameYTranslate);
+    
+    // Limit width and split text (reserve 45mm on the right for document title/metadata)
+    const maxNameWidth = 196 - finalNameX - 45;
+    const nameLines = doc.splitTextToSize(company.name, maxNameWidth);
+    doc.text(nameLines, finalNameX, 26 + nameYTranslate);
     
     // Company Contact details below name
     doc.setTextColor(100, 116, 139); // slate-500
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    let contactY = 31.5;
+    
+    // Calculate dynamic starting Y for contact info based on name lines height
+    const lineSpacing = nameFontSize * 0.352778; // convert pt to mm (approx 0.35)
+    let contactY = 26 + (nameLines.length * lineSpacing) + 1;
+
     if (company.phone) {
         doc.text(company.phone, finalNameX, contactY + nameYTranslate);
         contactY += 4.5;
     }
     if (company.email) {
         doc.text(company.email, finalNameX, contactY + nameYTranslate);
+        contactY += 4.5;
     }
 
     // Document Title, Number & Badge (Right)
@@ -183,16 +201,28 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
         doc.text(`# ${numberLabel}`, 196, 34, { align: 'right' });
     }
 
+    // Calculate dynamic divider line Y position based on logo bottom and contact details bottom
+    let dividerY = 42; // default min Y
+    const logoEndY = 16 + logoHeightMm;
+    if (logoEndY > dividerY) {
+        dividerY = logoEndY;
+    }
+    if (contactY + nameYTranslate > dividerY) {
+        dividerY = contactY + nameYTranslate;
+    }
+    // Add small margin below the lowest element
+    dividerY += 5;
+
     // Divider Line
     doc.setDrawColor(226, 232, 240); // slate-200
     doc.setLineWidth(0.5);
-    doc.line(14, 42, 196, 42);
+    doc.line(14, dividerY, 196, dividerY);
 
     // Reset styles
     doc.setTextColor(30, 41, 59);
     doc.setFont("helvetica", "normal");
     
-    return 48; // Return next Y position
+    return dividerY + 6; // Return next Y position
 }
 
 // Helper: collect all images for an item (supports both imageUrl and imageUrls)
