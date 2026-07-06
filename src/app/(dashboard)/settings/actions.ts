@@ -23,6 +23,7 @@ export async function updateCompanySettings(data: {
     phone?: string
     email?: string
     website?: string
+    slogan?: string
     logoUrl?: string
     taxId?: string
     bankDetails?: string
@@ -44,7 +45,7 @@ export async function updateCompanySettings(data: {
         })
 
         revalidatePath("/")
-        return { success: true, data: settings }
+        return { success: true }
     } catch (error) {
         console.error("Error updating company settings:", error)
         return { success: false, error: "Failed to update settings" }

@@ -75,16 +75,34 @@ function trimImageMargins(img: HTMLImageElement): string {
         const croppedWidth = maxX - minX + 1;
         const croppedHeight = maxY - minY + 1;
 
+        // Downscale logo to prevent 413 Payload Too Large error in Next.js Server Actions
+        const maxDimension = 400;
+        let targetWidth = croppedWidth;
+        let targetHeight = croppedHeight;
+
+        if (croppedWidth > maxDimension || croppedHeight > maxDimension) {
+            if (croppedWidth > croppedHeight) {
+                targetWidth = maxDimension;
+                targetHeight = Math.round((croppedHeight * maxDimension) / croppedWidth);
+            } else {
+                targetHeight = maxDimension;
+                targetWidth = Math.round((croppedWidth * maxDimension) / croppedHeight);
+            }
+        }
+
         const croppedCanvas = document.createElement('canvas');
-        croppedCanvas.width = croppedWidth;
-        croppedCanvas.height = croppedHeight;
+        croppedCanvas.width = targetWidth;
+        croppedCanvas.height = targetHeight;
         const croppedCtx = croppedCanvas.getContext('2d');
         if (!croppedCtx) return img.src;
+
+        croppedCtx.imageSmoothingEnabled = true;
+        croppedCtx.imageSmoothingQuality = 'high';
 
         croppedCtx.drawImage(
             canvas,
             minX, minY, croppedWidth, croppedHeight,
-            0, 0, croppedWidth, croppedHeight
+            0, 0, targetWidth, targetHeight
         );
 
         return croppedCanvas.toDataURL('image/png');
@@ -92,6 +110,55 @@ function trimImageMargins(img: HTMLImageElement): string {
         console.warn("Could not crop image margins", err);
         return img.src;
     }
+}
+
+function downscaleBase64Image(base64Str: string): Promise<string> {
+    return new Promise((resolve) => {
+        if (!base64Str || !base64Str.startsWith('data:image/') || base64Str.length < 100000) {
+            resolve(base64Str);
+            return;
+        }
+
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const maxDimension = 400;
+                let targetWidth = img.naturalWidth;
+                let targetHeight = img.naturalHeight;
+
+                if (targetWidth > maxDimension || targetHeight > maxDimension) {
+                    if (targetWidth > targetHeight) {
+                        targetWidth = maxDimension;
+                        targetHeight = Math.round((img.naturalHeight * maxDimension) / img.naturalWidth);
+                    } else {
+                        targetHeight = maxDimension;
+                        targetWidth = Math.round((img.naturalWidth * maxDimension) / img.naturalHeight);
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    resolve(base64Str);
+                    return;
+                }
+
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                resolve(canvas.toDataURL('image/png'));
+            } catch (e) {
+                console.error("Error downscaling on submit", e);
+                resolve(base64Str);
+            }
+        };
+        img.onerror = () => {
+            resolve(base64Str);
+        };
+        img.src = base64Str;
+    });
 }
 
 interface SettingsFormProps {
@@ -212,7 +279,16 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         e.preventDefault()
         setLoading(true)
         try {
-            const result = await updateCompanySettings(formData)
+            // Downscale logo if it is a large base64 string
+            let finalFormData = formData;
+            if (formData.logoUrl && formData.logoUrl.startsWith('data:image/') && formData.logoUrl.length > 100000) {
+                const smallLogo = await downscaleBase64Image(formData.logoUrl);
+                finalFormData = { ...formData, logoUrl: smallLogo };
+                // Also update local state so the preview is updated
+                setFormData(finalFormData);
+            }
+
+            const result = await updateCompanySettings(finalFormData)
             if (result.success) {
                 setTheme(formData.theme)
                 router.refresh()
