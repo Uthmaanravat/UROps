@@ -15,12 +15,20 @@ export default async function ProjectsPage() {
             include: {
                 client: true,
                 scopes: {
-                    include: { items: true },
+                    include: {
+                        items: {
+                            orderBy: { position: 'asc' }
+                        }
+                    },
                     orderBy: { version: 'desc' },
                     take: 1
                 },
                 workBreakdowns: {
-                    include: { items: true },
+                    include: {
+                        items: {
+                            orderBy: { position: 'asc' }
+                        }
+                    },
                     orderBy: { version: 'desc' },
                     take: 1
                 },

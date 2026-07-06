@@ -20,7 +20,9 @@ export default async function WorkBreakdownPricingPage({ params }: { params: { i
                     }
                 }
             },
-            items: true
+            items: {
+                orderBy: { position: 'asc' }
+            }
         }
     })
 

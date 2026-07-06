@@ -32,6 +32,7 @@ model Company {
   transactions   Transaction[]
   leads          Lead[]
   optOuts        OptOut[]
+  prospects      Prospect[]
 }
 
 model User {
@@ -150,6 +151,7 @@ model ScopeItem {
   quantity    Float       @default(1)
   unit        String?
   notes       String?
+  position    Int         @default(0)
   scope       ScopeOfWork @relation(fields: [scopeId], references: [id], onDelete: Cascade)
 }
 
@@ -183,6 +185,7 @@ model WorkBreakdownPricingItem {
   unitPrice   Float                @default(0)
   total       Float                @default(0)
   notes       String?
+  position    Int                  @default(0)
   wbp         WorkBreakdownPricing @relation(fields: [wbpId], references: [id], onDelete: Cascade)
 }
 
@@ -534,6 +537,44 @@ model OptOut {
   createdAt DateTime @default(now())
   companyId String
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Prospect {
+  id                   String    @id @default(uuid())
+  seedId               String? // stable id from the fable_37 seed file; null for discoveries
+  name                 String
+  location             String?
+  ownersEntity         String?
+
+  // Contact cascade (property manager -> receptionist -> switchboard)
+  propertyManagerName  String?
+  propertyManagerEmail String?
+  propertyManagerPhone String?
+  receptionistEmail    String?
+  companyMainPhone     String?
+
+  // Building details
+  category             String    @default("Niche") // Water Facing / No Gondola / Heritage / Rooftop Solar / Multiplier / Niche
+  accessMoat           String?
+  whyDronesMatter      String?
+  estimatedValue       String    @default("medium") // low / medium / high / strategic_multiplier
+
+  // Tracking
+  status               String    @default("new") // new / contacted / interested / not_interested / follow_up_pending / won / passed
+  firstContactDate     DateTime?
+  lastContactDate      DateTime?
+  nextFollowupDate     DateTime?
+  notes                String    @default("")
+  contactLog           Json? // array of {date, method, outcome, draft_sent}
+
+  source               String    @default("user_discovery") // fable_37 / user_discovery / web_research / referral
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  companyId            String
+  company              Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, seedId])
 }
 
 model RawProperty {

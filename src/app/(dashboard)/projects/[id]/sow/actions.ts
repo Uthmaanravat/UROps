@@ -15,38 +15,24 @@ export async function submitScopeAction(projectId: string, items: any[], site?: 
 export async function saveWBPDraftAction(wbpId: string, items: any[], options?: { site?: string, quoteNumber?: string, reference?: string, notes?: string, contactId?: string | null, attentionTo?: string | null }) {
     const companyId = await ensureAuth()
 
-    // Update WBP items without marking as APPROVED
-    for (const item of items) {
-        const isRealId = item.id && item.id.length > 20
+    // Clear old items to avoid orphans and preserve reordered positions
+    await prisma.workBreakdownPricingItem.deleteMany({
+        where: { wbpId }
+    })
 
-        if (isRealId) {
-            await prisma.workBreakdownPricingItem.update({
-                where: { id: item.id },
-                data: {
-                    area: item.area,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unit: item.unit,
-                    unitPrice: item.unitPrice,
-                    total: item.quantity * item.unitPrice,
-                    notes: item.notes
-                }
-            })
-        } else {
-            await prisma.workBreakdownPricingItem.create({
-                data: {
-                    wbpId,
-                    area: item.area,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unit: item.unit,
-                    unitPrice: item.unitPrice,
-                    total: item.quantity * item.unitPrice,
-                    notes: item.notes
-                }
-            })
-        }
-    }
+    await prisma.workBreakdownPricingItem.createMany({
+        data: items.map((item, idx) => ({
+            wbpId,
+            area: item.area || "",
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit || "",
+            unitPrice: item.unitPrice,
+            total: item.quantity * item.unitPrice,
+            notes: item.notes || "",
+            position: idx
+        }))
+    })
 
     await prisma.workBreakdownPricing.update({
         where: { id: wbpId, companyId },
@@ -105,12 +91,13 @@ export async function saveSOWDraftAction(projectId: string, items: any[], site?:
                 site,
                 items: {
                     deleteMany: {}, // Clear old items
-                    create: items.map(i => ({
+                    create: items.map((i, idx) => ({
                         area: i.area,
                         description: i.description,
                         quantity: i.quantity,
                         unit: i.unit,
-                        notes: i.notes
+                        notes: i.notes,
+                        position: idx
                     }))
                 }
             }
@@ -124,12 +111,13 @@ export async function saveSOWDraftAction(projectId: string, items: any[], site?:
                 status: 'DRAFT',
                 site,
                 items: {
-                    create: items.map(i => ({
+                    create: items.map((i, idx) => ({
                         area: i.area,
                         description: i.description,
                         quantity: i.quantity,
                         unit: i.unit,
-                        notes: i.notes
+                        notes: i.notes,
+                        position: idx
                     }))
                 }
             }

@@ -18,7 +18,11 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
             client: true,
             scopes: {
                 orderBy: { version: 'desc' },
-                include: { items: true },
+                include: {
+                    items: {
+                        orderBy: { position: 'asc' }
+                    }
+                },
                 take: 1
             }
         }
@@ -105,6 +109,7 @@ export default async function ProjectSOWPage({ params }: { params: { id: string 
                 <ScopeEditor
                     project={project as any}
                     initialItems={latestScope?.items.map((i: any) => ({
+                        area: i.area,
                         description: i.description,
                         quantity: i.quantity,
                         unit: i.unit,

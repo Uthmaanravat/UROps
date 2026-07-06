@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,11 +14,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { parseScopeAction } from "@/app/(dashboard)/invoices/ai-actions"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { VoiceRecorder } from "@/components/voice/VoiceRecorder"
 import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-actions"
+import { VoiceRecorder } from "@/components/voice/VoiceRecorder"
 import { Search, Book } from "lucide-react"
-import { useEffect } from "react"
 import { InfoTooltip } from "@/components/ui/InfoTooltip"
+
 
 
 interface QuoteFormProps {
@@ -45,6 +45,8 @@ interface QuoteFormProps {
 
 export function QuoteForm({ clients, projects, initialClientId, initialProjectId, initialScope, aiEnabled = true }: QuoteFormProps) {
     const router = useRouter()
+    const STORAGE_KEY = `quote-form-draft`
+    const isRestoring = useRef(false)
     const [loading, setLoading] = useState(false)
     const [scopeOpen, setScopeOpen] = useState(!!initialScope)
     const [scopeText, setScopeText] = useState(initialScope || "")
@@ -100,9 +102,69 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [catalogSearch, setCatalogSearch] = useState("")
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
 
+    // Check localStorage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem(STORAGE_KEY)
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved)
+                if (confirm("You have an unsaved session. Would you like to resume?")) {
+                    isRestoring.current = true
+                    if (parsed.clientId) setClientId(parsed.clientId)
+                    if (parsed.projectId) setProjectId(parsed.projectId)
+                    if (parsed.date) setDate(parsed.date)
+                    if (parsed.items) setItems(parsed.items)
+                    if (parsed.site) setSite(parsed.site)
+                    if (parsed.quoteNumber) setQuoteNumber(parsed.quoteNumber)
+                    if (parsed.reference) setReference(parsed.reference)
+                    if (parsed.projectName) setProjectName(parsed.projectName)
+                    if (parsed.paymentNotes) setPaymentNotes(parsed.paymentNotes)
+                    if (parsed.firstPaymentOption) setFirstPaymentOption(parsed.firstPaymentOption)
+                    if (parsed.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(parsed.customFirstPaymentPercentage)
+                    if (parsed.showPaymentNotes !== undefined) setShowPaymentNotes(parsed.showPaymentNotes)
+                    if (parsed.contactId) setContactId(parsed.contactId)
+                    if (parsed.attentionTo) setAttentionTo(parsed.attentionTo)
+                    
+                    // Allow effects to see that we are done restoring in the next tick
+                    setTimeout(() => {
+                        isRestoring.current = false
+                    }, 100)
+                } else {
+                    localStorage.removeItem(STORAGE_KEY)
+                }
+            } catch (e) {
+                console.error("Failed to parse saved session", e)
+            }
+        }
+    }, [STORAGE_KEY])
+
+    // Auto-save to localStorage
+    useEffect(() => {
+        if (items.length > 0 && !submitted && !isRestoring.current) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                clientId,
+                projectId,
+                date,
+                items,
+                site,
+                quoteNumber,
+                reference,
+                projectName,
+                paymentNotes,
+                firstPaymentOption,
+                customFirstPaymentPercentage,
+                showPaymentNotes,
+                contactId,
+                attentionTo,
+                timestamp: Date.now()
+            }))
+        }
+    }, [clientId, projectId, date, items, site, quoteNumber, reference, projectName, paymentNotes, firstPaymentOption, customFirstPaymentPercentage, showPaymentNotes, contactId, attentionTo, submitted, STORAGE_KEY])
+
     // Sync sequence number when clientId changes
     useEffect(() => {
         const loadSequence = async () => {
+            if (isRestoring.current) return;
             if (clientId) {
                 const docNumber = await getQuoteSequenceAction(clientId);
                 if (docNumber) setQuoteNumber(docNumber);
@@ -113,6 +175,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
 
     // Sync contacts when clientId changes
     useEffect(() => {
+        if (isRestoring.current) return;
         const selectedClient = clients.find(c => c.id === clientId);
         const contacts = selectedClient?.contacts || [];
         if (contacts.length > 0) {
@@ -138,6 +201,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
 
     // Sync Project Name with Reference pattern (simplified to avoid redundancy with Site field)
     useEffect(() => {
+        if (isRestoring.current) return;
         if (!isProjectNameManual) {
             setProjectName(reference);
         }
@@ -224,6 +288,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
             })
             setLastInvoiceId(invoiceId)
             setSubmitted(true)
+            localStorage.removeItem(STORAGE_KEY)
             router.refresh()
             window.scrollTo({ top: 0, behavior: 'smooth' })
         } catch (error) {
@@ -787,7 +852,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+                    <Button type="button" variant="outline" onClick={() => { localStorage.removeItem(STORAGE_KEY); router.back(); }}>Cancel</Button>
                     <Button type="submit" disabled={loading}>
                         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Save Quote

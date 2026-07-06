@@ -27,7 +27,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             scopes: {
                 orderBy: { version: 'desc' },
                 take: 1,
-                include: { items: true }
+                include: {
+                    items: {
+                        orderBy: { position: 'asc' }
+                    }
+                }
             },
             workBreakdowns: {
                 orderBy: { version: 'desc' },

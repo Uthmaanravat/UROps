@@ -327,7 +327,12 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
     // 1. Get the original quote details
     const quote = await prisma.invoice.findUnique({
         where: { id, companyId },
-        include: { items: true, client: true }
+        include: {
+            items: {
+                orderBy: { position: 'asc' }
+            },
+            client: true
+        }
     });
     if (!quote) throw new Error("Quote not found");
 

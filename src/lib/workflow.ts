@@ -75,12 +75,13 @@ export async function submitScopeOfWork(projectId: string, items: { description:
             version: 1,
             site,
             items: {
-                create: items.map(i => ({
+                create: items.map((i, idx) => ({
                     area: i.area,
                     description: i.description,
                     quantity: i.quantity,
                     unit: i.unit,
-                    notes: i.notes
+                    notes: i.notes,
+                    position: idx
                 }))
             }
         }
@@ -96,14 +97,15 @@ export async function submitScopeOfWork(projectId: string, items: { description:
             site,
             quoteNumber: suggestedQuoteNumber, // Stores "Q-2026-100" but backed by Invoice #100
             items: {
-                create: items.map(i => ({
+                create: items.map((i, idx) => ({
                     area: i.area,
                     description: i.description,
                     quantity: i.quantity,
                     unit: i.unit,
                     notes: i.notes,
                     unitPrice: 0,
-                    total: 0
+                    total: 0,
+                    position: idx
                 }))
             }
         }
@@ -162,47 +164,24 @@ export async function generateQuotationFromWBP(
     const taxAmount = subtotal * taxRate
     const total = subtotal + taxAmount
 
-    // 1. Update or Create the WB&P items with final prices
-    for (const item of items) {
-        // Only try to update if it looks like a real UUID and not a temporary client ID
-        const isRealId = item.id && item.id.length > 20; // Basic check for UUID vs temporary ID
+    // 1. Clear old WB&P items and recreate them in the new order with positions
+    await prisma.workBreakdownPricingItem.deleteMany({
+        where: { wbpId }
+    })
 
-        let existingItem = null;
-        if (isRealId) {
-            existingItem = await prisma.workBreakdownPricingItem.findUnique({
-                where: { id: item.id }
-            });
-        }
-
-        if (existingItem) {
-            await prisma.workBreakdownPricingItem.update({
-                where: { id: item.id },
-                data: {
-                    area: item.area,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unit: item.unit,
-                    unitPrice: item.unitPrice,
-                    total: item.quantity * item.unitPrice,
-                    notes: item.notes
-                }
-            })
-        } else {
-            // Logic for new items added during WB&P session or items with temporary IDs
-            await prisma.workBreakdownPricingItem.create({
-                data: {
-                    wbpId,
-                    area: item.area,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unit: item.unit,
-                    unitPrice: item.unitPrice,
-                    total: item.quantity * item.unitPrice,
-                    notes: item.notes
-                }
-            })
-        }
-    }
+    await prisma.workBreakdownPricingItem.createMany({
+        data: items.map((item, idx) => ({
+            wbpId,
+            area: item.area || "",
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit || "",
+            unitPrice: item.unitPrice,
+            total: item.quantity * item.unitPrice,
+            notes: item.notes || "",
+            position: idx
+        }))
+    })
 
     // 2. Mark WB&P as APPROVED and save notes
     await prisma.workBreakdownPricing.update({
@@ -429,7 +408,12 @@ export async function generateQuotationFromWBP(
 export async function approveQuote(quoteId: string) {
     const quote = await prisma.invoice.findUniqueOrThrow({
         where: { id: quoteId },
-        include: { items: true, client: true }
+        include: {
+            items: {
+                orderBy: { position: 'asc' }
+            },
+            client: true
+        }
     })
 
     const client = quote.client;

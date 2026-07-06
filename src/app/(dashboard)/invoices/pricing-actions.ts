@@ -62,7 +62,10 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
     }
 
     // Now update invoice totals
-    const finalItems = await prisma.invoiceItem.findMany({ where: { invoiceId } })
+    const finalItems = await prisma.invoiceItem.findMany({
+        where: { invoiceId },
+        orderBy: { position: 'asc' }
+    })
     const newSubtotal = finalItems.reduce((acc, item) => acc + item.total, 0)
     const tax = newSubtotal * 0.15
     const total = newSubtotal + tax
