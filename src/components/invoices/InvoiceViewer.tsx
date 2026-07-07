@@ -641,7 +641,23 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             }
         }
 
-        if (currentPct && currentPct > 0 && currentPct < 100) {
+        const paidAmount = invoice.payments ? invoice.payments.reduce((acc: number, p: any) => acc + p.amount, 0) : 0;
+
+        if (paidAmount > 0) {
+            currentY += 6;
+            doc.setFontSize(9.5);
+            doc.setTextColor(16, 185, 129); // Emerald-500
+            doc.setFont("helvetica", "bold");
+            doc.text(`Paid To Date:`, 140, currentY + 14);
+            doc.text(formatCurrency(paidAmount, currencySymbol), 196, currentY + 14, { align: 'right' });
+
+            currentY += 5;
+            doc.setFontSize(9.5);
+            doc.setTextColor(220, 38, 38); // Red-600
+            doc.setFont("helvetica", "bold");
+            doc.text(`Balance Outstanding:`, 140, currentY + 14);
+            doc.text(formatCurrency(total - paidAmount, currencySymbol), 196, currentY + 14, { align: 'right' });
+        } else if (currentPct && currentPct > 0 && currentPct < 100) {
             currentY += 6;
             doc.setFontSize(9.5);
             doc.setTextColor(16, 185, 129); // Emerald-500
@@ -946,7 +962,29 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 }
             }
 
-            if (currentPct && currentPct > 0 && currentPct < 100) {
+            const paidAmount = invoice.payments ? invoice.payments.reduce((acc: number, p: any) => acc + p.amount, 0) : 0;
+
+            if (paidAmount > 0) {
+                currentRow++;
+                const depRow = worksheet.getRow(currentRow);
+                depRow.getCell(6).value = `Paid To Date:`;
+                depRow.getCell(6).font = { bold: true, size: 10, color: { argb: 'FF10B981' } };
+                depRow.getCell(6).alignment = { horizontal: 'right' };
+                depRow.getCell(7).value = paidAmount;
+                depRow.getCell(7).font = { bold: true, size: 10, color: { argb: 'FF10B981' } };
+                depRow.getCell(7).numFmt = '"R"#,##0.00';
+                depRow.getCell(7).alignment = { horizontal: 'right' };
+
+                currentRow++;
+                const remRow = worksheet.getRow(currentRow);
+                remRow.getCell(6).value = `Balance Outstanding:`;
+                remRow.getCell(6).font = { bold: true, size: 10, color: { argb: 'FFDC2626' } };
+                remRow.getCell(6).alignment = { horizontal: 'right' };
+                remRow.getCell(7).value = total - paidAmount;
+                remRow.getCell(7).font = { bold: true, size: 10, color: { argb: 'FFDC2626' } };
+                remRow.getCell(7).numFmt = '"R"#,##0.00';
+                remRow.getCell(7).alignment = { horizontal: 'right' };
+            } else if (currentPct && currentPct > 0 && currentPct < 100) {
                 currentRow++;
                 const depRow = worksheet.getRow(currentRow);
                 depRow.getCell(6).value = `First Payment (${currentPct}%)`;
