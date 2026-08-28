@@ -14,13 +14,14 @@ export const dynamic = 'force-dynamic';
 export default async function InvoicesPage({
     searchParams
 }: {
-    searchParams: { q?: string; status?: string; type?: string; clientId?: string }
+    searchParams: { q?: string; status?: string; type?: string; clientId?: string; commercialStatus?: string }
 }) {
     const companyId = await ensureAuth();
     const query = searchParams.q || "";
     const statusFilter = searchParams.status || "";
     const typeFilter = searchParams.type || "";
     const clientIdFilter = searchParams.clientId || "";
+    const commercialStatusFilter = searchParams.commercialStatus || "";
     let invoices: any[] = [];
     let clients: { id: string; name: string }[] = [];
 
@@ -46,6 +47,7 @@ export default async function InvoicesPage({
                         ]
                     } : {},
                     clientIdFilter ? { clientId: clientIdFilter } : {},
+                    commercialStatusFilter ? { project: { commercialStatus: commercialStatusFilter as any } } : {},
                     statusFilter
                         ? { status: statusFilter as any }
                         : (typeFilter === 'QUOTE'
@@ -118,9 +120,25 @@ export default async function InvoicesPage({
                                         <td className="p-4 align-middle">{invoice.client?.name}</td>
                                         <td className="p-4 align-middle">
                                             {invoice.project ? (
-                                                <Link href={`/projects/${invoice.projectId}`} className="text-blue-600 hover:underline">
-                                                    {invoice.project.name}
-                                                </Link>
+                                                <div className="flex flex-col gap-1">
+                                                    <Link href={`/projects/${invoice.projectId}`} className="text-blue-600 hover:underline">
+                                                        {invoice.project.name}
+                                                    </Link>
+                                                    {invoice.project.commercialStatus && (
+                                                        <span className={cn(
+                                                            "inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold w-fit tracking-wide uppercase",
+                                                            invoice.project.commercialStatus === 'AWAITING_PO' ? "bg-rose-500/10 text-rose-500 border border-rose-500/20" :
+                                                            invoice.project.commercialStatus === 'PO_RECEIVED' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" :
+                                                            invoice.project.commercialStatus === 'EMERGENCY_WORK' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse" :
+                                                            "bg-sky-500/10 text-sky-500 border border-sky-500/20" // REACTIVE_WORK
+                                                        )}>
+                                                            {invoice.project.commercialStatus === 'AWAITING_PO' ? 'Awaiting PO' :
+                                                             invoice.project.commercialStatus === 'PO_RECEIVED' ? 'PO Received' :
+                                                             invoice.project.commercialStatus === 'EMERGENCY_WORK' ? 'Emergency' :
+                                                             'Reactive Work'}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <span className="text-muted-foreground italic">-</span>
                                             )}

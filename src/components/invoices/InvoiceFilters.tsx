@@ -25,6 +25,7 @@ export function InvoiceFilters({ clients }: { clients: ClientOption[] }) {
     const currentStatus = searchParams.get("status") || ""
     const currentType = searchParams.get("type") || ""
     const currentClientId = searchParams.get("clientId") || ""
+    const currentCommercialStatus = searchParams.get("commercialStatus") || ""
 
     const updateFilter = (key: string, value: string) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -58,6 +59,17 @@ export function InvoiceFilters({ clients }: { clients: ClientOption[] }) {
                 <option value="">All Types</option>
                 <option value="QUOTE">Quotes</option>
                 <option value="INVOICE">Invoices</option>
+            </select>
+            <select
+                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={currentCommercialStatus}
+                onChange={(e) => updateFilter("commercialStatus", e.target.value)}
+            >
+                <option value="">All Commercial Statuses</option>
+                <option value="AWAITING_PO">Awaiting PO</option>
+                <option value="PO_RECEIVED">PO Received</option>
+                <option value="EMERGENCY_WORK">Emergency Work</option>
+                <option value="REACTIVE_WORK">Reactive Work</option>
             </select>
             <select
                 className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
