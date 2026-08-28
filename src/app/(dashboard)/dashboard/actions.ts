@@ -495,7 +495,7 @@ export async function generateAndSendLeadQuoteAction(leadId: string) {
             data: {
                 name: projectName.slice(0, 100),
                 description: projectDesc,
-                status: 'QUOTED',
+                status: 'SCHEDULED',
                 workflowStage: 'QUOTATION',
                 commercialStatus: 'AWAITING_PO',
                 clientId: client.id,

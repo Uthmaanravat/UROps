@@ -226,7 +226,7 @@ export async function createInvoiceAction(data: {
             await prisma.project.update({
                 where: { id: effectiveProjectId, companyId },
                 data: {
-                    status: isInvoice ? 'INVOICED' : 'QUOTED',
+                    status: isInvoice ? 'INVOICED' : 'SCHEDULED',
                     workflowStage: isInvoice ? 'INVOICE' : 'QUOTATION'
                 }
             });
@@ -243,13 +243,80 @@ export async function createInvoiceAction(data: {
     return invoice.id;
 }
 
+export async function markAssociatedQuotesAsPaid(invoiceId: string, companyId: string) {
+    const invoice = await prisma.invoice.findUnique({
+        where: { id: invoiceId, companyId },
+        include: { items: true }
+    });
+    if (!invoice) return;
+
+    let quoteNumberToMark: string | null = null;
+    for (const item of invoice.items) {
+        if (item.description && item.description.includes("As per quotation")) {
+            const match = item.description.match(/As per quotation\s+(\S+)/);
+            if (match) {
+                quoteNumberToMark = match[1];
+                break;
+            }
+        }
+    }
+
+    if (quoteNumberToMark) {
+        await prisma.invoice.updateMany({
+            where: {
+                companyId,
+                clientId: invoice.clientId,
+                type: 'QUOTE',
+                quoteNumber: quoteNumberToMark,
+                status: { not: 'PAID' }
+            },
+            data: { status: 'PAID' }
+        });
+    }
+
+    if (invoice.wbpId) {
+        await prisma.invoice.updateMany({
+            where: {
+                companyId,
+                wbpId: invoice.wbpId,
+                type: 'QUOTE',
+                status: { not: 'PAID' }
+            },
+            data: { status: 'PAID' }
+        });
+    }
+
+    if (invoice.projectId) {
+        await prisma.invoice.updateMany({
+            where: {
+                companyId,
+                projectId: invoice.projectId,
+                type: 'QUOTE',
+                status: { not: 'PAID' }
+            },
+            data: { status: 'PAID' }
+        });
+    }
+}
+
 export async function updateInvoiceStatus(id: string, status: any) { // Type check loose for brevity
     const companyId = await ensureAuth()
-    await prisma.invoice.update({
+    const invoice = await prisma.invoice.update({
         where: { id, companyId },
         data: { status }
     })
+    
+    if (status === 'PAID') {
+        await markAssociatedQuotesAsPaid(id, companyId);
+    }
+    
     revalidatePath(`/invoices/${id}`)
+    revalidatePath("/invoices")
+    revalidatePath("/clients")
+    revalidatePath(`/clients/${invoice.clientId}`)
+    if (invoice.projectId) {
+        revalidatePath(`/projects/${invoice.projectId}`)
+    }
 }
 
 export async function getQuoteSequenceAction(clientId?: string) {
@@ -488,15 +555,8 @@ export async function recordPaymentAction(data: {
             })
 
             // IF FULLY PAID, also mark the associated quote as PAID so it leaves the quote folder
-            if (newStatus === 'PAID' && invoice.wbpId) {
-                await prisma.invoice.updateMany({
-                    where: {
-                        wbpId: invoice.wbpId,
-                        type: 'QUOTE',
-                        status: { not: 'PAID' }
-                    },
-                    data: { status: 'PAID' }
-                })
+            if (newStatus === 'PAID') {
+                await markAssociatedQuotesAsPaid(data.invoiceId, companyId);
             }
         }
 
@@ -510,6 +570,14 @@ export async function recordPaymentAction(data: {
     }
 
     revalidatePath(`/invoices/${data.invoiceId}`)
+    revalidatePath("/invoices")
+    revalidatePath("/clients")
+    if (invoice) {
+        revalidatePath(`/clients/${invoice.clientId}`)
+        if (invoice.projectId) {
+            revalidatePath(`/projects/${invoice.projectId}`)
+        }
+    }
 }
 
 export async function deleteInvoiceAction(id: string) {

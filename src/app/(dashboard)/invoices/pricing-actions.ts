@@ -98,7 +98,7 @@ export async function finalizeQuoteAction(quoteId: string) {
             where: { id: quote.projectId, companyId },
             data: {
                 workflowStage: 'QUOTATION',
-                status: 'QUOTED'
+                status: 'SCHEDULED'
             }
         })
     }

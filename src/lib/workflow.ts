@@ -377,7 +377,7 @@ export async function generateQuotationFromWBP(
         where: { id: wbp.projectId },
         data: {
             workflowStage: 'QUOTATION',
-            status: 'QUOTED'
+            status: 'SCHEDULED'
         }
     })
 

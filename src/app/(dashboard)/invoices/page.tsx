@@ -49,7 +49,7 @@ export default async function InvoicesPage({
                     statusFilter
                         ? { status: statusFilter as any }
                         : (typeFilter === 'QUOTE'
-                            ? { status: { not: 'CANCELLED' as const } }
+                            ? { status: { notIn: ['CANCELLED', 'ACCEPTED', 'PAID'] as const } }
                             : { status: { notIn: ['PAID', 'CANCELLED'] as const } }
                         ),
                     typeFilter ? { type: typeFilter as 'INVOICE' | 'QUOTE' } : {}

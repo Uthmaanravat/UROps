@@ -21,7 +21,7 @@ export async function updateInvoiceProjectAction(invoiceId: string, projectId: s
             await prisma.project.update({
                 where: { id: projectId, companyId },
                 data: {
-                    status: 'QUOTED',
+                    status: 'SCHEDULED',
                     workflowStage: 'QUOTATION'
                 }
             })

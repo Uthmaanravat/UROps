@@ -17,8 +17,8 @@ import { Label } from "@/components/ui/label"
 import { Eye, EyeOff, Filter, ChevronDown, Zap, ShieldAlert, Clock3 } from "lucide-react"
 
 const ALL_COLUMNS = [
-    { id: 'APPROVAL', title: 'Waiting Approval', statuses: ['SOW', 'SOW_SUBMITTED', 'QUOTED', 'LEAD'], color: 'border-blue-500/30 bg-blue-500/5', icon: Clock3 },
-    { id: 'SCHEDULED', title: 'Scheduled', statuses: ['PLANNING', 'SCHEDULED'], color: 'border-purple-500/30 bg-purple-500/5', icon: CalendarIcon },
+    { id: 'APPROVAL', title: 'Waiting Approval', statuses: ['SOW', 'SOW_SUBMITTED', 'LEAD'], color: 'border-blue-500/30 bg-blue-500/5', icon: Clock3 },
+    { id: 'SCHEDULED', title: 'Scheduled', statuses: ['PLANNING', 'SCHEDULED', 'QUOTED'], color: 'border-purple-500/30 bg-purple-500/5', icon: CalendarIcon },
     { id: 'IN_PROGRESS', title: 'In Progress', statuses: ['IN_PROGRESS'], color: 'border-emerald-500/30 bg-emerald-500/5', icon: Zap },
     { id: 'HOLD', title: 'On Hold', statuses: ['ON_HOLD'], color: 'border-orange-500/30 bg-orange-500/5', icon: AlertCircle },
     { id: 'COMPLETED', title: 'Completed', statuses: ['COMPLETED'], color: 'border-teal-500/30 bg-teal-500/5', icon: CheckCircle2 },

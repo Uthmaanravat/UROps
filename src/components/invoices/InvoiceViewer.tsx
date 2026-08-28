@@ -189,7 +189,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     // Lock document if finalized/sent/approved (for Quotes) or paid/checked (for Invoices)
     const isLocked = invoice.type === 'QUOTE'
-        ? ['SENT', 'ACCEPTED', 'REJECTED'].includes(invoice.status)
+        ? ['SENT', 'ACCEPTED', 'REJECTED', 'PAID'].includes(invoice.status)
         : ['PAID', 'CHECKED'].includes(invoice.status);
     const isPricingMode = !isLocked;
 

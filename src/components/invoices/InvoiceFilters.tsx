@@ -7,6 +7,7 @@ const statuses = [
     { value: "", label: "All" },
     { value: "DRAFT", label: "Draft" },
     { value: "SENT", label: "Sent" },
+    { value: "ACCEPTED", label: "Accepted" },
     { value: "INVOICED", label: "Invoiced" },
     { value: "PAID", label: "Paid" },
 ]

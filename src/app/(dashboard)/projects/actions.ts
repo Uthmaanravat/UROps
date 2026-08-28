@@ -68,10 +68,28 @@ export async function deleteProject(id: string) {
 export async function updateProjectStatus(id: string, status: string) {
     const companyId = await ensureAuth()
     try {
+        let finalStatus = status;
+        if (status === 'QUOTED') {
+            finalStatus = 'SCHEDULED';
+        }
+
         await prisma.project.update({
             where: { id, companyId },
-            data: { status: status as any }
+            data: { status: finalStatus as any }
         })
+
+        if (finalStatus === 'COMPLETED') {
+            await prisma.invoice.updateMany({
+                where: {
+                    companyId,
+                    projectId: id,
+                    type: 'QUOTE',
+                    status: { not: 'PAID' }
+                },
+                data: { status: 'PAID' }
+            });
+        }
+
         revalidatePath(`/projects/${id}`)
         return { success: true }
     } catch (error) {
