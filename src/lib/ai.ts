@@ -2,13 +2,58 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
+export const GEMINI_FALLBACK_MODELS = [
+    'gemini-flash-latest',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+];
+
+export async function generateContentWithFallback(
+    genAIInstance: GoogleGenerativeAI,
+    contents: any,
+    generationConfig?: any
+) {
+    let lastError: any = null;
+
+    for (const modelName of GEMINI_FALLBACK_MODELS) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const model = genAIInstance.getGenerativeModel({
+                    model: modelName,
+                    ...(generationConfig ? { generationConfig } : {})
+                });
+                const result = await model.generateContent(contents);
+                return result;
+            } catch (err: any) {
+                lastError = err;
+                const isTransient = 
+                    err.status === 503 || 
+                    err.status === 429 || 
+                    err.message?.includes('503') || 
+                    err.message?.includes('high demand') ||
+                    err.message?.includes('ECONNRESET') ||
+                    err.code === 'ECONNRESET';
+
+                if (isTransient && attempt === 0) {
+                    await new Promise(res => setTimeout(res, 1200));
+                    continue;
+                }
+                console.warn(`Model ${modelName} failed (attempt ${attempt + 1}), falling back to next model. Error:`, err.message);
+                break;
+            }
+        }
+    }
+
+    throw lastError || new Error("All AI models are currently unavailable. Please try again shortly.");
+}
+
 export async function parseScopeToItems(scopeText: string) {
     if (!process.env.GEMINI_API_KEY) {
         throw new Error("Missing Gemini API Key. AI parsing unavailable.")
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest", generationConfig: { responseMimeType: "application/json" } });
         const prompt = `You are a professional estimator for a building maintenance company.
 
 Your task is to analyze a scope of work and break it down into billable line items.
@@ -23,7 +68,7 @@ Each item in the array must have exactly these keys:
 Scope of Work:
 ${scopeText}`;
 
-        const result = await model.generateContent(prompt);
+        const result = await generateContentWithFallback(genAI, prompt, { responseMimeType: "application/json" });
         const content = result.response.text();
         console.log("AI Response:", content);
 

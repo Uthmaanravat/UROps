@@ -25,15 +25,23 @@ async function listModels() {
         // But there isn't a simple listModels helper exposed in the high-level `GoogleGenerativeAI` class in early versions.
         // We will try to confirm if 'gemini-1.5-flash' works with a simple prompt, if not try 'gemini-pro'.
 
-        const modelsToTest = ['gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-3.5-flash'];
+        const modelsToTest = [
+            'gemini-flash-latest', 
+            'gemini-3.6-flash', 
+            'gemini-3.5-flash', 
+            'gemini-3.5-flash-lite',
+            'gemini-flash-lite-latest'
+        ];
 
         for (const modelName of modelsToTest) {
             try {
                 console.log(`Testing model: ${modelName}`);
-                const model = genAI.getGenerativeModel({ model: modelName });
-                const result = await model.generateContent("Hello");
-                console.log(`✅ SUCCESS: ${modelName} is available.`);
-                return; // Found a working one
+                const model = genAI.getGenerativeModel({ 
+                    model: modelName,
+                    generationConfig: { responseMimeType: "application/json" }
+                });
+                const result = await model.generateContent('Return JSON: {"status": "ok"}');
+                console.log(`✅ SUCCESS: ${modelName} -> ${result.response.text().trim()}`);
             } catch (e) {
                 console.log(`❌ FAILED: ${modelName} - ${e.message}`);
             }

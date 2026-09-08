@@ -3,6 +3,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { prisma } from "@/lib/prisma"
 import OpenAI from "openai"
+import { generateContentWithFallback } from "@/lib/ai"
 
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -130,7 +131,6 @@ export async function parseScopeOfWork(text: string) {
             return { success: false, error: "Gemini API Key is missing. AI parsing unavailable." }
         }
 
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest", generationConfig: { responseMimeType: "application/json" } });
         const prompt = `You are an expert project manager for a maintenance and construction company. 
         Your task is to take a transcribed voice note and parse it into a structured Scope of Work (SOW).
         Identify individual tasks, descriptions, and any mentioned quantities or materials.
@@ -138,7 +138,7 @@ export async function parseScopeOfWork(text: string) {
         
         Voice Note: ${text}`;
 
-        const result = await model.generateContent(prompt);
+        const result = await generateContentWithFallback(genAI, prompt, { responseMimeType: "application/json" });
         const textResponse = result.response.text();
 
         const parsed = JSON.parse(textResponse);
@@ -164,7 +164,6 @@ export async function extractPricingFromText(text: string) {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest", generationConfig: { responseMimeType: "application/json" } });
         const prompt = `You are a specialized data extractor for construction and maintenance quotations.
         Your goal is to extract EVERY SINGLE individual line item and their typical unit prices.
         Do not skip any items. If a quotation has 20 items, extract all 20.
@@ -177,7 +176,7 @@ export async function extractPricingFromText(text: string) {
         
         Text content: ${text}`;
 
-        const result = await model.generateContent(prompt);
+        const result = await generateContentWithFallback(genAI, prompt, { responseMimeType: "application/json" });
         const textResponse = result.response.text();
 
         const parsed = JSON.parse(textResponse);

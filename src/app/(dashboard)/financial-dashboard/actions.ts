@@ -5,6 +5,7 @@ import { ensureAuth } from "@/lib/auth-actions"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { revalidatePath } from "next/cache"
 import pdfParse from 'pdf-parse'
+import { generateContentWithFallback } from "@/lib/ai"
 
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 
@@ -72,11 +73,6 @@ export async function processBankStatementAction(formData: FormData) {
             }
         }
 
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-flash-latest", 
-            generationConfig: { responseMimeType: "application/json" } 
-        });
-
         const prompt = `You are an expert AI accounting assistant.
         I am providing you with a bank statement, expense report, or transaction list file for a business named "${businessName}".
         Please carefully extract all financial transactions from it.
@@ -103,14 +99,14 @@ export async function processBankStatementAction(formData: FormData) {
         if (textContent && textContent.trim().length > 0) {
             console.log("Sending extracted text of length", textContent.length, "to Gemini");
             const fullPrompt = `${prompt}\n\nHere is the transaction data extracted from the document:\n\n${textContent}`;
-            result = await model.generateContent(fullPrompt);
+            result = await generateContentWithFallback(genAI, fullPrompt, { responseMimeType: "application/json" });
         } else if (fileExtension === 'pdf') {
             console.log("Extracted text empty for PDF, sending base64 to Gemini direct");
             const base64Data = buffer.toString("base64");
-            result = await model.generateContent([
+            result = await generateContentWithFallback(genAI, [
                 prompt,
                 { inlineData: { data: base64Data, mimeType: "application/pdf" } }
-            ]);
+            ], { responseMimeType: "application/json" });
         } else {
             return { success: false, error: "Unable to extract text content from the file." };
         }
@@ -136,7 +132,11 @@ export async function processBankStatementAction(formData: FormData) {
         return { success: true, count: createdCount.count };
     } catch (error: any) {
         console.error("Statement processing error:", error);
-        return { success: false, error: error.message || "Failed to process statement" };
+        let userMessage = error.message || "Failed to process statement";
+        if (userMessage.includes("503") || userMessage.includes("high demand") || userMessage.includes("Service Unavailable")) {
+            userMessage = "Google AI is currently experiencing high demand. Please try uploading again in a few moments, or upload a CSV / Excel spreadsheet directly.";
+        }
+        return { success: false, error: userMessage };
     }
 }
 
