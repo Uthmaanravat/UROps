@@ -248,7 +248,7 @@ export async function markAssociatedQuotesAsPaid(invoiceId: string, companyId: s
         where: { id: invoiceId, companyId },
         include: { items: true }
     });
-    if (!invoice) return;
+    if (!invoice || invoice.type !== 'INVOICE') return;
 
     let quoteNumberToMark: string | null = null;
     for (const item of invoice.items) {
@@ -279,18 +279,6 @@ export async function markAssociatedQuotesAsPaid(invoiceId: string, companyId: s
             where: {
                 companyId,
                 wbpId: invoice.wbpId,
-                type: 'QUOTE',
-                status: { not: 'PAID' }
-            },
-            data: { status: 'PAID' }
-        });
-    }
-
-    if (invoice.projectId) {
-        await prisma.invoice.updateMany({
-            where: {
-                companyId,
-                projectId: invoice.projectId,
                 type: 'QUOTE',
                 status: { not: 'PAID' }
             },

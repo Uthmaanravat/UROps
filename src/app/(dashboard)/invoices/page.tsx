@@ -50,10 +50,7 @@ export default async function InvoicesPage({
                     commercialStatusFilter ? { project: { commercialStatus: commercialStatusFilter as any } } : {},
                     statusFilter
                         ? { status: statusFilter as any }
-                        : (typeFilter === 'QUOTE'
-                            ? { status: { notIn: ['CANCELLED', 'ACCEPTED', 'PAID'] as const } }
-                            : { status: { notIn: ['PAID', 'CANCELLED'] as const } }
-                        ),
+                        : { status: { notIn: ['PAID', 'CANCELLED'] as const } },
                     typeFilter ? { type: typeFilter as 'INVOICE' | 'QUOTE' } : {}
                 ]
             },
@@ -108,7 +105,9 @@ export default async function InvoicesPage({
                                 </tr>
                             ) : invoices.map(invoice => {
                                 const paid = invoice.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0;
-                                const isPaid = paid >= invoice.total;
+                                const isPaid = invoice.type === 'INVOICE'
+                                    ? (invoice.total > 0 ? paid >= invoice.total : invoice.status === 'PAID')
+                                    : invoice.status === 'PAID';
 
                                 return (
                                     <tr key={invoice.id} className="border-b transition-colors hover:bg-muted/50">

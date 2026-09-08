@@ -78,18 +78,6 @@ export async function updateProjectStatus(id: string, status: string) {
             data: { status: finalStatus as any }
         })
 
-        if (finalStatus === 'COMPLETED') {
-            await prisma.invoice.updateMany({
-                where: {
-                    companyId,
-                    projectId: id,
-                    type: 'QUOTE',
-                    status: { not: 'PAID' }
-                },
-                data: { status: 'PAID' }
-            });
-        }
-
         revalidatePath(`/projects/${id}`)
         return { success: true }
     } catch (error) {

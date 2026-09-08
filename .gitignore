@@ -20,3 +20,6 @@ yarn-error.log*
 # misc
 lint_output.txt
 .vercel
+New App/
+venv/
+.venv/
