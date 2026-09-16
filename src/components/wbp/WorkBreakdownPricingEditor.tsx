@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save, GripVertical, ArrowUp, ArrowDown, Copy, CopyPlus, ClipboardPaste, Check } from "lucide-react"
+import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save, GripVertical, ArrowUp, ArrowDown, Copy, CopyPlus } from "lucide-react"
 import { formatCurrency, cn } from "@/lib/utils"
 import { generateQuotationAction, getPricingSuggestionsAction, getSuggestedQuoteNumberAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
 import { saveWBPDraftAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
@@ -109,29 +109,6 @@ const WbpItemRow = memo(({
         onMoveDown(index)
     }, [index, onMoveDown])
 
-    const [copiedField, setCopiedField] = useState<string | null>(null);
-
-    const handleCopyText = async (text: string, fieldId: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            setCopiedField(fieldId);
-            setTimeout(() => setCopiedField(null), 2000);
-        } catch (err) {
-            console.error("Failed to copy text:", err);
-        }
-    };
-
-    const handlePasteToField = async (field: 'description' | 'area') => {
-        try {
-            const text = await navigator.clipboard.readText();
-            if (text) {
-                onUpdate(index, field, text);
-            }
-        } catch (err) {
-            console.error("Failed to paste from clipboard:", err);
-        }
-    };
-
     return (
         <tr 
             onDragEnter={(e) => {
@@ -181,31 +158,6 @@ const WbpItemRow = memo(({
                     <div className="flex-1 relative">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-black uppercase text-primary italic">Description</span>
-                            <div className="flex items-center gap-1.5 ml-auto pb-0.5">
-                                {item.description && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleCopyText(item.description, `wbp-desc-${index}`)}
-                                        className="px-1.5 py-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-white/10 text-[9px] font-semibold flex items-center gap-1 transition-colors"
-                                        title="Copy description text to clipboard"
-                                    >
-                                        {copiedField === `wbp-desc-${index}` ? (
-                                            <span className="text-emerald-400 flex items-center gap-0.5 font-bold"><Check className="h-3 w-3" /> Copied</span>
-                                        ) : (
-                                            <span className="flex items-center gap-0.5"><Copy className="h-3 w-3" /> Copy</span>
-                                        )}
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => handlePasteToField('description')}
-                                    className="px-1.5 py-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-white/10 text-[9px] font-semibold flex items-center gap-1 transition-colors"
-                                    title="Paste text from clipboard into Description"
-                                >
-                                    <ClipboardPaste className="h-3 w-3" />
-                                    <span>Paste</span>
-                                </button>
-                            </div>
                         </div>
                         <Textarea
                             value={item.description}
@@ -228,26 +180,6 @@ const WbpItemRow = memo(({
                     <div className="w-1/4">
                         <div className="flex items-center justify-between mb-1">
                             <Label className="text-[10px] font-black uppercase text-primary italic block">Heading</Label>
-                            <div className="flex items-center gap-1">
-                                {item.area && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleCopyText(item.area, `wbp-heading-${index}`)}
-                                        className="p-1 rounded text-muted-foreground/60 hover:text-primary hover:bg-white/10 text-[9px] flex items-center gap-0.5"
-                                        title="Copy Heading to clipboard"
-                                    >
-                                        {copiedField === `wbp-heading-${index}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => handlePasteToField('area')}
-                                    className="p-1 rounded text-muted-foreground/60 hover:text-primary hover:bg-white/10 text-[9px] flex items-center gap-0.5"
-                                    title="Paste from clipboard into Heading"
-                                >
-                                    <ClipboardPaste className="h-3 w-3" />
-                                </button>
-                            </div>
                         </div>
                         <Input
                             value={item.area || ""}
