@@ -292,6 +292,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
 
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    const [draggableIndex, setDraggableIndex] = useState<number | null>(null);
 
     const handleDragStart = (e: React.DragEvent, index: number) => {
         setDraggedIndex(index);
@@ -319,6 +320,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         }
         setDraggedIndex(null);
         setDragOverIndex(null);
+        setDraggableIndex(null);
     };
 
     const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
@@ -762,7 +764,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             {items.map((item, index) => (
                                 <div 
                                     key={index} 
-                                    draggable
+                                    draggable={draggableIndex === index}
                                     onDragStart={(e) => handleDragStart(e, index)}
                                     onDragEnter={(e) => handleDragEnter(e, index)}
                                     onDragOver={(e) => e.preventDefault()}
@@ -786,7 +788,11 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                         {/* Drag Handle & Editable # */}
                                         <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 select-none justify-start md:justify-center">
                                             <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
-                                            <div className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0">
+                                            <div 
+                                                className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0"
+                                                onMouseEnter={() => setDraggableIndex(index)}
+                                                onMouseLeave={() => setDraggableIndex(null)}
+                                            >
                                                 <GripVertical className="h-4 w-4" />
                                             </div>
                                             <ItemPositionInput
@@ -828,6 +834,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                 placeholder="Item description..."
                                                 value={item.description}
                                                 onChange={(e) => updateItem(index, 'description', e.target.value)}
+                                                onDragStart={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
                                                 required
                                             />

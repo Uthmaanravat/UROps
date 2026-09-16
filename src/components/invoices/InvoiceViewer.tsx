@@ -123,6 +123,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    const [draggableItemId, setDraggableItemId] = useState<string | null>(null);
 
     const moveItemUp = (index: number) => {
         if (index === 0) return;
@@ -174,6 +175,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
         setDraggedIndex(null);
         setDragOverIndex(null);
+        setDraggableItemId(null);
     };
 
     const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
@@ -1896,7 +1898,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 return (
                                                     <div
                                                         key={item.id}
-                                                        draggable={isPricingMode}
+                                                        draggable={isPricingMode && draggableItemId === item.id}
                                                         onDragStart={(e) => handleDragStart(e, originalIndex)}
                                                         onDragEnter={(e) => handleDragEnter(e, originalIndex)}
                                                         onDragOver={(e) => e.preventDefault()}
@@ -1919,7 +1921,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             {/* Drag Handle & Editable # */}
                                                             <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 select-none justify-start md:justify-center">
                                                                 <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
-                                                                <div className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0">
+                                                                <div 
+                                                                    className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0"
+                                                                    onMouseEnter={() => setDraggableItemId(item.id)}
+                                                                    onMouseLeave={() => setDraggableItemId(null)}
+                                                                >
                                                                     <GripVertical className="h-4 w-4" />
                                                                 </div>
                                                                 <ItemPositionInput
@@ -1935,6 +1941,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                 <Textarea
                                                                     value={item.description}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
+                                                                    onDragStart={(e) => e.stopPropagation()}
                                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
                                                                     placeholder="Item Description"
                                                                     required

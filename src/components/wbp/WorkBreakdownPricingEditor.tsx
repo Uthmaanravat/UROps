@@ -141,6 +141,7 @@ const WbpItemRow = memo(({
                         <Textarea
                             value={item.description}
                             onChange={handleDescriptionChange}
+                            onDragStart={(e) => e.stopPropagation()}
                             className="min-h-[70px] bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black text-base resize-none"
                             placeholder="Item specification..."
                         />
