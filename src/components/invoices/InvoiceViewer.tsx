@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, ClipboardPaste, Check } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -134,6 +134,29 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             next.splice(originalIndex + 1, 0, cloned);
             return next;
         });
+    };
+
+    const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    const handleCopyText = async (text: string, fieldId: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedField(fieldId);
+            setTimeout(() => setCopiedField(null), 2000);
+        } catch (err) {
+            console.error("Failed to copy text:", err);
+        }
+    };
+
+    const handlePasteToField = async (itemId: string, field: 'description' | 'area') => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+                handleItemUpdate(itemId, field, text);
+            }
+        } catch (err) {
+            console.error("Failed to paste from clipboard:", err);
+        }
     };
 
     const moveItemUp = (index: number) => {
@@ -1892,7 +1915,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                         </div>
 
                                         {/* Table-like Header Row (hidden on mobile) */}
-                                        <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 select-none">
+                                        <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
                                             <div className="w-16 text-center">#</div>
                                             <div className="flex-1">Service Description</div>
                                             <div className="w-16 text-center">Qty</div>
@@ -1928,24 +1951,40 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                     >
                                                         {/* Heading Input placed ON TOP of each item */}
                                                         <div className="flex items-center gap-2 px-1">
-                                                            <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest select-none">Heading:</span>
+                                                            <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
                                                             <Input
                                                                 value={item.area || ""}
                                                                 onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
-                                                                onDragStart={(e) => e.stopPropagation()}
-                                                                onCopy={(e) => e.stopPropagation()}
-                                                                onCut={(e) => e.stopPropagation()}
-                                                                onPaste={(e) => e.stopPropagation()}
                                                                 className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
                                                                 placeholder="HEADING"
                                                             />
+                                                            <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                                                {item.area && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleCopyText(item.area, `heading-${item.id}`)}
+                                                                        className="p-1 rounded text-muted-foreground/60 hover:text-primary hover:bg-white/10 text-[9px] flex items-center gap-0.5"
+                                                                        title="Copy Heading to clipboard"
+                                                                    >
+                                                                        {copiedField === `heading-${item.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                                                    </button>
+                                                                )}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handlePasteToField(item.id, 'area')}
+                                                                    className="p-1 rounded text-muted-foreground/60 hover:text-primary hover:bg-white/10 text-[9px] flex items-center gap-0.5"
+                                                                    title="Paste from clipboard into Heading"
+                                                                >
+                                                                    <ClipboardPaste className="h-3 w-3" />
+                                                                </button>
+                                                            </div>
                                                         </div>
 
                                                         {/* Main Row Inputs */}
                                                         <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3">
                                                             {/* Drag Handle & Editable # */}
-                                                            <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 select-none justify-start md:justify-center">
-                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
+                                                            <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 justify-start md:justify-center">
+                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2 select-none">Pos</span>
                                                                 <div 
                                                                     draggable={isPricingMode}
                                                                     onDragStart={(e) => handleDragStart(e, originalIndex)}
@@ -1964,14 +2003,37 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
                                                             {/* Description */}
                                                             <div className="flex-1 flex flex-col md:block">
-                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Service Description</span>
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block">Service Description</span>
+                                                                    <div className="flex items-center gap-1.5 ml-auto opacity-0 group-hover/row:opacity-100 transition-opacity pb-0.5">
+                                                                        {item.description && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleCopyText(item.description, `desc-${item.id}`)}
+                                                                                className="px-1.5 py-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-white/10 text-[9px] font-semibold flex items-center gap-1 transition-colors"
+                                                                                title="Copy description text to clipboard"
+                                                                            >
+                                                                                {copiedField === `desc-${item.id}` ? (
+                                                                                    <span className="text-emerald-400 flex items-center gap-0.5 font-bold"><Check className="h-3 w-3" /> Copied</span>
+                                                                                ) : (
+                                                                                    <span className="flex items-center gap-0.5"><Copy className="h-3 w-3" /> Copy</span>
+                                                                                )}
+                                                                            </button>
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handlePasteToField(item.id, 'description')}
+                                                                            className="px-1.5 py-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-white/10 text-[9px] font-semibold flex items-center gap-1 transition-colors"
+                                                                            title="Paste text from clipboard into Description"
+                                                                        >
+                                                                            <ClipboardPaste className="h-3 w-3" />
+                                                                            <span>Paste</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
                                                                 <Textarea
                                                                     value={item.description}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
-                                                                    onDragStart={(e) => e.stopPropagation()}
-                                                                    onCopy={(e) => e.stopPropagation()}
-                                                                    onCut={(e) => e.stopPropagation()}
-                                                                    onPaste={(e) => e.stopPropagation()}
                                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
                                                                     placeholder="Item Description"
                                                                     required
@@ -1985,7 +2047,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                     type="number"
                                                                     value={item.quantity}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                    onDragStart={(e) => e.stopPropagation()}
                                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs"
                                                                     required
                                                                 />
@@ -1997,7 +2058,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                 <Input
                                                                     value={item.unit || ""}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'unit', e.target.value)}
-                                                                    onDragStart={(e) => e.stopPropagation()}
                                                                     placeholder="ea"
                                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center h-9 w-full text-xs"
                                                                 />
@@ -2012,7 +2072,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                         type="number"
                                                                         value={item.unitPrice}
                                                                         onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                                        onDragStart={(e) => e.stopPropagation()}
                                                                         className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs"
                                                                         required
                                                                     />
@@ -2035,9 +2094,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                     size="icon"
                                                                     className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/10"
                                                                     onClick={() => handleDuplicateItem(item, originalIndex)}
-                                                                    title="Duplicate Item"
+                                                                    title="Duplicate Item Row (adds a copy below)"
                                                                 >
-                                                                    <Copy className="h-4.5 w-4.5" />
+                                                                    <CopyPlus className="h-4.5 w-4.5" />
                                                                 </Button>
                                                                 <Button
                                                                     type="button"

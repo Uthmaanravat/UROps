@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy } from "lucide-react"
+import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy, CopyPlus, ClipboardPaste, Check } from "lucide-react"
 import { createInvoiceAction, getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
 import { formatCurrency } from "@/lib/utils"
 import Link from "next/link"
@@ -337,6 +337,29 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
             });
             return newItems;
         });
+    };
+
+    const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    const handleCopyText = async (text: string, fieldId: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedField(fieldId);
+            setTimeout(() => setCopiedField(null), 2000);
+        } catch (err) {
+            console.error("Failed to copy text:", err);
+        }
+    };
+
+    const handlePasteToField = async (index: number, field: 'description' | 'area') => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+                updateItem(index, field, text);
+            }
+        } catch (err) {
+            console.error("Failed to paste from clipboard:", err);
+        }
     };
 
     const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
@@ -764,7 +787,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
 
                     <div className="space-y-3">
                         {/* Table-like Header Row (hidden on mobile) */}
-                        <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 select-none">
+                        <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
                             <div className="w-16 text-center">#</div>
                             <div className="w-24">Code</div>
                             <div className="flex-1">Service Description & Details</div>
@@ -799,25 +822,41 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 >
                                     {/* Heading Input placed ON TOP of each item */}
                                     <div className="flex items-center gap-2 px-1">
-                                        <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest select-none">Heading:</span>
+                                        <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
                                         <Input
                                             placeholder="SECTION/HEADING (E.G. PREPARATIONS, ROOM 1)"
                                             // @ts-ignore
                                             value={item.area || ""}
                                             onChange={(e) => updateItem(index, 'area', e.target.value)}
-                                            onDragStart={(e) => e.stopPropagation()}
-                                            onCopy={(e) => e.stopPropagation()}
-                                            onCut={(e) => e.stopPropagation()}
-                                            onPaste={(e) => e.stopPropagation()}
                                             className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
                                         />
+                                        <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                            {item.area && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleCopyText(item.area, `heading-${index}`)}
+                                                    className="p-1 rounded text-muted-foreground/60 hover:text-primary hover:bg-white/10 text-[9px] flex items-center gap-0.5"
+                                                    title="Copy Heading to clipboard"
+                                                >
+                                                    {copiedField === `heading-${index}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => handlePasteToField(index, 'area')}
+                                                className="p-1 rounded text-muted-foreground/60 hover:text-primary hover:bg-white/10 text-[9px] flex items-center gap-0.5"
+                                                title="Paste from clipboard into Heading"
+                                            >
+                                                <ClipboardPaste className="h-3 w-3" />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Main Row Inputs */}
                                     <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3">
                                         {/* Drag Handle & Editable # */}
-                                        <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 select-none justify-start md:justify-center">
-                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
+                                        <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 justify-start md:justify-center">
+                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2 select-none">Pos</span>
                                             <div 
                                                 draggable
                                                 onDragStart={(e) => handleDragStart(e, index)}
@@ -855,25 +894,44 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                         updateItem(index, 'unitPrice', matched.unitPrice);
                                                     }
                                                 }}
-                                                onDragStart={(e) => e.stopPropagation()}
-                                                onCopy={(e) => e.stopPropagation()}
-                                                onCut={(e) => e.stopPropagation()}
-                                                onPaste={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-mono uppercase text-center font-bold h-9 w-full text-xs"
                                             />
                                         </div>
 
                                         {/* Description */}
                                         <div className="flex-1 flex flex-col md:block">
-                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Description & Details</span>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block">Description & Details</span>
+                                                <div className="flex items-center gap-1.5 ml-auto opacity-0 group-hover/row:opacity-100 transition-opacity pb-0.5">
+                                                    {item.description && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCopyText(item.description, `desc-${index}`)}
+                                                            className="px-1.5 py-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-white/10 text-[9px] font-semibold flex items-center gap-1 transition-colors"
+                                                            title="Copy description text to clipboard"
+                                                        >
+                                                            {copiedField === `desc-${index}` ? (
+                                                                <span className="text-emerald-400 flex items-center gap-0.5 font-bold"><Check className="h-3 w-3" /> Copied</span>
+                                                            ) : (
+                                                                <span className="flex items-center gap-0.5"><Copy className="h-3 w-3" /> Copy</span>
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePasteToField(index, 'description')}
+                                                        className="px-1.5 py-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-white/10 text-[9px] font-semibold flex items-center gap-1 transition-colors"
+                                                        title="Paste text from clipboard into Description"
+                                                    >
+                                                        <ClipboardPaste className="h-3 w-3" />
+                                                        <span>Paste</span>
+                                                    </button>
+                                                </div>
+                                            </div>
                                             <Textarea
                                                 placeholder="Item description..."
                                                 value={item.description}
                                                 onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                                onDragStart={(e) => e.stopPropagation()}
-                                                onCopy={(e) => e.stopPropagation()}
-                                                onCut={(e) => e.stopPropagation()}
-                                                onPaste={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
                                                 required
                                             />
@@ -887,7 +945,6 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                 placeholder="1"
                                                 value={item.quantity}
                                                 onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
-                                                onDragStart={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs"
                                                 required
                                             />
@@ -901,7 +958,6 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                 // @ts-ignore
                                                 value={item.unit || ""}
                                                 onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                                onDragStart={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center h-9 w-full text-xs"
                                             />
                                         </div>
@@ -916,7 +972,6 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                     placeholder="0.00"
                                                     value={item.unitPrice}
                                                     onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
-                                                    onDragStart={(e) => e.stopPropagation()}
                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs"
                                                     required
                                                 />
@@ -939,9 +994,9 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                 size="sm"
                                                 className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
                                                 onClick={() => duplicateItem(index)}
-                                                title="Duplicate Item"
+                                                title="Duplicate Item Row (adds a copy below)"
                                             >
-                                                <Copy className="h-4 w-4" />
+                                                <CopyPlus className="h-4 w-4" />
                                             </Button>
                                             <Button
                                                 type="button"

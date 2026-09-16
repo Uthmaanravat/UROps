@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save, GripVertical, ArrowUp, ArrowDown, Copy } from "lucide-react"
+import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save, GripVertical, ArrowUp, ArrowDown, Copy, CopyPlus, ClipboardPaste, Check } from "lucide-react"
 import { formatCurrency, cn } from "@/lib/utils"
 import { generateQuotationAction, getPricingSuggestionsAction, getSuggestedQuoteNumberAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
 import { saveWBPDraftAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
@@ -109,6 +109,29 @@ const WbpItemRow = memo(({
         onMoveDown(index)
     }, [index, onMoveDown])
 
+    const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    const handleCopyText = async (text: string, fieldId: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedField(fieldId);
+            setTimeout(() => setCopiedField(null), 2000);
+        } catch (err) {
+            console.error("Failed to copy text:", err);
+        }
+    };
+
+    const handlePasteToField = async (field: 'description' | 'area') => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+                onUpdate(index, field, text);
+            }
+        } catch (err) {
+            console.error("Failed to paste from clipboard:", err);
+        }
+    };
+
     return (
         <tr 
             onDragEnter={(e) => {
@@ -151,19 +174,42 @@ const WbpItemRow = memo(({
                         <Input
                             value={item.code || ""}
                             onChange={handleCodeChange}
-                            onDragStart={(e) => e.stopPropagation()}
                             className="h-10 text-center font-mono uppercase bg-[#14141E] border-white/10 text-white font-bold"
                             placeholder="CODE"
                         />
                     </div>
                     <div className="flex-1 relative">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-black uppercase text-primary italic">Description</span>
+                            <div className="flex items-center gap-1.5 ml-auto pb-0.5">
+                                {item.description && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopyText(item.description, `wbp-desc-${index}`)}
+                                        className="px-1.5 py-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-white/10 text-[9px] font-semibold flex items-center gap-1 transition-colors"
+                                        title="Copy description text to clipboard"
+                                    >
+                                        {copiedField === `wbp-desc-${index}` ? (
+                                            <span className="text-emerald-400 flex items-center gap-0.5 font-bold"><Check className="h-3 w-3" /> Copied</span>
+                                        ) : (
+                                            <span className="flex items-center gap-0.5"><Copy className="h-3 w-3" /> Copy</span>
+                                        )}
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => handlePasteToField('description')}
+                                    className="px-1.5 py-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-white/10 text-[9px] font-semibold flex items-center gap-1 transition-colors"
+                                    title="Paste text from clipboard into Description"
+                                >
+                                    <ClipboardPaste className="h-3 w-3" />
+                                    <span>Paste</span>
+                                </button>
+                            </div>
+                        </div>
                         <Textarea
                             value={item.description}
                             onChange={handleDescriptionChange}
-                            onDragStart={(e) => e.stopPropagation()}
-                            onCopy={(e) => e.stopPropagation()}
-                            onCut={(e) => e.stopPropagation()}
-                            onPaste={(e) => e.stopPropagation()}
                             className="min-h-[70px] bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black text-base resize-none"
                             placeholder="Item specification..."
                         />
@@ -180,14 +226,32 @@ const WbpItemRow = memo(({
                         )}
                     </div>
                     <div className="w-1/4">
-                        <Label className="text-[10px] font-black uppercase text-primary italic mb-1 block">Heading</Label>
+                        <div className="flex items-center justify-between mb-1">
+                            <Label className="text-[10px] font-black uppercase text-primary italic block">Heading</Label>
+                            <div className="flex items-center gap-1">
+                                {item.area && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopyText(item.area, `wbp-heading-${index}`)}
+                                        className="p-1 rounded text-muted-foreground/60 hover:text-primary hover:bg-white/10 text-[9px] flex items-center gap-0.5"
+                                        title="Copy Heading to clipboard"
+                                    >
+                                        {copiedField === `wbp-heading-${index}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => handlePasteToField('area')}
+                                    className="p-1 rounded text-muted-foreground/60 hover:text-primary hover:bg-white/10 text-[9px] flex items-center gap-0.5"
+                                    title="Paste from clipboard into Heading"
+                                >
+                                    <ClipboardPaste className="h-3 w-3" />
+                                </button>
+                            </div>
+                        </div>
                         <Input
                             value={item.area || ""}
                             onChange={handleAreaChange}
-                            onDragStart={(e) => e.stopPropagation()}
-                            onCopy={(e) => e.stopPropagation()}
-                            onCut={(e) => e.stopPropagation()}
-                            onPaste={(e) => e.stopPropagation()}
                             className="h-10 text-[11px] font-bold text-white bg-[#14141E] border-white/10 hover:border-primary/50 transition-all"
                             placeholder="HEADING (OPTIONAL)"
                         />
@@ -196,7 +260,6 @@ const WbpItemRow = memo(({
                 <Input
                     value={item.notes}
                     onChange={handleNotesChange}
-                    onDragStart={(e) => e.stopPropagation()}
                     className="h-8 text-[11px] font-bold text-muted-foreground/60 bg-transparent border-white/5 hover:border-white/20 transition-all italic"
                     placeholder="Commercial or technical notes..."
                 />
@@ -207,7 +270,6 @@ const WbpItemRow = memo(({
                     type="number"
                     value={item.quantity}
                     onChange={handleQuantityChange}
-                    onDragStart={(e) => e.stopPropagation()}
                     className="h-10 text-center font-black bg-[#14141E] border-white/10 text-white"
                 />
             </td>
@@ -216,7 +278,6 @@ const WbpItemRow = memo(({
                 <Input
                     value={item.unit}
                     onChange={handleUnitChange}
-                    onDragStart={(e) => e.stopPropagation()}
                     className="h-10 text-center font-bold bg-[#14141E] border-white/10 text-muted-foreground uppercase text-[10px] tracking-widest"
                     placeholder="ea"
                 />
@@ -229,7 +290,6 @@ const WbpItemRow = memo(({
                         type="number"
                         value={item.unitPrice}
                         onChange={handleUnitPriceChange}
-                        onDragStart={(e) => e.stopPropagation()}
                         className="pl-8 text-right h-10 font-black bg-[#14141E] border-white/10 text-white"
                     />
                 </div>
@@ -250,9 +310,9 @@ const WbpItemRow = memo(({
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-white/10 transition-colors"
                     onClick={handleDuplicate}
-                    title="Duplicate Item"
+                    title="Duplicate Item Row (adds a copy below)"
                 >
-                    <Copy className="h-4 w-4" />
+                    <CopyPlus className="h-4 w-4" />
                 </Button>
                 <Button
                     variant="ghost"
@@ -1216,10 +1276,6 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                                             return item;
                                                                         }));
                                                                     }}
-                                                                    onDragStart={(e) => e.stopPropagation()}
-                                                                    onCopy={(e) => e.stopPropagation()}
-                                                                    onCut={(e) => e.stopPropagation()}
-                                                                    onPaste={(e) => e.stopPropagation()}
                                                                     className="h-8 min-w-[300px] max-w-lg bg-transparent border-none text-[11px] font-black text-left uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0 placeholder:opacity-20"
                                                                     placeholder="ENTER SECTION HEADING..."
                                                                 />
