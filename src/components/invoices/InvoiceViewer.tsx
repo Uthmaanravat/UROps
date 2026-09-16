@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -123,7 +123,18 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-    const [draggableItemId, setDraggableItemId] = useState<string | null>(null);
+
+    const handleDuplicateItem = (itemToClone: any, originalIndex: number) => {
+        const cloned = {
+            ...itemToClone,
+            id: `clone-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        };
+        setItems(prev => {
+            const next = [...prev];
+            next.splice(originalIndex + 1, 0, cloned);
+            return next;
+        });
+    };
 
     const moveItemUp = (index: number) => {
         if (index === 0) return;
@@ -152,6 +163,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const handleDragStart = (e: React.DragEvent, index: number) => {
         setDraggedIndex(index);
         e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', index.toString());
     };
 
     const handleDragEnter = (e: React.DragEvent, index: number) => {
@@ -175,7 +187,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         }
         setDraggedIndex(null);
         setDragOverIndex(null);
-        setDraggableItemId(null);
     };
 
     const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
@@ -1898,11 +1909,21 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 return (
                                                     <div
                                                         key={item.id}
-                                                        draggable={isPricingMode && draggableItemId === item.id}
-                                                        onDragStart={(e) => handleDragStart(e, originalIndex)}
-                                                        onDragEnter={(e) => handleDragEnter(e, originalIndex)}
-                                                        onDragOver={(e) => e.preventDefault()}
-                                                        onDragEnd={handleDragEnd}
+                                                        onDragEnter={(e) => {
+                                                            if (draggedIndex !== null) handleDragEnter(e, originalIndex);
+                                                        }}
+                                                        onDragOver={(e) => {
+                                                            if (draggedIndex !== null) {
+                                                                e.preventDefault();
+                                                                e.dataTransfer.dropEffect = 'move';
+                                                            }
+                                                        }}
+                                                        onDrop={(e) => {
+                                                            if (draggedIndex !== null) {
+                                                                e.preventDefault();
+                                                                handleDragEnd();
+                                                            }
+                                                        }}
                                                         className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row relative ${dragOverIndex === originalIndex ? 'border-t-2 border-t-primary' : ''}`}
                                                     >
                                                         {/* Heading Input placed ON TOP of each item */}
@@ -1911,6 +1932,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             <Input
                                                                 value={item.area || ""}
                                                                 onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
+                                                                onDragStart={(e) => e.stopPropagation()}
+                                                                onCopy={(e) => e.stopPropagation()}
+                                                                onCut={(e) => e.stopPropagation()}
+                                                                onPaste={(e) => e.stopPropagation()}
                                                                 className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
                                                                 placeholder="HEADING"
                                                             />
@@ -1922,9 +1947,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 select-none justify-start md:justify-center">
                                                                 <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
                                                                 <div 
+                                                                    draggable={isPricingMode}
+                                                                    onDragStart={(e) => handleDragStart(e, originalIndex)}
+                                                                    onDragEnd={handleDragEnd}
                                                                     className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0"
-                                                                    onMouseEnter={() => setDraggableItemId(item.id)}
-                                                                    onMouseLeave={() => setDraggableItemId(null)}
+                                                                    title="Drag to reorder"
                                                                 >
                                                                     <GripVertical className="h-4 w-4" />
                                                                 </div>
@@ -1942,6 +1969,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                     value={item.description}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
                                                                     onDragStart={(e) => e.stopPropagation()}
+                                                                    onCopy={(e) => e.stopPropagation()}
+                                                                    onCut={(e) => e.stopPropagation()}
+                                                                    onPaste={(e) => e.stopPropagation()}
                                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
                                                                     placeholder="Item Description"
                                                                     required
@@ -1955,6 +1985,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                     type="number"
                                                                     value={item.quantity}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                                                    onDragStart={(e) => e.stopPropagation()}
                                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs"
                                                                     required
                                                                 />
@@ -1966,6 +1997,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                 <Input
                                                                     value={item.unit || ""}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'unit', e.target.value)}
+                                                                    onDragStart={(e) => e.stopPropagation()}
                                                                     placeholder="ea"
                                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center h-9 w-full text-xs"
                                                                 />
@@ -1980,6 +2012,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                         type="number"
                                                                         value={item.unitPrice}
                                                                         onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                                                        onDragStart={(e) => e.stopPropagation()}
                                                                         className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs"
                                                                         required
                                                                     />
@@ -1997,36 +2030,46 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             {/* Actions */}
                                                             <div className="md:w-28 flex items-center justify-end md:justify-center gap-1 mt-2 md:mt-0 md:pt-1">
                                                                 <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10"
-                                                                onClick={() => moveItemUp(originalIndex)}
-                                                                title="Move Up"
-                                                            >
-                                                                <ArrowUp className="h-4.5 w-4.5" />
-                                                            </Button>
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10"
-                                                                onClick={() => moveItemDown(originalIndex)}
-                                                                title="Move Down"
-                                                            >
-                                                                <ArrowDown className="h-4.5 w-4.5" />
-                                                            </Button>
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8 rounded-lg text-red-500 hover:bg-red-500/10"
-                                                                onClick={() => handleDeleteItem(item.id)}
-                                                                title="Delete Item"
-                                                            >
-                                                                <Trash2 className="h-4.5 w-4.5" />
-                                                            </Button>
-                                                        </div>
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/10"
+                                                                    onClick={() => handleDuplicateItem(item, originalIndex)}
+                                                                    title="Duplicate Item"
+                                                                >
+                                                                    <Copy className="h-4.5 w-4.5" />
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10"
+                                                                    onClick={() => moveItemUp(originalIndex)}
+                                                                    title="Move Up"
+                                                                >
+                                                                    <ArrowUp className="h-4.5 w-4.5" />
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10"
+                                                                    onClick={() => moveItemDown(originalIndex)}
+                                                                    title="Move Down"
+                                                                >
+                                                                    <ArrowDown className="h-4.5 w-4.5" />
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 rounded-lg text-red-500 hover:bg-red-500/10"
+                                                                    onClick={() => handleDeleteItem(item.id)}
+                                                                    title="Delete Item"
+                                                                >
+                                                                    <Trash2 className="h-4.5 w-4.5" />
+                                                                </Button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );

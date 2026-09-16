@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save, GripVertical, ArrowUp, ArrowDown } from "lucide-react"
+import { FileText, Sparkles, Loader2, Trash2, Plus, Scissors, CheckCircle, Search, Book, Save, GripVertical, ArrowUp, ArrowDown, Copy } from "lucide-react"
 import { formatCurrency, cn } from "@/lib/utils"
 import { generateQuotationAction, getPricingSuggestionsAction, getSuggestedQuoteNumberAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
 import { saveWBPDraftAction } from "@/app/(dashboard)/projects/[id]/sow/actions"
@@ -30,6 +30,7 @@ const WbpItemRow = memo(({
     aiEnabled,
     onUpdate,
     onRemove,
+    onDuplicate,
     onSplit,
     onMoveUp,
     onMoveDown,
@@ -38,6 +39,7 @@ const WbpItemRow = memo(({
     onDragEnter,
     onDragEnd,
     isDragOver,
+    isDraggingActive,
     totalItems
 }: {
     item: any,
@@ -46,6 +48,7 @@ const WbpItemRow = memo(({
     aiEnabled: boolean,
     onUpdate: (index: number, field: string, value: any) => void,
     onRemove: (index: number) => void,
+    onDuplicate: (index: number) => void,
     onSplit: (index: number) => void,
     onMoveUp: (index: number) => void,
     onMoveDown: (index: number) => void,
@@ -54,10 +57,9 @@ const WbpItemRow = memo(({
     onDragEnter: (e: React.DragEvent, index: number) => void,
     onDragEnd: (e: React.DragEvent) => void,
     isDragOver: boolean,
+    isDraggingActive: boolean,
     totalItems: number
 }) => {
-    const [isDraggable, setIsDraggable] = useState(false);
-
     // Local stable handlers to bind the index
     const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         onUpdate(index, 'code', e.target.value)
@@ -95,6 +97,10 @@ const WbpItemRow = memo(({
         onRemove(index)
     }, [index, onRemove])
 
+    const handleDuplicate = useCallback(() => {
+        onDuplicate(index)
+    }, [index, onDuplicate])
+
     const handleMoveUp = useCallback(() => {
         onMoveUp(index)
     }, [index, onMoveUp])
@@ -105,20 +111,32 @@ const WbpItemRow = memo(({
 
     return (
         <tr 
-            draggable={isDraggable}
-            onDragStart={(e) => onDragStart(e, index)}
-            onDragEnter={(e) => onDragEnter(e, index)}
-            onDragOver={(e) => e.preventDefault()}
-            onDragEnd={onDragEnd}
+            onDragEnter={(e) => {
+                if (isDraggingActive) onDragEnter(e, index);
+            }}
+            onDragOver={(e) => {
+                if (isDraggingActive) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                }
+            }}
+            onDrop={(e) => {
+                if (isDraggingActive) {
+                    e.preventDefault();
+                    onDragEnd(e);
+                }
+            }}
             className={`hover:bg-white/[0.02] transition-colors group border-b border-white/5 md:border-none ${isDragOver ? 'border-t-2 border-t-primary' : ''}`}
         >
             <td className="px-4 md:px-8 py-4 md:py-6 space-y-3 block md:table-cell">
                 <div className="flex gap-2 md:gap-4">
                     <div className="flex items-center gap-1.5 pt-2 shrink-0">
                         <div 
+                            draggable
+                            onDragStart={(e) => onDragStart(e, index)}
+                            onDragEnd={onDragEnd}
                             className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-primary transition-colors flex items-start"
-                            onMouseEnter={() => setIsDraggable(true)}
-                            onMouseLeave={() => setIsDraggable(false)}
+                            title="Drag to reorder"
                         >
                             <GripVertical className="h-5 w-5" />
                         </div>
@@ -133,6 +151,7 @@ const WbpItemRow = memo(({
                         <Input
                             value={item.code || ""}
                             onChange={handleCodeChange}
+                            onDragStart={(e) => e.stopPropagation()}
                             className="h-10 text-center font-mono uppercase bg-[#14141E] border-white/10 text-white font-bold"
                             placeholder="CODE"
                         />
@@ -142,6 +161,9 @@ const WbpItemRow = memo(({
                             value={item.description}
                             onChange={handleDescriptionChange}
                             onDragStart={(e) => e.stopPropagation()}
+                            onCopy={(e) => e.stopPropagation()}
+                            onCut={(e) => e.stopPropagation()}
+                            onPaste={(e) => e.stopPropagation()}
                             className="min-h-[70px] bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black text-base resize-none"
                             placeholder="Item specification..."
                         />
@@ -162,6 +184,10 @@ const WbpItemRow = memo(({
                         <Input
                             value={item.area || ""}
                             onChange={handleAreaChange}
+                            onDragStart={(e) => e.stopPropagation()}
+                            onCopy={(e) => e.stopPropagation()}
+                            onCut={(e) => e.stopPropagation()}
+                            onPaste={(e) => e.stopPropagation()}
                             className="h-10 text-[11px] font-bold text-white bg-[#14141E] border-white/10 hover:border-primary/50 transition-all"
                             placeholder="HEADING (OPTIONAL)"
                         />
@@ -170,6 +196,7 @@ const WbpItemRow = memo(({
                 <Input
                     value={item.notes}
                     onChange={handleNotesChange}
+                    onDragStart={(e) => e.stopPropagation()}
                     className="h-8 text-[11px] font-bold text-muted-foreground/60 bg-transparent border-white/5 hover:border-white/20 transition-all italic"
                     placeholder="Commercial or technical notes..."
                 />
@@ -180,6 +207,7 @@ const WbpItemRow = memo(({
                     type="number"
                     value={item.quantity}
                     onChange={handleQuantityChange}
+                    onDragStart={(e) => e.stopPropagation()}
                     className="h-10 text-center font-black bg-[#14141E] border-white/10 text-white"
                 />
             </td>
@@ -188,6 +216,7 @@ const WbpItemRow = memo(({
                 <Input
                     value={item.unit}
                     onChange={handleUnitChange}
+                    onDragStart={(e) => e.stopPropagation()}
                     className="h-10 text-center font-bold bg-[#14141E] border-white/10 text-muted-foreground uppercase text-[10px] tracking-widest"
                     placeholder="ea"
                 />
@@ -200,6 +229,7 @@ const WbpItemRow = memo(({
                         type="number"
                         value={item.unitPrice}
                         onChange={handleUnitPriceChange}
+                        onDragStart={(e) => e.stopPropagation()}
                         className="pl-8 text-right h-10 font-black bg-[#14141E] border-white/10 text-white"
                     />
                 </div>
@@ -215,6 +245,15 @@ const WbpItemRow = memo(({
                 {formatCurrency(item.quantity * item.unitPrice)}
             </td>
             <td className="px-4 py-3 md:py-6 align-top pt-4 md:pt-8 block md:table-cell text-right md:text-left whitespace-nowrap">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-white/10 transition-colors"
+                    onClick={handleDuplicate}
+                    title="Duplicate Item"
+                >
+                    <Copy className="h-4 w-4" />
+                </Button>
                 <Button
                     variant="ghost"
                     size="icon"
@@ -555,7 +594,21 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
         setDraggedIndex(index)
         e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', index.toString())
     }, [])
+
+    const duplicateItem = useCallback((index: number) => {
+        setItems((prev: any[]) => {
+            const next = [...prev];
+            const itemToClone = prev[index];
+            const cloned = {
+                ...itemToClone,
+                id: Math.random().toString(36).substr(2, 9),
+            };
+            next.splice(index + 1, 0, cloned);
+            return next;
+        });
+    }, []);
 
     const handleDragEnter = useCallback((e: React.DragEvent, index: number) => {
         e.preventDefault()
@@ -1163,6 +1216,10 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                                             return item;
                                                                         }));
                                                                     }}
+                                                                    onDragStart={(e) => e.stopPropagation()}
+                                                                    onCopy={(e) => e.stopPropagation()}
+                                                                    onCut={(e) => e.stopPropagation()}
+                                                                    onPaste={(e) => e.stopPropagation()}
                                                                     className="h-8 min-w-[300px] max-w-lg bg-transparent border-none text-[11px] font-black text-left uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-0 placeholder:opacity-20"
                                                                     placeholder="ENTER SECTION HEADING..."
                                                                 />
@@ -1181,6 +1238,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                             aiEnabled={aiEnabled}
                                                             onUpdate={updateItem}
                                                             onRemove={removeItem}
+                                                            onDuplicate={duplicateItem}
                                                             onSplit={splitItem}
                                                             onMoveUp={moveItemUp}
                                                             onMoveDown={moveItemDown}
@@ -1189,6 +1247,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                             onDragEnter={handleDragEnter}
                                                             onDragEnd={handleDragEnd}
                                                             isDragOver={dragOverIndex === item.originalIndex}
+                                                            isDraggingActive={draggedIndex !== null}
                                                             totalItems={items.length}
                                                         />
                                                     )

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Trash, Wand2, Loader2, FileText, GripVertical } from "lucide-react"
+import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy } from "lucide-react"
 import { createInvoiceAction, getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
 import { formatCurrency } from "@/lib/utils"
 import Link from "next/link"
@@ -292,11 +292,11 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
 
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-    const [draggableIndex, setDraggableIndex] = useState<number | null>(null);
 
     const handleDragStart = (e: React.DragEvent, index: number) => {
         setDraggedIndex(index);
         e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', index.toString());
     };
 
     const handleDragEnter = (e: React.DragEvent, index: number) => {
@@ -320,7 +320,23 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         }
         setDraggedIndex(null);
         setDragOverIndex(null);
-        setDraggableIndex(null);
+    };
+
+    const duplicateItem = (index: number) => {
+        setItems(prev => {
+            const newItems = [...prev];
+            const itemToClone = prev[index];
+            newItems.splice(index + 1, 0, {
+                ...itemToClone,
+                code: itemToClone.code || "",
+                description: itemToClone.description || "",
+                quantity: itemToClone.quantity || 1,
+                unit: itemToClone.unit || "",
+                unitPrice: itemToClone.unitPrice || 0,
+                area: itemToClone.area || ""
+            });
+            return newItems;
+        });
     };
 
     const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
@@ -756,7 +772,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             <div className="w-16 text-center">Unit</div>
                             <div className="w-28 text-right">Price</div>
                             <div className="w-28 text-right">Total</div>
-                            <div className="w-10"></div> {/* Delete spacer */}
+                            <div className="w-16 text-center">Actions</div>
                         </div>
 
                         {/* List of Rows */}
@@ -764,11 +780,21 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             {items.map((item, index) => (
                                 <div 
                                     key={index} 
-                                    draggable={draggableIndex === index}
-                                    onDragStart={(e) => handleDragStart(e, index)}
-                                    onDragEnter={(e) => handleDragEnter(e, index)}
-                                    onDragOver={(e) => e.preventDefault()}
-                                    onDragEnd={handleDragEnd}
+                                    onDragEnter={(e) => {
+                                        if (draggedIndex !== null) handleDragEnter(e, index);
+                                    }}
+                                    onDragOver={(e) => {
+                                        if (draggedIndex !== null) {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = 'move';
+                                        }
+                                    }}
+                                    onDrop={(e) => {
+                                        if (draggedIndex !== null) {
+                                            e.preventDefault();
+                                            handleDragEnd();
+                                        }
+                                    }}
                                     className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row relative ${dragOverIndex === index ? 'border-t-2 border-t-primary' : ''}`}
                                 >
                                     {/* Heading Input placed ON TOP of each item */}
@@ -779,6 +805,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                             // @ts-ignore
                                             value={item.area || ""}
                                             onChange={(e) => updateItem(index, 'area', e.target.value)}
+                                            onDragStart={(e) => e.stopPropagation()}
+                                            onCopy={(e) => e.stopPropagation()}
+                                            onCut={(e) => e.stopPropagation()}
+                                            onPaste={(e) => e.stopPropagation()}
                                             className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
                                         />
                                     </div>
@@ -789,9 +819,11 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                         <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 select-none justify-start md:justify-center">
                                             <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
                                             <div 
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, index)}
+                                                onDragEnd={handleDragEnd}
                                                 className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0"
-                                                onMouseEnter={() => setDraggableIndex(index)}
-                                                onMouseLeave={() => setDraggableIndex(null)}
+                                                title="Drag to reorder"
                                             >
                                                 <GripVertical className="h-4 w-4" />
                                             </div>
@@ -823,6 +855,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                         updateItem(index, 'unitPrice', matched.unitPrice);
                                                     }
                                                 }}
+                                                onDragStart={(e) => e.stopPropagation()}
+                                                onCopy={(e) => e.stopPropagation()}
+                                                onCut={(e) => e.stopPropagation()}
+                                                onPaste={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-mono uppercase text-center font-bold h-9 w-full text-xs"
                                             />
                                         </div>
@@ -835,6 +871,9 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                 value={item.description}
                                                 onChange={(e) => updateItem(index, 'description', e.target.value)}
                                                 onDragStart={(e) => e.stopPropagation()}
+                                                onCopy={(e) => e.stopPropagation()}
+                                                onCut={(e) => e.stopPropagation()}
+                                                onPaste={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
                                                 required
                                             />
@@ -848,6 +887,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                 placeholder="1"
                                                 value={item.quantity}
                                                 onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
+                                                onDragStart={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs"
                                                 required
                                             />
@@ -861,6 +901,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                 // @ts-ignore
                                                 value={item.unit || ""}
                                                 onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                                                onDragStart={(e) => e.stopPropagation()}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center h-9 w-full text-xs"
                                             />
                                         </div>
@@ -875,6 +916,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                     placeholder="0.00"
                                                     value={item.unitPrice}
                                                     onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
+                                                    onDragStart={(e) => e.stopPropagation()}
                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs"
                                                     required
                                                 />
@@ -889,19 +931,30 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                             </span>
                                         </div>
 
-                                        {/* Delete action */}
-                                        <div className="md:w-10 flex justify-end md:justify-center items-center mt-2 md:mt-0 md:pt-1">
+                                        {/* Actions */}
+                                        <div className="md:w-16 flex justify-end md:justify-center items-center gap-1 mt-2 md:mt-0 md:pt-1">
                                             <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                                            onClick={() => removeItem(index)}
-                                            disabled={items.length === 1}
-                                        >
-                                            <Trash className="h-4.5 w-4.5" />
-                                        </Button>
-                                    </div>
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                                                onClick={() => duplicateItem(index)}
+                                                title="Duplicate Item"
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                                                onClick={() => removeItem(index)}
+                                                disabled={items.length === 1}
+                                                title="Delete Item"
+                                            >
+                                                <Trash className="h-4.5 w-4.5" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
