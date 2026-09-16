@@ -8,6 +8,7 @@ import { InvoiceFilters } from "@/components/invoices/InvoiceFilters";
 import { deleteInvoiceAction } from "./actions";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import { ensureAuth } from "@/lib/auth-actions";
+import { DraftResumeBanner } from "@/components/drafts/DraftResumeBanner";
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +65,8 @@ export default async function InvoicesPage({
 
     return (
         <div className="space-y-6">
+            <DraftResumeBanner filterType="INVOICE_OR_QUOTE" />
+
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight">
                     {typeFilter === 'QUOTE' ? 'Quotations' : typeFilter === 'INVOICE' ? 'Invoices' : 'Quotes & Invoices'}

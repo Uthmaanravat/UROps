@@ -17,6 +17,9 @@ import { updateProject, updateProjectCommercialStatus } from "@/app/(dashboard)/
 import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-actions"
 import { VoiceRecorder } from "@/components/voice/VoiceRecorder"
 import { InfoTooltip } from "@/components/ui/InfoTooltip"
+import { saveDraft, getDraft, clearDraft, DraftRecord } from "@/lib/drafts"
+import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
+import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
 
 
 // Memoized individual item row to prevent full-table re-renders
@@ -30,10 +33,12 @@ const WbpItemRow = memo(({
     onSplit,
     onMoveUp,
     onMoveDown,
+    onMoveToPosition,
     onDragStart,
     onDragEnter,
     onDragEnd,
-    isDragOver
+    isDragOver,
+    totalItems
 }: {
     item: any,
     index: number,
@@ -44,10 +49,12 @@ const WbpItemRow = memo(({
     onSplit: (index: number) => void,
     onMoveUp: (index: number) => void,
     onMoveDown: (index: number) => void,
+    onMoveToPosition: (fromIndex: number, targetPosition: number) => void,
     onDragStart: (e: React.DragEvent, index: number) => void,
     onDragEnter: (e: React.DragEvent, index: number) => void,
     onDragEnd: (e: React.DragEvent) => void,
-    isDragOver: boolean
+    isDragOver: boolean,
+    totalItems: number
 }) => {
     const [isDraggable, setIsDraggable] = useState(false);
 
@@ -107,12 +114,19 @@ const WbpItemRow = memo(({
         >
             <td className="px-4 md:px-8 py-4 md:py-6 space-y-3 block md:table-cell">
                 <div className="flex gap-2 md:gap-4">
-                    <div 
-                        className="pt-2 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-primary transition-colors flex items-start"
-                        onMouseEnter={() => setIsDraggable(true)}
-                        onMouseLeave={() => setIsDraggable(false)}
-                    >
-                        <GripVertical className="h-5 w-5" />
+                    <div className="flex items-center gap-1.5 pt-2 shrink-0">
+                        <div 
+                            className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-primary transition-colors flex items-start"
+                            onMouseEnter={() => setIsDraggable(true)}
+                            onMouseLeave={() => setIsDraggable(false)}
+                        >
+                            <GripVertical className="h-5 w-5" />
+                        </div>
+                        <ItemPositionInput
+                            position={index + 1}
+                            totalItems={totalItems}
+                            onMove={(targetPos) => onMoveToPosition(index, targetPos)}
+                        />
                     </div>
                     <div className="w-20 shrink-0">
                         <Label className="text-[10px] font-black uppercase text-primary italic mb-1 block">Code</Label>
@@ -274,37 +288,40 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
-    const STORAGE_KEY = `wbp-draft-${wbpId}`
+    const STORAGE_KEY = `urops_draft_wbp_${wbpId}`
+    const [pendingDraft, setPendingDraft] = useState<DraftRecord | null>(null)
 
-    // Check localStorage on mount
+    // Check localStorage on mount for pending unsaved draft
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY)
-        if (saved) {
-            try {
-                const { items: savedItems, site: savedSite, quoteNumber: savedQuote, reference: savedRef, notes: savedNotes } = JSON.parse(saved)
-                if (confirm("You have an unsaved session. Would you like to resume?")) {
-                    setItems(savedItems)
-                    setSite(savedSite)
-                    setQuoteNumber(savedQuote)
-                    setReference(savedRef)
-                    setQuotationNotes(savedNotes)
-                } else {
-                    localStorage.removeItem(STORAGE_KEY)
-                }
-            } catch (e) {
-                console.error("Failed to parse saved session", e)
+        const saved = getDraft(STORAGE_KEY) || getDraft(`wbp-draft-${wbpId}`)
+        if (saved && saved.data) {
+            const hasDraftItems = Array.isArray(saved.data.items) && saved.data.items.length > 0
+            const hasDraftInfo = Boolean(saved.data.site || saved.data.notes || saved.data.quoteNumber)
+            if (hasDraftItems || hasDraftInfo) {
+                setPendingDraft(saved)
             }
         }
     }, [wbpId, STORAGE_KEY])
 
-    // Auto-save to localStorage
-    useEffect(() => {
-        if (items.length > 0 && !submitted) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                items, site, quoteNumber, reference, notes: quotationNotes, projectName, timestamp: Date.now()
-            }))
-        }
-    }, [items, site, quoteNumber, reference, quotationNotes, projectName, submitted, STORAGE_KEY])
+    const handleRestoreDraft = useCallback(() => {
+        if (!pendingDraft?.data) return
+        const d = pendingDraft.data
+        if (d.items && Array.isArray(d.items)) setItems(d.items)
+        if (d.site !== undefined) setSite(d.site)
+        if (d.quoteNumber !== undefined) setQuoteNumber(d.quoteNumber)
+        if (d.reference !== undefined) setReference(d.reference)
+        if (d.notes !== undefined) setQuotationNotes(d.notes)
+        if (d.projectName !== undefined) setProjectName(d.projectName)
+        if (d.contactId !== undefined) setContactId(d.contactId)
+        if (d.attentionTo !== undefined) setAttentionTo(d.attentionTo)
+        setPendingDraft(null)
+    }, [pendingDraft])
+
+    const handleDiscardDraft = useCallback(() => {
+        clearDraft(STORAGE_KEY)
+        clearDraft(`wbp-draft-${wbpId}`)
+        setPendingDraft(null)
+    }, [STORAGE_KEY, wbpId])
 
     // Catalog state
     const [catalog, setCatalog] = useState<any[]>([])
@@ -565,6 +582,25 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
         setDragOverIndex(null)
     }, [draggedIndex, dragOverIndex])
 
+    const handleMoveToPosition = useCallback((fromIndex: number, targetPosition: number) => {
+        if (isNaN(targetPosition)) return;
+        setItems((prev: any[]) => {
+            if (fromIndex < 0 || fromIndex >= prev.length) return prev;
+            const toIndex = Math.max(0, Math.min(prev.length - 1, targetPosition - 1));
+            if (fromIndex === toIndex) return prev;
+
+            const newItems = [...prev];
+            const itemToMove = { ...newItems[fromIndex] };
+            const destItem = prev[toIndex];
+            if (destItem && destItem.area) {
+                itemToMove.area = destItem.area;
+            }
+            newItems.splice(fromIndex, 1);
+            newItems.splice(toIndex, 0, itemToMove);
+            return newItems;
+        });
+    }, []);
+
     const addFromCatalog = useCallback((catalogItem: any) => {
         setItems((prev: any[]) => {
             const newItem = {
@@ -642,6 +678,36 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
 
     const total = useMemo(() => subtotal * 1.15, [subtotal]) // 15% VAT
 
+    // Debounced Auto-save to localStorage
+    useEffect(() => {
+        if (submitted || pendingDraft) return
+        if (items.length === 0 && !site && !quotationNotes && !reference) return
+
+        const timer = setTimeout(() => {
+            saveDraft({
+                key: STORAGE_KEY,
+                type: 'WBP',
+                id: wbpId,
+                title: `WBP: ${projectName || site || project.name || 'Draft'}`,
+                url: `/work-breakdown-pricing/${wbpId}`,
+                itemCount: items.length,
+                total: total,
+                data: {
+                    items,
+                    site,
+                    quoteNumber,
+                    reference,
+                    notes: quotationNotes,
+                    projectName,
+                    contactId,
+                    attentionTo
+                }
+            })
+        }, 800)
+
+        return () => clearTimeout(timer)
+    }, [items, site, quoteNumber, reference, quotationNotes, projectName, contactId, attentionTo, submitted, pendingDraft, STORAGE_KEY, wbpId, project.name, total])
+
     const handleGenerate = async () => {
         setIsGenerating(true)
         try {
@@ -663,7 +729,8 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
             setLastQuoteNumber(quote.quoteNumber || quote.number?.toString())
             // Remove success card auto-show if user wants to stay in editor, or just keep it but ensure it's not locking
             setSubmitted(true)
-            localStorage.removeItem(STORAGE_KEY)
+            clearDraft(STORAGE_KEY)
+            clearDraft(`wbp-draft-${wbpId}`)
 
             // Rename project in UI locally if reference changed
             project.name = reference;
@@ -692,6 +759,8 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                 contactId: contactId || null,
                 attentionTo: attentionTo || null
             })
+            clearDraft(STORAGE_KEY)
+            clearDraft(`wbp-draft-${wbpId}`)
             alert("Draft saved successfully!")
         } catch (error) {
             console.error("Error saving draft:", error)
@@ -769,14 +838,26 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                         </CardContent>
                     </Card>
                 )}
+
+                {pendingDraft && (
+                    <EditorDraftBanner
+                        draft={pendingDraft}
+                        onRestore={handleRestoreDraft}
+                        onDiscard={handleDiscardDraft}
+                    />
+                )}
+
                 <Card className="border-white/5 bg-[#1A1A2E] shadow-2xl overflow-hidden rounded-2xl">
                     <CardHeader className="bg-white/5 p-6 border-b border-white/5">
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle className="flex items-center gap-2 md:gap-3 text-lg md:text-2xl font-black text-white uppercase italic">
-                                    <FileText className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                                    Pricing Breakdown
-                                </CardTitle>
+                                <div className="flex items-center gap-3">
+                                    <CardTitle className="flex items-center gap-2 md:gap-3 text-lg md:text-2xl font-black text-white uppercase italic">
+                                        <FileText className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                                        Pricing Breakdown
+                                    </CardTitle>
+                                    <AutoSaveIndicator draftKey={STORAGE_KEY} />
+                                </div>
                                 <p className="text-[9px] md:text-xs text-muted-foreground font-black mt-1 md:mt-2 uppercase tracking-[0.2em]">
                                     Engineering metrics & commercial validation.
                                 </p>
@@ -1102,10 +1183,12 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                                             onSplit={splitItem}
                                                             onMoveUp={moveItemUp}
                                                             onMoveDown={moveItemDown}
+                                                            onMoveToPosition={handleMoveToPosition}
                                                             onDragStart={handleDragStart}
                                                             onDragEnter={handleDragEnter}
                                                             onDragEnd={handleDragEnd}
                                                             isDragOver={dragOverIndex === item.originalIndex}
+                                                            totalItems={items.length}
                                                         />
                                                     )
                                                 })}

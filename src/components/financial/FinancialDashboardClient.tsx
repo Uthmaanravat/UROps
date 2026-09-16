@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatCurrency } from "@/lib/utils"
 import { Upload, Plus, TrendingUp, TrendingDown, DollarSign, Brain, Loader2, ArrowUpRight, ArrowDownRight, Briefcase, Activity, Calendar, AlertCircle, PieChart as PieChartIcon } from "lucide-react"
-import { processBankStatementAction, addManualTransactionAction } from "@/app/(dashboard)/financial-dashboard/actions"
+import { processBankStatementAction, addManualTransactionAction, deleteTransactionAction, clearUploadedTransactionsAction } from "@/app/(dashboard)/financial-dashboard/actions"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Badge } from "@/components/ui/badge"
-import { Check, Copy, ChevronRight, Building2, Mail, Users } from "lucide-react"
+import { Check, Copy, ChevronRight, Building2, Mail, Users, Trash2 } from "lucide-react"
 import { InfoTooltip } from "@/components/ui/InfoTooltip"
 
 
@@ -23,7 +23,9 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
     const [uploadError, setUploadError] = useState<string | null>(null)
     
     // Manual Transaction State
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
     const [isAddingTransaction, setIsAddingTransaction] = useState(false)
+    const [isDeletingId, setIsDeletingId] = useState<string | null>(null)
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
     const [description, setDescription] = useState("")
     const [amount, setAmount] = useState("")
@@ -85,10 +87,23 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
             });
             setDescription("");
             setAmount("");
+            setIsAddDialogOpen(false);
         } catch (error) {
             console.error(error);
         } finally {
             setIsAddingTransaction(false);
+        }
+    };
+
+    const handleDeleteTransaction = async (transactionId: string) => {
+        if (!confirm("Are you sure you want to delete this transaction?")) return;
+        setIsDeletingId(transactionId);
+        try {
+            await deleteTransactionAction(transactionId);
+        } catch (error) {
+            console.error("Failed to delete transaction:", error);
+        } finally {
+            setIsDeletingId(null);
         }
     };
 
@@ -308,7 +323,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                         ))}
                     </div>
                     <div className="flex items-center gap-2 w-full md:w-auto">
-                        <Dialog>
+                        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                             <DialogTrigger asChild>
                                 <Button variant="outline" className="flex-1 md:flex-none border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 text-white font-bold backdrop-blur-sm">
                                     <Plus className="mr-2 h-4 w-4" /> Add Record
@@ -790,6 +805,7 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                             <th className="py-3 px-4">Description</th>
                                             <th className="py-3 px-4">Category</th>
                                             <th className="py-3 px-4 text-right">Amount</th>
+                                            <th className="py-3 px-2 text-right">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -799,6 +815,18 @@ export function FinancialDashboardClient({ invoices, transactions, projects = []
                                                 <td className="py-3 px-4 font-medium text-white">{t.description}</td>
                                                 <td className="py-3 px-4"><Badge variant="outline" className="bg-white/5 border-white/10">{t.category}</Badge></td>
                                                 <td className={`py-3 px-4 text-right font-black ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(Number(t.amount) || 0)}</td>
+                                                <td className="py-3 px-2 text-right">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        disabled={isDeletingId === t.id}
+                                                        onClick={() => handleDeleteTransaction(t.id)}
+                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                                                        title="Delete transaction"
+                                                    >
+                                                        {isDeletingId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>

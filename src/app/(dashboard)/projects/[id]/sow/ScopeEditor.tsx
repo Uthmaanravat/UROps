@@ -12,6 +12,8 @@ import { VoiceFieldInput } from "@/components/ui/VoiceFieldInput"
 import { submitScopeAction, saveSOWDraftAction } from "./actions"
 import { SOWChecklistButton } from "./SOWChecklistButton"
 import Link from "next/link"
+import { saveDraft, getDraft, clearDraft, DraftRecord } from "@/lib/drafts"
+import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
 
 interface ScopeEditorProps {
     project: any
@@ -30,32 +32,58 @@ export function ScopeEditor({ project, initialItems, settings }: ScopeEditorProp
     const [submitted, setSubmitted] = useState(false)
     const [wbpId, setWbpId] = useState<string | null>(null)
 
-    const STORAGE_KEY = `sow-draft-${projectId}`
+    const STORAGE_KEY = `urops_draft_sow_${projectId}`
+    const [pendingDraft, setPendingDraft] = useState<DraftRecord | null>(null)
 
-    // Check localStorage on mount
+    // Check localStorage on mount for pending draft
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY)
-        if (saved) {
-            try {
-                const { items: savedItems, site: savedSite } = JSON.parse(saved)
-                if (confirm("You have an unsaved session. Would you like to resume?")) {
-                    setItems(savedItems)
-                    setSite(savedSite)
-                } else {
-                    localStorage.removeItem(STORAGE_KEY)
-                }
-            } catch (e) {
-                console.error("Failed to parse saved session", e)
+        const saved = getDraft(STORAGE_KEY) || getDraft(`sow-draft-${projectId}`)
+        if (saved && saved.data) {
+            const hasDraftItems = Array.isArray(saved.data.items) && saved.data.items.length > 0 && saved.data.items.some((i: any) => i.description)
+            const hasDraftSite = Boolean(saved.data.site)
+            if (hasDraftItems || hasDraftSite) {
+                setPendingDraft(saved)
             }
         }
     }, [projectId, STORAGE_KEY])
 
-    // Auto-save to localStorage
-    useEffect(() => {
-        if (items.length > 0 && !submitted) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ items, site, timestamp: Date.now() }))
+    const handleRestoreDraft = () => {
+        if (!pendingDraft?.data) return
+        if (pendingDraft.data.items && Array.isArray(pendingDraft.data.items)) {
+            setItems(pendingDraft.data.items)
         }
-    }, [items, site, submitted, STORAGE_KEY])
+        if (pendingDraft.data.site !== undefined) {
+            setSite(pendingDraft.data.site)
+        }
+        setPendingDraft(null)
+    }
+
+    const handleDiscardDraft = () => {
+        clearDraft(STORAGE_KEY)
+        clearDraft(`sow-draft-${projectId}`)
+        setPendingDraft(null)
+    }
+
+    // Debounced auto-save to localStorage
+    useEffect(() => {
+        if (submitted || pendingDraft) return
+        const hasContent = items.some(i => i.description) || Boolean(site)
+        if (!hasContent) return
+
+        const timer = setTimeout(() => {
+            saveDraft({
+                key: STORAGE_KEY,
+                type: 'SOW',
+                id: projectId,
+                title: `SOW: ${project.name || site || 'Draft'}`,
+                url: `/projects/${projectId}/sow`,
+                itemCount: items.length,
+                data: { items, site }
+            })
+        }, 800)
+
+        return () => clearTimeout(timer)
+    }, [items, site, submitted, pendingDraft, STORAGE_KEY, projectId, project.name])
 
     const addItem = () => setItems([...items, { description: "", quantity: 1, unit: "", notes: "" }])
     const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index))
@@ -94,6 +122,8 @@ export function ScopeEditor({ project, initialItems, settings }: ScopeEditorProp
         setSaving(true)
         try {
             await saveSOWDraftAction(projectId, items, site)
+            clearDraft(STORAGE_KEY)
+            clearDraft(`sow-draft-${projectId}`)
             alert("Draft saved successfully!")
         } catch (error) {
             console.error("Error saving draft:", error)
@@ -115,7 +145,8 @@ export function ScopeEditor({ project, initialItems, settings }: ScopeEditorProp
             // @ts-ignore
             setWbpId(result.wbpId)
             setSubmitted(true)
-            localStorage.removeItem(STORAGE_KEY)
+            clearDraft(STORAGE_KEY)
+            clearDraft(`sow-draft-${projectId}`)
             // Scroll to top to show confirmation
             window.scrollTo({ top: 0, behavior: 'smooth' })
         } catch (error) {
@@ -165,10 +196,22 @@ export function ScopeEditor({ project, initialItems, settings }: ScopeEditorProp
                     </CardContent>
                 </Card>
             )}
+
+            {pendingDraft && (
+                <EditorDraftBanner
+                    draft={pendingDraft}
+                    onRestore={handleRestoreDraft}
+                    onDiscard={handleDiscardDraft}
+                />
+            )}
+
             <Card className="bg-[#1A1A2E] border-white/5 shadow-2xl overflow-hidden rounded-2xl">
                 <CardHeader className="flex flex-row items-center justify-between pb-6 border-b border-white/5 bg-white/5">
                     <div>
-                        <CardTitle className="text-2xl font-black text-white">Scope Definition</CardTitle>
+                        <div className="flex items-center gap-3">
+                            <CardTitle className="text-2xl font-black text-white">Scope Definition</CardTitle>
+                            <AutoSaveIndicator draftKey={STORAGE_KEY} />
+                        </div>
                         <p className="text-xs text-muted-foreground font-medium mt-1">Specify technical requirements for the breakdown.</p>
                     </div>
                     <Button

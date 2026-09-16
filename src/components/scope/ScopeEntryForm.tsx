@@ -12,6 +12,8 @@ import Link from "next/link"
 import { createMobileSOWAction, saveScopeDraftAction } from "@/app/(dashboard)/scope/actions"
 import { VoiceFieldInput } from "@/components/ui/VoiceFieldInput"
 import { InfoTooltip } from "@/components/ui/InfoTooltip"
+import { saveDraft, getDraft, clearDraft, DraftRecord } from "@/lib/drafts"
+import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
 
 // Individual row component (removed memo to ensure fresh handlers/props)
 const ScopeItemRow = ({
@@ -178,15 +180,14 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
 
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
-    const [showResume, setShowResume] = useState(false)
-    const [pendingDraft, setPendingDraft] = useState<any>(null)
+    const [pendingDraft, setPendingDraft] = useState<DraftRecord | null>(null)
     const [recordingKey, setRecordingKey] = useState<string | null>(null)
     const [submitted, setSubmitted] = useState(false)
     const [wbpId, setWbpId] = useState<string | null>(null)
 
-    const STORAGE_KEY = `mobile-sow-draft-v4` // Fresh key
+    const STORAGE_KEY = `urops_draft_scope_new`
 
-    // 2. Client-side only initialization
+    // Client-side only initialization
     useEffect(() => {
         // Set date
         if (!date) {
@@ -194,24 +195,60 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
         }
 
         // Check draft
-        const saved = localStorage.getItem(STORAGE_KEY)
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved)
-                setPendingDraft(parsed)
-                setShowResume(true)
-            } catch (e) {
-                console.error("Draft parse error", e)
+        const saved = getDraft(STORAGE_KEY) || getDraft('mobile-sow-draft-v4')
+        if (saved && saved.data) {
+            const hasData = Boolean(
+                saved.data.clientId ||
+                saved.data.site ||
+                (saved.data.areas && saved.data.areas.length > 0 && saved.data.areas.some((a: any) => a.name || a.items?.some((i: any) => i.description)))
+            )
+            if (hasData) {
+                setPendingDraft(saved)
             }
         }
-    }, [date])
+    }, [date, STORAGE_KEY])
 
-    // Auto-save
+    const handleRestoreDraft = () => {
+        if (!pendingDraft?.data) return
+        const d = pendingDraft.data
+        if (d.clientId !== undefined) setClientId(d.clientId)
+        if (d.site !== undefined) setSite(d.site)
+        if (d.areas && Array.isArray(d.areas)) setAreas(d.areas)
+        if (d.date !== undefined) setDate(d.date)
+        setPendingDraft(null)
+    }
+
+    const handleDiscardDraft = () => {
+        clearDraft(STORAGE_KEY)
+        clearDraft('mobile-sow-draft-v4')
+        setPendingDraft(null)
+    }
+
+    // Debounced Auto-save
     useEffect(() => {
-        if (!submitted && (clientId || site || areas.length > 1 || areas[0].name || areas[0].items[0].description)) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ clientId, site, areas, date }))
-        }
-    }, [clientId, site, areas, date, submitted])
+        if (submitted || pendingDraft) return
+        const hasContent = Boolean(
+            clientId ||
+            site ||
+            (areas.length > 0 && areas.some((a: any) => a.name || a.items?.some((i: any) => i.description)))
+        )
+        if (!hasContent) return
+
+        const timer = setTimeout(() => {
+            const flattened = areas.flatMap((a: any) => (a.items || []).filter((i: any) => i.description))
+            saveDraft({
+                key: STORAGE_KEY,
+                type: 'SOW',
+                id: 'new',
+                title: `Scope: ${site || 'Field Assessment'}`,
+                url: '/scope/new',
+                itemCount: flattened.length,
+                data: { clientId, site, areas, date }
+            })
+        }, 800)
+
+        return () => clearTimeout(timer)
+    }, [clientId, site, areas, date, submitted, pendingDraft, STORAGE_KEY])
 
     // 3. Simple Handlers (GUARANTEED IMMUTABLE UPDATES)
     const addArea = () => {
@@ -339,7 +376,8 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
             })
             setWbpId(result.wbpId)
             setSubmitted(true)
-            localStorage.removeItem(STORAGE_KEY)
+            clearDraft(STORAGE_KEY)
+            clearDraft('mobile-sow-draft-v4')
             window.scrollTo({ top: 0, behavior: "smooth" })
         } catch (error) {
             console.error("Submit Error", error)
@@ -359,7 +397,8 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                 clientId, site, date, items: flattenData()
             })
             alert("Draft saved!")
-            localStorage.removeItem(STORAGE_KEY)
+            clearDraft(STORAGE_KEY)
+            clearDraft('mobile-sow-draft-v4')
         } catch (error) {
             console.error("Draft Error", error)
         } finally {
@@ -398,40 +437,13 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto py-6 px-4 relative">
-            {showResume && pendingDraft && (
-                <div className="fixed bottom-4 left-4 right-4 z-50 animate-in slide-in-from-bottom-full duration-500">
-                    <Card className="bg-primary border-primary p-4 shadow-2xl flex items-center justify-between text-primary-foreground rounded-xl">
-                        <div className="flex-1">
-                            <p className="font-black uppercase text-[10px] tracking-widest opacity-80">Draft Found</p>
-                            <p className="text-xs font-bold">Resume your previous session?</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button
-                                size="sm"
-                                variant="secondary"
-                                className="h-8 text-[10px] font-black uppercase"
-                                onClick={() => {
-                                    setClientId(pendingDraft.clientId || "")
-                                    setSite(pendingDraft.site || "")
-                                    setAreas(pendingDraft.areas || areas)
-                                    setShowResume(false)
-                                }}
-                            >
-                                Resume
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 text-[10px] font-black uppercase text-primary-foreground hover:bg-white/10"
-                                onClick={() => {
-                                    localStorage.removeItem(STORAGE_KEY)
-                                    setShowResume(false)
-                                }}
-                            >
-                                Dismiss
-                            </Button>
-                        </div>
-                    </Card>
+            {pendingDraft && (
+                <div className="mb-4">
+                    <EditorDraftBanner
+                        draft={pendingDraft}
+                        onRestore={handleRestoreDraft}
+                        onDiscard={handleDiscardDraft}
+                    />
                 </div>
             )}
 
@@ -443,10 +455,13 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                         </Button>
                     </Link>
                     <div>
-                        <h1 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase italic flex items-center">
-                            Scope Entry
-                            <InfoTooltip content="Site requirement logging tool. Log multiple areas and tasks. You can record requirements using voice notes, which the AI automatically transcribes." />
-                        </h1>
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase italic flex items-center">
+                                Scope Entry
+                                <InfoTooltip content="Site requirement logging tool. Log multiple areas and tasks. You can record requirements using voice notes, which the AI automatically transcribes." />
+                            </h1>
+                            <AutoSaveIndicator draftKey={STORAGE_KEY} />
+                        </div>
                         <p className="text-[8px] md:text-[10px] font-bold text-primary uppercase tracking-[0.2em] md:tracking-[0.3em] -mt-1">Technical Requirement Capture</p>
                     </div>
                 </div>
@@ -584,7 +599,8 @@ export function ScopeEntryForm({ clients }: { clients: any[] }) {
                                 setAreas([{ id: "initial-area", name: "", items: [{ id: "initial-item", description: "" }] }])
                                 setClientId("")
                                 setSite("")
-                                localStorage.removeItem(STORAGE_KEY)
+                                clearDraft(STORAGE_KEY)
+                                clearDraft('mobile-sow-draft-v4')
                             }
                         }}
                         className="text-muted-foreground hover:text-white font-bold h-11 md:h-12 rounded-xl"

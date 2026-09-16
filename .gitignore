@@ -23,3 +23,5 @@ lint_output.txt
 New App/
 venv/
 .venv/
+.claude/
+*.tsbuildinfo

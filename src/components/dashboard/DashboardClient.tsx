@@ -38,6 +38,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { InfoTooltip } from "@/components/ui/InfoTooltip"
+import { DraftResumeBanner } from "@/components/drafts/DraftResumeBanner"
 import { 
     BarChart, 
     Bar, 
@@ -146,6 +147,9 @@ export function DashboardClient({ data }: DashboardClientProps) {
                     </Link>
                 </div>
             </div>
+
+            {/* Unsaved Work Recovery Banner */}
+            <DraftResumeBanner />
 
             {/* Quick Stats Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

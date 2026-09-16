@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Trash, Wand2, Loader2, FileText } from "lucide-react"
+import { Plus, Trash, Wand2, Loader2, FileText, GripVertical } from "lucide-react"
 import { createInvoiceAction, getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
 import { formatCurrency } from "@/lib/utils"
 import Link from "next/link"
@@ -18,6 +18,9 @@ import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-acti
 import { VoiceRecorder } from "@/components/voice/VoiceRecorder"
 import { Search, Book } from "lucide-react"
 import { InfoTooltip } from "@/components/ui/InfoTooltip"
+import { saveDraft, getDraft, clearDraft } from "@/lib/drafts"
+import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
+import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
 
 
 
@@ -45,8 +48,12 @@ interface QuoteFormProps {
 
 export function QuoteForm({ clients, projects, initialClientId, initialProjectId, initialScope, aiEnabled = true }: QuoteFormProps) {
     const router = useRouter()
-    const STORAGE_KEY = `quote-form-draft`
+    const STORAGE_KEY = `urops_draft_quote_new`
     const isRestoring = useRef(false)
+    const initialLoaded = useRef(false)
+    const [pendingDraft, setPendingDraft] = useState<any | null>(null)
+    const [lastSavedTimestamp, setLastSavedTimestamp] = useState<number | null>(null)
+    const [isSavingDraft, setIsSavingDraft] = useState(false)
     const [loading, setLoading] = useState(false)
     const [scopeOpen, setScopeOpen] = useState(!!initialScope)
     const [scopeText, setScopeText] = useState(initialScope || "")
@@ -104,62 +111,93 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
 
     // Check localStorage on mount
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY)
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved)
-                if (confirm("You have an unsaved session. Would you like to resume?")) {
-                    isRestoring.current = true
-                    if (parsed.clientId) setClientId(parsed.clientId)
-                    if (parsed.projectId) setProjectId(parsed.projectId)
-                    if (parsed.date) setDate(parsed.date)
-                    if (parsed.items) setItems(parsed.items)
-                    if (parsed.site) setSite(parsed.site)
-                    if (parsed.quoteNumber) setQuoteNumber(parsed.quoteNumber)
-                    if (parsed.reference) setReference(parsed.reference)
-                    if (parsed.projectName) setProjectName(parsed.projectName)
-                    if (parsed.paymentNotes) setPaymentNotes(parsed.paymentNotes)
-                    if (parsed.firstPaymentOption) setFirstPaymentOption(parsed.firstPaymentOption)
-                    if (parsed.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(parsed.customFirstPaymentPercentage)
-                    if (parsed.showPaymentNotes !== undefined) setShowPaymentNotes(parsed.showPaymentNotes)
-                    if (parsed.contactId) setContactId(parsed.contactId)
-                    if (parsed.attentionTo) setAttentionTo(parsed.attentionTo)
-                    
-                    // Allow effects to see that we are done restoring in the next tick
-                    setTimeout(() => {
-                        isRestoring.current = false
-                    }, 100)
-                } else {
-                    localStorage.removeItem(STORAGE_KEY)
-                }
-            } catch (e) {
-                console.error("Failed to parse saved session", e)
-            }
+        const saved = getDraft(STORAGE_KEY) || getDraft('quote-form-draft');
+        if (saved && saved.data) {
+            setPendingDraft(saved);
         }
+        setTimeout(() => {
+            initialLoaded.current = true;
+        }, 300);
     }, [STORAGE_KEY])
 
-    // Auto-save to localStorage
+    const handleRestoreDraft = () => {
+        if (!pendingDraft || !pendingDraft.data) return;
+        isRestoring.current = true;
+        const parsed = pendingDraft.data;
+        if (parsed.clientId) setClientId(parsed.clientId)
+        if (parsed.projectId) setProjectId(parsed.projectId)
+        if (parsed.date) setDate(parsed.date)
+        if (parsed.items) setItems(parsed.items)
+        if (parsed.site) setSite(parsed.site)
+        if (parsed.quoteNumber) setQuoteNumber(parsed.quoteNumber)
+        if (parsed.reference) setReference(parsed.reference)
+        if (parsed.projectName) setProjectName(parsed.projectName)
+        if (parsed.paymentNotes) setPaymentNotes(parsed.paymentNotes)
+        if (parsed.firstPaymentOption) setFirstPaymentOption(parsed.firstPaymentOption)
+        if (parsed.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(parsed.customFirstPaymentPercentage)
+        if (parsed.showPaymentNotes !== undefined) setShowPaymentNotes(parsed.showPaymentNotes)
+        if (parsed.contactId) setContactId(parsed.contactId)
+        if (parsed.attentionTo) setAttentionTo(parsed.attentionTo)
+        setLastSavedTimestamp(pendingDraft.updatedAt)
+        setPendingDraft(null)
+        setTimeout(() => {
+            isRestoring.current = false
+        }, 100)
+    };
+
+    const handleDiscardDraft = () => {
+        clearDraft(STORAGE_KEY);
+        clearDraft('quote-form-draft');
+        setPendingDraft(null);
+        setLastSavedTimestamp(null);
+    };
+
+    // Debounced Auto-save to localStorage
     useEffect(() => {
-        if (items.length > 0 && !submitted && !isRestoring.current) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                clientId,
-                projectId,
-                date,
-                items,
-                site,
-                quoteNumber,
-                reference,
-                projectName,
-                paymentNotes,
-                firstPaymentOption,
-                customFirstPaymentPercentage,
-                showPaymentNotes,
-                contactId,
-                attentionTo,
-                timestamp: Date.now()
-            }))
-        }
-    }, [clientId, projectId, date, items, site, quoteNumber, reference, projectName, paymentNotes, firstPaymentOption, customFirstPaymentPercentage, showPaymentNotes, contactId, attentionTo, submitted, STORAGE_KEY])
+        if (!initialLoaded.current || submitted || isRestoring.current || pendingDraft) return;
+
+        const hasContent = items.some(i => (i.description && i.description.trim()) || Number(i.unitPrice) > 0 || (i.area && i.area.trim())) || site.trim() || projectName.trim() || reference.trim();
+        if (!hasContent) return;
+
+        setIsSavingDraft(true);
+        const timer = setTimeout(() => {
+            const subtotal = items.reduce((acc, item) => acc + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
+            const total = subtotal * 1.15;
+            const clientObj = clients.find(c => c.id === clientId);
+            const docTitle = (projectName ? `Quote: ${projectName}` : 'New Quotation Draft') + (clientObj ? ` (${clientObj.name})` : '');
+
+            saveDraft({
+                key: STORAGE_KEY,
+                type: 'QUOTATION',
+                id: 'new',
+                title: docTitle,
+                url: '/invoices/new?type=QUOTE',
+                updatedAt: Date.now(),
+                itemCount: items.length,
+                total,
+                data: {
+                    clientId,
+                    projectId,
+                    date,
+                    items,
+                    site,
+                    quoteNumber,
+                    reference,
+                    projectName,
+                    paymentNotes,
+                    firstPaymentOption,
+                    customFirstPaymentPercentage,
+                    showPaymentNotes,
+                    contactId,
+                    attentionTo
+                }
+            });
+            setIsSavingDraft(false);
+            setLastSavedTimestamp(Date.now());
+        }, 800);
+
+        return () => clearTimeout(timer);
+    }, [clientId, projectId, date, items, site, quoteNumber, reference, projectName, paymentNotes, firstPaymentOption, customFirstPaymentPercentage, showPaymentNotes, contactId, attentionTo, submitted, pendingDraft, STORAGE_KEY, clients]);
 
     // Sync sequence number when clientId changes
     useEffect(() => {
@@ -252,6 +290,56 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
         setItems(newItems)
     }
 
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+    const handleDragStart = (e: React.DragEvent, index: number) => {
+        setDraggedIndex(index);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragEnter = (e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        setDragOverIndex(index);
+    };
+
+    const handleDragEnd = () => {
+        if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+            setItems(prev => {
+                const newItems = [...prev];
+                const itemToMove = { ...newItems[draggedIndex] };
+                const destItem = newItems[dragOverIndex];
+                if (destItem && destItem.area) {
+                    itemToMove.area = destItem.area;
+                }
+                newItems.splice(draggedIndex, 1);
+                newItems.splice(dragOverIndex, 0, itemToMove);
+                return newItems;
+            });
+        }
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+    };
+
+    const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
+        if (isNaN(targetPosition)) return;
+        setItems(prev => {
+            if (fromIndex < 0 || fromIndex >= prev.length) return prev;
+            const toIndex = Math.max(0, Math.min(prev.length - 1, targetPosition - 1));
+            if (fromIndex === toIndex) return prev;
+
+            const newItems = [...prev];
+            const itemToMove = { ...newItems[fromIndex] };
+            const destItem = prev[toIndex];
+            if (destItem && destItem.area) {
+                itemToMove.area = destItem.area;
+            }
+            newItems.splice(fromIndex, 1);
+            newItems.splice(toIndex, 0, itemToMove);
+            return newItems;
+        });
+    };
+
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
     const tax = subtotal * 0.15
     const total = subtotal + tax
@@ -288,7 +376,10 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
             })
             setLastInvoiceId(invoiceId)
             setSubmitted(true)
-            localStorage.removeItem(STORAGE_KEY)
+            clearDraft(STORAGE_KEY)
+            clearDraft('quote-form-draft')
+            setPendingDraft(null)
+            setLastSavedTimestamp(null)
             router.refresh()
             window.scrollTo({ top: 0, behavior: 'smooth' })
         } catch (error) {
@@ -355,8 +446,21 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const hasMultipleContacts = clientContacts.length > 0 || attentionToNames.length > 0;
  
     return (
-        <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20">
+        <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20 relative">
+            {pendingDraft && (
+                <EditorDraftBanner
+                    draftTimestamp={pendingDraft.updatedAt}
+                    itemCount={pendingDraft.itemCount}
+                    onRestore={handleRestoreDraft}
+                    onDiscard={handleDiscardDraft}
+                    documentType="Quotation"
+                />
+            )}
             <div className="flex-1 w-full rounded-lg border bg-card p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-6 pb-3 border-b border-white/5">
+                    <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Quotation Editor</span>
+                    <AutoSaveIndicator lastSavedTimestamp={lastSavedTimestamp} isSaving={isSavingDraft} />
+                </div>
                 <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Header Details */}
                 <div className="grid gap-6 md:grid-cols-2">
@@ -643,6 +747,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                     <div className="space-y-3">
                         {/* Table-like Header Row (hidden on mobile) */}
                         <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 select-none">
+                            <div className="w-16 text-center">#</div>
                             <div className="w-24">Code</div>
                             <div className="flex-1">Service Description & Details</div>
                             <div className="w-16 text-center">Qty</div>
@@ -655,7 +760,15 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         {/* List of Rows */}
                         <div className="space-y-3">
                             {items.map((item, index) => (
-                                <div key={index} className="flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row">
+                                <div 
+                                    key={index} 
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, index)}
+                                    onDragEnter={(e) => handleDragEnter(e, index)}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDragEnd={handleDragEnd}
+                                    className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row relative ${dragOverIndex === index ? 'border-t-2 border-t-primary' : ''}`}
+                                >
                                     {/* Heading Input placed ON TOP of each item */}
                                     <div className="flex items-center gap-2 px-1">
                                         <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest select-none">Heading:</span>
@@ -670,6 +783,19 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
 
                                     {/* Main Row Inputs */}
                                     <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3">
+                                        {/* Drag Handle & Editable # */}
+                                        <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 select-none justify-start md:justify-center">
+                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
+                                            <div className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0">
+                                                <GripVertical className="h-4 w-4" />
+                                            </div>
+                                            <ItemPositionInput
+                                                position={index + 1}
+                                                totalItems={items.length}
+                                                onMove={(newPos) => moveItemToPosition(index, newPos)}
+                                            />
+                                        </div>
+
                                         {/* Code */}
                                         <div className="md:w-24 flex flex-col md:block">
                                             <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Code</span>

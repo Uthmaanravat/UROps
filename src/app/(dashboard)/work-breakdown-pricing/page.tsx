@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { deleteWBPAction } from "./actions";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import { ensureAuth } from "@/lib/auth-actions";
+import { DraftResumeBanner } from "@/components/drafts/DraftResumeBanner";
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,8 @@ export default async function WorkBreakdownPricingListPage() {
                     </Button>
                 </Link>
             </div>
+
+            <DraftResumeBanner filterType="SOW_OR_WBP" />
 
             <div className="grid gap-6">
                 {breakdowns.length === 0 ? (

@@ -15,13 +15,16 @@ import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction } from "@/app/(dashboard)/invoices/project-actions"
-import { useState, useEffect, Fragment } from "react"
+import { useState, useEffect, useRef, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { InfoTooltip } from "@/components/ui/InfoTooltip"
+import { saveDraft, getDraft, clearDraft } from "@/lib/drafts"
+import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
+import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
 
 
 export function InvoiceViewer({ invoice, companySettings, availableProjects = [] }: { invoice: any, companySettings?: any, availableProjects?: any[] }) {
@@ -173,6 +176,25 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         setDragOverIndex(null);
     };
 
+    const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
+        if (isNaN(targetPosition)) return;
+        setItems(prev => {
+            if (fromIndex < 0 || fromIndex >= prev.length) return prev;
+            const toIndex = Math.max(0, Math.min(prev.length - 1, targetPosition - 1));
+            if (fromIndex === toIndex) return prev;
+
+            const newItems = [...prev];
+            const itemToMove = { ...newItems[fromIndex] };
+            const destItem = prev[toIndex];
+            if (destItem && destItem.area) {
+                itemToMove.area = destItem.area;
+            }
+            newItems.splice(fromIndex, 1);
+            newItems.splice(toIndex, 0, itemToMove);
+            return newItems;
+        });
+    };
+
     const [recipientEmails, setRecipientEmails] = useState(invoice.client.email || "");
 
     // Auto-fetch suggested quote number if missing
@@ -208,6 +230,116 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     };
 
     const [note, setNote] = useState(invoice.notes || "");
+
+    const DRAFT_KEY = `urops_draft_invoice_${invoice.id}`;
+    const [pendingDraft, setPendingDraft] = useState<any | null>(null);
+    const [lastSavedTimestamp, setLastSavedTimestamp] = useState<number | null>(null);
+    const [isSavingDraft, setIsSavingDraft] = useState(false);
+    const isRestoring = useRef(false);
+    const initialLoaded = useRef(false);
+
+    // Check for local draft on mount
+    useEffect(() => {
+        const saved = getDraft(DRAFT_KEY);
+        if (saved && saved.data) {
+            const hasItemDiff = JSON.stringify(saved.data.items?.map((i: any) => ({
+                id: i.id,
+                desc: i.description,
+                qty: i.quantity,
+                price: i.unitPrice,
+                unit: i.unit,
+                area: i.area
+            }))) !== JSON.stringify(invoice.items?.map((i: any) => ({
+                id: i.id,
+                desc: i.description,
+                qty: i.quantity,
+                price: i.unitPrice,
+                unit: i.unit,
+                area: i.area
+            })));
+            const hasSiteDiff = saved.data.site !== (invoice.site || "");
+            const hasRefDiff = saved.data.reference !== (invoice.reference || "");
+            const hasQuoteNumDiff = saved.data.quoteNumber !== (invoice.quoteNumber || "");
+            const hasNoteDiff = saved.data.note !== (invoice.notes || "");
+            const hasDateDiff = saved.data.date !== new Date(invoice.date).toISOString().split('T')[0];
+
+            if (hasItemDiff || hasSiteDiff || hasRefDiff || hasQuoteNumDiff || hasNoteDiff || hasDateDiff) {
+                setPendingDraft(saved);
+            }
+        }
+        setTimeout(() => {
+            initialLoaded.current = true;
+        }, 300);
+    }, [invoice.id]);
+
+    const handleRestoreDraft = () => {
+        if (!pendingDraft || !pendingDraft.data) return;
+        isRestoring.current = true;
+        const d = pendingDraft.data;
+        if (d.items) setItems(d.items);
+        if (d.site !== undefined) setSite(d.site);
+        if (d.reference !== undefined) setReference(d.reference);
+        if (d.quoteNumber !== undefined) setQuoteNumber(d.quoteNumber);
+        if (d.date !== undefined) setDate(d.date);
+        if (d.note !== undefined) setNote(d.note);
+        if (d.firstPaymentOption !== undefined) setFirstPaymentOption(d.firstPaymentOption);
+        if (d.customFirstPaymentPercentage !== undefined) setCustomFirstPaymentPercentage(d.customFirstPaymentPercentage);
+        if (d.contactId !== undefined) setContactId(d.contactId);
+        if (d.attentionTo !== undefined) setAttentionTo(d.attentionTo);
+        setLastSavedTimestamp(pendingDraft.updatedAt);
+        setPendingDraft(null);
+        setTimeout(() => {
+            isRestoring.current = false;
+        }, 200);
+    };
+
+    const handleDiscardDraft = () => {
+        clearDraft(DRAFT_KEY);
+        setPendingDraft(null);
+        setLastSavedTimestamp(null);
+    };
+
+    // Debounced Auto-Save to localStorage
+    useEffect(() => {
+        if (!initialLoaded.current || isRestoring.current || loading || pendingDraft) return;
+
+        setIsSavingDraft(true);
+        const timer = setTimeout(() => {
+            const docTitle = invoice.type === 'QUOTE'
+                ? (quoteNumber ? `Quote ${quoteNumber}` : `Quote #${invoice.number}`) + (invoice.client?.name ? ` - ${invoice.client.name}` : '')
+                : `Invoice #${invoice.number}` + (invoice.client?.name ? ` - ${invoice.client.name}` : '');
+
+            const calcSubtotal = items.reduce((acc: number, item: any) => acc + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
+            const calcTotal = calcSubtotal * 1.15;
+
+            saveDraft({
+                key: DRAFT_KEY,
+                type: invoice.type === 'QUOTE' ? 'QUOTATION' : 'INVOICE',
+                id: invoice.id,
+                title: docTitle,
+                url: `/invoices/${invoice.id}`,
+                updatedAt: Date.now(),
+                itemCount: items.length,
+                total: calcTotal,
+                data: {
+                    items,
+                    site,
+                    reference,
+                    quoteNumber,
+                    date,
+                    note,
+                    firstPaymentOption,
+                    customFirstPaymentPercentage,
+                    contactId,
+                    attentionTo
+                }
+            });
+            setIsSavingDraft(false);
+            setLastSavedTimestamp(Date.now());
+        }, 800);
+
+        return () => clearTimeout(timer);
+    }, [items, site, reference, quoteNumber, date, note, firstPaymentOption, customFirstPaymentPercentage, contactId, attentionTo, loading, pendingDraft]);
 
     const saveChanges = async () => {
         setLoading(true);
@@ -266,6 +398,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             if (savedItems) {
                 setItems(savedItems);
             }
+
+            // Clear draft upon successful server commit
+            clearDraft(DRAFT_KEY);
+            setPendingDraft(null);
+            setLastSavedTimestamp(null);
         } catch (error) {
             console.error("Error saving changes:", error);
             alert("Failed to save changes. Please try again.");
@@ -1116,14 +1253,27 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     return (
         <div className="max-w-7xl mx-auto space-y-6 px-4 md:px-0 pb-20">
+            {pendingDraft && (
+                <EditorDraftBanner
+                    draftTimestamp={pendingDraft.updatedAt}
+                    itemCount={pendingDraft.itemCount}
+                    onRestore={handleRestoreDraft}
+                    onDiscard={handleDiscardDraft}
+                    documentType={invoice.type === 'QUOTE' ? 'Quotation' : 'Invoice'}
+                />
+            )}
+
             {/* Header Actions */}
             {/* Professional Action Bar */}
             <div className="flex flex-col xl:flex-row justify-between items-center gap-6 py-8 print:hidden border-b border-white/5 pb-10">
-                <Link href={`/invoices?type=${invoice.type}`}>
-                    <Button variant="ghost" className="hover:bg-white/5 text-muted-foreground font-black uppercase tracking-widest text-[10px]">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workspace
-                    </Button>
-                </Link>
+                <div className="flex items-center gap-4 flex-wrap">
+                    <Link href={`/invoices?type=${invoice.type}`}>
+                        <Button variant="ghost" className="hover:bg-white/5 text-muted-foreground font-black uppercase tracking-widest text-[10px]">
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workspace
+                        </Button>
+                    </Link>
+                    <AutoSaveIndicator lastSavedTimestamp={lastSavedTimestamp} isSaving={isSavingDraft} />
+                </div>
                 
                 <div className="flex flex-wrap items-center justify-center gap-3">
                     {/* Document & Sharing Actions */}
@@ -1730,7 +1880,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
                                         {/* Table-like Header Row (hidden on mobile) */}
                                         <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 select-none">
-                                            <div className="w-12 text-center">#</div>
+                                            <div className="w-16 text-center">#</div>
                                             <div className="flex-1">Service Description</div>
                                             <div className="w-16 text-center">Qty</div>
                                             <div className="w-16 text-center">Unit</div>
@@ -1766,13 +1916,17 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
                                                         {/* Main Row Inputs */}
                                                         <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3">
-                                                            {/* Drag Handle & # */}
-                                                            <div className="md:w-12 flex items-center gap-1 pt-2 md:pt-2 select-none justify-start md:justify-center">
+                                                            {/* Drag Handle & Editable # */}
+                                                            <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 select-none justify-start md:justify-center">
                                                                 <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2">Pos</span>
-                                                                <div className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-1 rounded hover:bg-white/5 transition-colors">
+                                                                <div className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0">
                                                                     <GripVertical className="h-4 w-4" />
                                                                 </div>
-                                                                <span className="text-[10px] font-black text-gray-500 w-5 text-center">{globalStartIndex + iIdx + 1}</span>
+                                                                <ItemPositionInput
+                                                                    position={originalIndex + 1}
+                                                                    totalItems={items.length}
+                                                                    onMove={(newPos) => moveItemToPosition(originalIndex, newPos)}
+                                                                />
                                                             </div>
 
                                                             {/* Description */}
@@ -2060,7 +2214,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         <Button variant="secondary" onClick={handleAddItem} disabled={loading} className="h-14 px-8 border-2 border-dashed border-white/20">
                             + Add Line Item
                         </Button>
-                        <div className="flex gap-3">
+                        <div className="flex items-center gap-3">
+                            <AutoSaveIndicator lastSavedTimestamp={lastSavedTimestamp} isSaving={isSavingDraft} />
                             <Button size="lg" variant="outline" onClick={saveChanges} disabled={loading} className="h-14 px-8 border-2">
                                 {loading ? "Saving..." : "Save Draft Changes"}
                             </Button>
