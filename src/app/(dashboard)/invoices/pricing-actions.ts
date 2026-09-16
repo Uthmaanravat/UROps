@@ -15,41 +15,35 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
     })
     if (!invoice) throw new Error("Invoice not found or unauthorized")
 
-    const updatedItemIds = items.filter(i => !i.id.startsWith('new-')).map(i => i.id)
+    // 1. Fetch all existing items from the database for this invoice
+    const existingDbItems = await prisma.invoiceItem.findMany({
+        where: { invoiceId },
+        select: { id: true }
+    });
+    const existingDbItemIds = new Set(existingDbItems.map(item => item.id));
 
-    // Delete items not in updated list (done first so new items aren't deleted)
+    // 2. Identify which incoming items actually exist in the DB
+    const retainedDbIds = items.filter(i => existingDbItemIds.has(i.id)).map(i => i.id);
+
+    // 3. Delete any DB items that were removed by the user
     await prisma.invoiceItem.deleteMany({
         where: {
             invoiceId,
-            id: { notIn: updatedItemIds }
+            id: { notIn: retainedDbIds }
         }
-    })
+    });
 
-    // Process updates and creations
+    // 4. Update existing items, and create new/cloned items
     for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        if (item.id.startsWith('new-')) {
-            // Create new item
-            await prisma.invoiceItem.create({
-                data: {
-                    invoiceId,
-                    description: item.description || "New Item",
-                    quantity: item.quantity || 1,
-                    unitPrice: item.unitPrice || 0,
-                    unit: item.unit || "ea",
-                    area: item.area || "",
-                    total: (item.quantity || 1) * (item.unitPrice || 0),
-                    position: i
-                }
-            })
-        } else {
+        if (existingDbItemIds.has(item.id)) {
             // Update existing item
             await prisma.invoiceItem.update({
                 where: { id: item.id },
                 data: {
                     unitPrice: item.unitPrice,
                     quantity: item.quantity,
-                    description: item.description,
+                    description: item.description ?? "",
                     unit: item.unit,
                     area: item.area,
                     total: (item.quantity !== undefined && item.unitPrice !== undefined)
@@ -57,7 +51,21 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                         : undefined,
                     position: i
                 }
-            })
+            });
+        } else {
+            // Create new or cloned item
+            await prisma.invoiceItem.create({
+                data: {
+                    invoiceId,
+                    description: item.description || "",
+                    quantity: item.quantity || 1,
+                    unitPrice: item.unitPrice || 0,
+                    unit: item.unit || "ea",
+                    area: item.area || "",
+                    total: (item.quantity || 1) * (item.unitPrice || 0),
+                    position: i
+                }
+            });
         }
     }
 

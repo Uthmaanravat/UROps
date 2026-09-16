@@ -859,7 +859,6 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                         <div className="flex-1 flex flex-col md:block">
                                             <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Description & Details</span>
                                             <Textarea
-                                                placeholder="Item description..."
                                                 value={item.description}
                                                 onChange={(e) => updateItem(index, 'description', e.target.value)}
                                                 className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"

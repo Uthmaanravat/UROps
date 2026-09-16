@@ -104,10 +104,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             : ""
     );
 
+    const [justSavedManually, setJustSavedManually] = useState(false);
+
     const handleAddItem = () => {
         const newItem = {
             id: `new-${Date.now()}`,
-            description: "NEW ITEM",
+            description: "",
             quantity: 1,
             unitPrice: 0,
             unit: "EA",
@@ -411,6 +413,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             if (savedItems) {
                 setItems(savedItems);
             }
+
+            setJustSavedManually(true);
+            setTimeout(() => setJustSavedManually(false), 3500);
 
             // Clear draft upon successful server commit
             clearDraft(DRAFT_KEY);
@@ -1965,8 +1970,6 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                     value={item.description}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
                                                                     className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
-                                                                    placeholder="Item Description"
-                                                                    required
                                                                 />
                                                             </div>
 
@@ -2255,8 +2258,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         </Button>
                         <div className="flex items-center gap-3">
                             <AutoSaveIndicator lastSavedTimestamp={lastSavedTimestamp} isSaving={isSavingDraft} />
-                            <Button size="lg" variant="outline" onClick={saveChanges} disabled={loading} className="h-14 px-8 border-2">
-                                {loading ? "Saving..." : "Save Draft Changes"}
+                            <Button 
+                                size="lg" 
+                                variant={justSavedManually ? "default" : "outline"} 
+                                onClick={saveChanges} 
+                                disabled={loading} 
+                                className={`h-14 px-8 border-2 font-bold transition-all ${justSavedManually ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-lg shadow-emerald-950/40' : ''}`}
+                            >
+                                {loading ? "Saving..." : justSavedManually ? "✓ Saved to Database!" : "Save Changes"}
                             </Button>
                             {invoice.type === 'QUOTE' && (
                                 <Button size="lg" onClick={handleApprove} disabled={loading} className="h-14 px-10 bg-blue-600 hover:bg-blue-700 font-bold shadow-xl">
