@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -268,6 +268,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const DRAFT_KEY = `urops_draft_invoice_${invoice.id}`;
     const [pendingDraft, setPendingDraft] = useState<any | null>(null);
     const [lastSavedTimestamp, setLastSavedTimestamp] = useState<number | null>(null);
+    const [dbSavedAt, setDbSavedAt] = useState<number | null>(invoice.updatedAt ? new Date(invoice.updatedAt).getTime() : null);
     const [isSavingDraft, setIsSavingDraft] = useState(false);
     const isRestoring = useRef(false);
     const initialLoaded = useRef(false);
@@ -450,8 +451,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 setItems(savedItems);
             }
 
+            const now = Date.now();
+            setDbSavedAt(now);
             setJustSavedManually(true);
-            setTimeout(() => setJustSavedManually(false), 3500);
+            setTimeout(() => setJustSavedManually(false), 4500);
 
             // Clear draft upon successful server commit
             clearDraft(DRAFT_KEY);
@@ -1344,7 +1347,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workspace
                         </Button>
                     </Link>
-                    <AutoSaveIndicator lastSavedTimestamp={lastSavedTimestamp} isSaving={isSavingDraft} />
+                    <AutoSaveIndicator 
+                        dbSavedTimestamp={dbSavedAt} 
+                        localDraftTimestamp={lastSavedTimestamp} 
+                        isSavingDraft={isSavingDraft}
+                        isSavingDb={loading}
+                        justSavedDb={justSavedManually}
+                    />
                 </div>
                 
                 <div className="flex flex-wrap items-center justify-center gap-3">
@@ -2329,7 +2338,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     <span>{checkInvalidItems(items).length} {checkInvalidItems(items).length === 1 ? 'item requires' : 'items require'} price / qty</span>
                                 </div>
                             )}
-                            <AutoSaveIndicator lastSavedTimestamp={lastSavedTimestamp} isSaving={isSavingDraft} />
+                            <AutoSaveIndicator 
+                                dbSavedTimestamp={dbSavedAt} 
+                                localDraftTimestamp={lastSavedTimestamp} 
+                                isSavingDraft={isSavingDraft}
+                                isSavingDb={loading}
+                                justSavedDb={justSavedManually}
+                            />
                             <Button 
                                 size="lg" 
                                 variant={justSavedManually ? "default" : "outline"} 
@@ -2350,6 +2365,19 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     {loading ? "Processing..." : "Approve & Generate Invoice"}
                                 </Button>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Floating Persistent Confirmation Toast */}
+                {justSavedManually && (
+                    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#091e14] border-2 border-emerald-500/70 text-emerald-200 shadow-2xl shadow-emerald-950/90 animate-in slide-in-from-bottom-3 duration-200">
+                        <div className="h-8 w-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                            <Database className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <div className="text-xs font-black uppercase tracking-wider text-emerald-400">Database Confirmed</div>
+                            <div className="text-xs text-white/90 font-medium">All changes persisted to PostgreSQL at {dbSavedAt ? new Date(dbSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'just now'}</div>
                         </div>
                     </div>
                 )}

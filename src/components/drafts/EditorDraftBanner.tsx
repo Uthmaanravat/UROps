@@ -3,7 +3,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Clock, RotateCcw, Trash2, CheckCircle2 } from "lucide-react";
+import { Clock, RotateCcw, Trash2, CheckCircle2, Database, Laptop, Loader2 } from "lucide-react";
 import { formatRelativeTime, DraftMetadata, getDraft } from "@/lib/drafts";
 
 interface EditorDraftBannerProps {
@@ -78,12 +78,22 @@ export function EditorDraftBanner({
 
 export function AutoSaveIndicator({
     lastSavedTimestamp,
+    localDraftTimestamp,
+    dbSavedTimestamp,
+    isSavingDraft = false,
+    isSavingDb = false,
     isSaving = false,
+    justSavedDb = false,
     draftKey,
     className = ""
 }: {
     lastSavedTimestamp?: number | null;
+    localDraftTimestamp?: number | null;
+    dbSavedTimestamp?: number | string | null;
+    isSavingDraft?: boolean;
+    isSavingDb?: boolean;
     isSaving?: boolean;
+    justSavedDb?: boolean;
     draftKey?: string;
     className?: string;
 }) {
@@ -108,23 +118,48 @@ export function AutoSaveIndicator({
         };
     }, [draftKey]);
 
-    const effectiveTimestamp = lastSavedTimestamp !== undefined ? lastSavedTimestamp : keyTimestamp;
+    const effectiveDraft = localDraftTimestamp !== undefined ? localDraftTimestamp : (lastSavedTimestamp !== undefined ? lastSavedTimestamp : keyTimestamp);
+    const savingDraft = isSavingDraft || isSaving;
 
-    if (!effectiveTimestamp && !isSaving) return null;
+    const formatTime = (ts: number | string) => {
+        const d = new Date(ts);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    if (!effectiveDraft && !savingDraft && !dbSavedTimestamp && !isSavingDb && !justSavedDb) return null;
 
     return (
-        <div className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-muted-foreground transition-all ${className}`}>
-            {isSaving ? (
-                <>
-                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping" />
-                    <span>Auto-saving draft...</span>
-                </>
-            ) : (
-                <>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-white/80">Draft saved locally <span className="text-zinc-400">({formatRelativeTime(effectiveTimestamp!)})</span></span>
-                </>
-            )}
+        <div className={`inline-flex flex-wrap items-center gap-2 ${className}`}>
+            {/* Database persistence status */}
+            {isSavingDb ? (
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving to Database...</span>
+                </div>
+            ) : justSavedDb ? (
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-950/30">
+                    <Database className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>✓ Persisted to Database ({dbSavedTimestamp ? formatTime(dbSavedTimestamp) : 'just now'})</span>
+                </div>
+            ) : dbSavedTimestamp ? (
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" title={`Last persisted to PostgreSQL at ${new Date(dbSavedTimestamp).toLocaleString()}`}>
+                    <Database className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Saved to Database <span className="text-emerald-400/80">({formatTime(dbSavedTimestamp)})</span></span>
+                </div>
+            ) : null}
+
+            {/* Browser local draft status */}
+            {savingDraft ? (
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                    <span>Auto-saving draft locally...</span>
+                </div>
+            ) : effectiveDraft ? (
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300/90" title={`Local browser backup saved at ${new Date(effectiveDraft).toLocaleTimeString()}`}>
+                    <Laptop className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Draft in browser <span className="text-amber-400/70">({formatRelativeTime(effectiveDraft)})</span></span>
+                </div>
+            ) : null}
         </div>
     );
 }
