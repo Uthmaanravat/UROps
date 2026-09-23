@@ -166,3 +166,8 @@ export async function updateInvoiceNoteAction(invoiceId: string, notes: string) 
     })
     revalidatePath(`/invoices/${invoiceId}`)
 }
+
+export async function getPricingSuggestionsAction(items: { description: string }[]) {
+    const { getPricingSuggestions } = await import("@/app/actions/ai");
+    return await getPricingSuggestions(items);
+}

@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -13,7 +13,7 @@ import ExcelJS from "exceljs"
 import { saveAs } from "file-saver"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
-import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction } from "@/app/(dashboard)/invoices/pricing-actions"
+import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction, getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction } from "@/app/(dashboard)/invoices/project-actions"
 import { useState, useEffect, useRef, Fragment } from "react"
 import { useRouter } from "next/navigation"
@@ -272,6 +272,61 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [isSavingDraft, setIsSavingDraft] = useState(false);
     const isRestoring = useRef(false);
     const initialLoaded = useRef(false);
+
+    // Pricing Intelligence state
+    const [pricingSuggestions, setPricingSuggestions] = useState<Record<string, { typicalPrice: number; source: string }>>({});
+    const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+
+    const descriptionsKey = items.map(i => i.description).join('||');
+    // Debounced fetch of pricing suggestions when item descriptions change in quotes
+    useEffect(() => {
+        if (invoice.type !== 'QUOTE') return;
+        const descriptions = items.map(i => i.description).filter(d => d && d.trim().length > 1);
+        if (descriptions.length === 0) return;
+
+        const timer = setTimeout(async () => {
+            try {
+                const res = await getPricingSuggestionsAction(descriptions.map(d => ({ description: d })));
+                setPricingSuggestions(res || {});
+            } catch (err) {
+                console.error("Failed to fetch pricing suggestions:", err);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [descriptionsKey, invoice.type]);
+
+    const handleAutoSuggestAll = async () => {
+        const currentList = itemsRef.current || items;
+        const unpriced = currentList.filter(i => !i.unitPrice || Number(i.unitPrice) <= 0);
+        if (unpriced.length === 0) {
+            alert("All items already have pricing set.");
+            return;
+        }
+        setIsLoadingSuggestions(true);
+        try {
+            const res = await getPricingSuggestionsAction(currentList.map(i => ({ description: i.description })));
+            let appliedCount = 0;
+            const nextItems = currentList.map(item => {
+                const sug = res[item.description];
+                if (sug && (!item.unitPrice || Number(item.unitPrice) <= 0)) {
+                    appliedCount++;
+                    const q = Number(item.quantity) || 1;
+                    return { ...item, unitPrice: sug.typicalPrice, total: q * sug.typicalPrice };
+                }
+                return item;
+            });
+            itemsRef.current = nextItems;
+            setItems(nextItems);
+            setPricingSuggestions(res || {});
+            alert(`Applied ${appliedCount} pricing rate${appliedCount === 1 ? '' : 's'} from Pricing Intelligence!`);
+        } catch (err) {
+            console.error("Auto suggest error:", err);
+        } finally {
+            setIsLoadingSuggestions(false);
+        }
+    };
 
     // Check for local draft on mount
     useEffect(() => {
@@ -2084,6 +2139,17 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                     />
                                                                 </div>
                                                                 {isPriceInvalid && <span className="text-[8px] font-black text-amber-400 block text-right pr-1 mt-0.5 uppercase tracking-wider">Price &gt; 0</span>}
+                                                                {invoice.type === 'QUOTE' && pricingSuggestions[item.description] && (!item.unitPrice || Number(item.unitPrice) <= 0) && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleItemUpdate(item.id, 'unitPrice', pricingSuggestions[item.description].typicalPrice)}
+                                                                        className="mt-1 flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded transition-all w-full justify-center"
+                                                                        title={`Click to apply rate of R${pricingSuggestions[item.description].typicalPrice} from ${pricingSuggestions[item.description].source}`}
+                                                                    >
+                                                                        <Sparkles className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
+                                                                        <span>Apply R{pricingSuggestions[item.description].typicalPrice.toFixed(2)}</span>
+                                                                    </button>
+                                                                )}
                                                             </div>
 
                                                             {/* Total */}
@@ -2328,9 +2394,23 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
                 {isPricingMode && (
                     <div className="mt-12 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 print:hidden">
-                        <Button variant="secondary" onClick={handleAddItem} disabled={loading} className="h-14 px-8 border-2 border-dashed border-white/20">
-                            + Add Line Item
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button variant="secondary" onClick={handleAddItem} disabled={loading} className="h-14 px-8 border-2 border-dashed border-white/20">
+                                + Add Line Item
+                            </Button>
+                            {invoice.type === 'QUOTE' && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleAutoSuggestAll}
+                                    disabled={loading || isLoadingSuggestions}
+                                    className="h-14 px-6 border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 font-bold text-xs"
+                                >
+                                    <Sparkles className="mr-2 h-4 w-4 text-emerald-400" />
+                                    {isLoadingSuggestions ? "Checking..." : "Auto-Price Unpriced Items"}
+                                </Button>
+                            )}
+                        </div>
                         <div className="flex flex-wrap items-center gap-3">
                             {invoice.type === 'QUOTE' && checkInvalidItems(items).length > 0 && (
                                 <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold">

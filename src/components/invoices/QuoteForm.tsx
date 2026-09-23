@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy, CopyPlus } from "lucide-react"
+import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy, CopyPlus, Sparkles } from "lucide-react"
 import { createInvoiceAction, getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
+import { getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { formatCurrency } from "@/lib/utils"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
@@ -79,6 +80,56 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     // Contacts state
     const [contactId, setContactId] = useState("")
     const [attentionTo, setAttentionTo] = useState("")
+
+    // Pricing Intelligence state
+    const [pricingSuggestions, setPricingSuggestions] = useState<Record<string, { typicalPrice: number; source: string }>>({})
+    const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+
+    const descriptionsKey = items.map(i => i.description).join('||');
+    // Debounced fetch of pricing suggestions when item descriptions change
+    useEffect(() => {
+        const descriptions = items.map(i => i.description).filter(d => d && d.trim().length > 1);
+        if (descriptions.length === 0) return;
+
+        const timer = setTimeout(async () => {
+            try {
+                const res = await getPricingSuggestionsAction(descriptions.map(d => ({ description: d })));
+                setPricingSuggestions(res || {});
+            } catch (err) {
+                console.error("Failed to fetch pricing suggestions:", err);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [descriptionsKey]);
+
+    const handleAutoSuggestAll = async () => {
+        const unpriced = items.filter(i => !i.unitPrice || Number(i.unitPrice) <= 0);
+        if (unpriced.length === 0) {
+            alert("All items already have pricing set.");
+            return;
+        }
+        setIsLoadingSuggestions(true);
+        try {
+            const res = await getPricingSuggestionsAction(items.map(i => ({ description: i.description })));
+            let appliedCount = 0;
+            setItems(prev => prev.map(item => {
+                const sug = res[item.description];
+                if (sug && (!item.unitPrice || Number(item.unitPrice) <= 0)) {
+                    appliedCount++;
+                    return { ...item, unitPrice: sug.typicalPrice };
+                }
+                return item;
+            }));
+            setPricingSuggestions(res || {});
+            alert(`Applied ${appliedCount} pricing rate${appliedCount === 1 ? '' : 's'} from Pricing Intelligence!`);
+        } catch (err) {
+            console.error("Auto suggest error:", err);
+        } finally {
+            setIsLoadingSuggestions(false);
+        }
+    };
 
     const handleFirstPaymentOptionChange = (val: string) => {
         setFirstPaymentOption(val);
@@ -757,9 +808,22 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 <div className="space-y-4">
                     <div className="flex items-center justify-between border-b pb-2">
                         <h3 className="font-semibold">Line Items</h3>
-                        <Button type="button" onClick={addItem} size="sm" variant="outline">
-                            <Plus className="mr-2 h-4 w-4" /> Add Item
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button 
+                                type="button" 
+                                onClick={handleAutoSuggestAll} 
+                                size="sm" 
+                                variant="outline"
+                                disabled={isLoadingSuggestions}
+                                className="border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 font-bold text-xs"
+                            >
+                                <Sparkles className="mr-1.5 h-3.5 w-3.5 text-emerald-400" />
+                                {isLoadingSuggestions ? "Checking..." : "Auto-Price Unpriced Items"}
+                            </Button>
+                            <Button type="button" onClick={addItem} size="sm" variant="outline">
+                                <Plus className="mr-2 h-4 w-4" /> Add Item
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="space-y-3">
@@ -905,6 +969,17 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                     required
                                                 />
                                             </div>
+                                            {pricingSuggestions[item.description] && (!item.unitPrice || item.unitPrice === 0) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateItem(index, 'unitPrice', pricingSuggestions[item.description].typicalPrice)}
+                                                    className="mt-1 flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded transition-all w-full justify-center"
+                                                    title={`Click to apply rate of R${pricingSuggestions[item.description].typicalPrice} from ${pricingSuggestions[item.description].source}`}
+                                                >
+                                                    <Sparkles className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
+                                                    <span>Apply R{pricingSuggestions[item.description].typicalPrice.toFixed(2)}</span>
+                                                </button>
+                                            )}
                                         </div>
 
                                         {/* Total */}

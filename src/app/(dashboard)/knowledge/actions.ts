@@ -36,6 +36,29 @@ export async function uploadQuotationAction(formData: FormData) {
             const result = await pdfParse(buffer);
             text = result.text;
             console.log("Extracted text length:", text?.length);
+        } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+            console.log("Analyzing Excel document:", file.name);
+            const ExcelJS = (await import("exceljs")).default;
+            const workbook = new ExcelJS.Workbook();
+            const arrayBuffer = await file.arrayBuffer();
+            // @ts-ignore
+            await workbook.xlsx.load(arrayBuffer);
+            const lines: string[] = [];
+            workbook.eachSheet((worksheet) => {
+                worksheet.eachRow((row) => {
+                    const rowValues = row.values as any[];
+                    if (rowValues && Array.isArray(rowValues)) {
+                        const cellTexts = rowValues
+                            .filter(v => v !== null && v !== undefined && v !== "")
+                            .map(v => (typeof v === 'object' && v.text ? v.text : typeof v === 'object' && v.result ? v.result : String(v)));
+                        if (cellTexts.length > 0) {
+                            lines.push(cellTexts.join(" | "));
+                        }
+                    }
+                });
+            });
+            text = lines.join("\n");
+            console.log("Extracted text lines from Excel:", lines.length);
         } else {
             text = await file.text()
         }

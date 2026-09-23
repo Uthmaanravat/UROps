@@ -80,14 +80,35 @@ export async function transcribeAudio(formData: FormData) {
 }
 
 export async function getPricingSuggestions(items: { description: string }[]) {
-    const suggestions: Record<string, { typicalPrice: number; source: string }> = {};
+    const suggestions: Record<string, { typicalPrice: number; source: string; minPrice?: number; maxPrice?: number }> = {};
 
     for (const item of items) {
-        // 1. Check PricingKnowledge (exact or partial match)
+        const desc = item.description?.trim();
+        if (!desc || desc.length < 2) continue;
+
+        // 1. Check Standard Catalog (FixedPriceItem)
+        const catalogItem = await prisma.fixedPriceItem.findFirst({
+            where: {
+                description: {
+                    contains: desc,
+                    mode: 'insensitive'
+                },
+                unitPrice: { gt: 0 }
+            }
+        });
+        if (catalogItem) {
+            suggestions[item.description] = {
+                typicalPrice: catalogItem.unitPrice,
+                source: 'Standard Catalog'
+            };
+            continue;
+        }
+
+        // 2. Check PricingKnowledge (Direct or partial match)
         const knowledge = await prisma.pricingKnowledge.findFirst({
             where: {
                 description: {
-                    contains: item.description,
+                    contains: desc,
                     mode: 'insensitive'
                 }
             },
@@ -97,27 +118,65 @@ export async function getPricingSuggestions(items: { description: string }[]) {
         if (knowledge) {
             suggestions[item.description] = {
                 typicalPrice: knowledge.typicalPrice,
-                source: 'Knowledge Base'
+                minPrice: knowledge.minPrice,
+                maxPrice: knowledge.maxPrice,
+                source: 'Pricing Intelligence'
             };
             continue;
         }
 
-        // 2. Check previous InvoiceItem history
+        // 2b. Check PricingKnowledge bidirectional / keyword match
+        const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        if (words.length > 0) {
+            const allKnowledge = await prisma.pricingKnowledge.findMany({
+                orderBy: { frequency: 'desc' },
+                take: 100
+            });
+            let bestK: any = null;
+            let bestScore = 0;
+            for (const k of allKnowledge) {
+                const kLower = k.description.toLowerCase();
+                if (kLower.includes(desc.toLowerCase()) || desc.toLowerCase().includes(kLower)) {
+                    bestK = k;
+                    break;
+                }
+                const matches = words.filter(w => kLower.includes(w)).length;
+                if (matches > bestScore && matches >= 1) {
+                    bestScore = matches;
+                    bestK = k;
+                }
+            }
+            if (bestK) {
+                suggestions[item.description] = {
+                    typicalPrice: bestK.typicalPrice,
+                    minPrice: bestK.minPrice,
+                    maxPrice: bestK.maxPrice,
+                    source: 'Pricing Intelligence'
+                };
+                continue;
+            }
+        }
+
+        // 3. Check previous InvoiceItem history
         const historicalItem = await prisma.invoiceItem.findFirst({
             where: {
                 description: {
-                    contains: item.description,
+                    contains: desc,
                     mode: 'insensitive'
                 },
                 unitPrice: { gt: 0 }
             },
-            orderBy: { invoice: { date: 'desc' } }
+            orderBy: {
+                invoice: {
+                    createdAt: 'desc'
+                }
+            }
         });
 
-        if (historicalItem) {
+        if (historicalItem && historicalItem.unitPrice) {
             suggestions[item.description] = {
                 typicalPrice: historicalItem.unitPrice,
-                source: 'Historical Data'
+                source: 'Historical Quotes'
             };
         }
     }
