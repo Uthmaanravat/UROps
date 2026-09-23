@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles, ClipboardPaste } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -68,6 +68,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [showStatusOnQuote, setShowStatusOnQuote] = useState(false);
     const [contactId, setContactId] = useState(invoice.contactId || "");
     const [attentionTo, setAttentionTo] = useState(invoice.attentionTo || "");
+
+    const linkedInvoice = invoice.type === 'QUOTE'
+        ? (invoice.project?.invoices?.find((i: any) => i.type === 'INVOICE' && i.id !== invoice.id) || null)
+        : null;
+    const isInvoiced = invoice.status === 'INVOICED' || (invoice.type === 'QUOTE' && !!linkedInvoice);
 
     const parseAttentionToNames = (attn: string | null | undefined): string[] => {
         if (!attn) return [];
@@ -266,7 +271,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     // Lock document if finalized/sent/approved (for Quotes) or paid/checked (for Invoices)
     const isLocked = invoice.type === 'QUOTE'
-        ? ['SENT', 'ACCEPTED', 'REJECTED', 'PAID'].includes(invoice.status)
+        ? ['SENT', 'ACCEPTED', 'REJECTED', 'PAID', 'INVOICED'].includes(invoice.status) || isInvoiced
         : ['PAID', 'CHECKED'].includes(invoice.status);
     const isPricingMode = !isLocked;
 
@@ -1464,6 +1469,33 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 />
             )}
 
+            {invoice.type === 'QUOTE' && isInvoiced && (
+                <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-indigo-300 shadow-lg backdrop-blur-sm">
+                    <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0 text-indigo-400">
+                            <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <div className="font-bold text-sm text-white flex items-center gap-2">
+                                Quotation Invoiced
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Official</span>
+                            </div>
+                            <p className="text-xs text-indigo-300/80">
+                                This quotation has been converted into an official Tax Invoice.
+                            </p>
+                        </div>
+                    </div>
+                    {linkedInvoice && (
+                        <Link href={`/invoices/${linkedInvoice.id}`} className="shrink-0 w-full sm:w-auto">
+                            <Button size="sm" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5">
+                                View Tax Invoice ({linkedInvoice.quoteNumber || `INV-${String(linkedInvoice.number).padStart(3, '0')}`})
+                                <ArrowRight className="w-3.5 h-3.5" />
+                            </Button>
+                        </Link>
+                    )}
+                </div>
+            )}
+
             {/* Header Actions */}
             {/* Professional Action Bar */}
             <div className="flex flex-col xl:flex-row justify-between items-center gap-6 py-8 print:hidden border-b border-white/5 pb-10">
@@ -1544,13 +1576,28 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
                     {/* Status & Management Actions */}
                     <div className="flex gap-2">
-                        {invoice.type === 'QUOTE' && invoice.status !== 'INVOICED' && (
-                            <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
-                                <DialogTrigger asChild>
-                                    <Button disabled={loading} variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl">
-                                        <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
-                                    </Button>
-                                </DialogTrigger>
+                        {invoice.type === 'QUOTE' && (
+                            isInvoiced ? (
+                                <div className="flex items-center gap-2">
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 font-bold text-xs uppercase tracking-wider">
+                                        <CheckCircle2 className="w-4 h-4 text-indigo-400" />
+                                        Invoiced
+                                    </span>
+                                    {linkedInvoice && (
+                                        <Link href={`/invoices/${linkedInvoice.id}`}>
+                                            <Button variant="outline" className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-bold text-xs h-12 px-4 rounded-xl">
+                                                View Invoice ({linkedInvoice.quoteNumber || `INV-${String(linkedInvoice.number).padStart(3, '0')}`}) <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+                                            </Button>
+                                        </Link>
+                                    )}
+                                </div>
+                            ) : (
+                                <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button disabled={loading} variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl">
+                                            <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
+                                        </Button>
+                                    </DialogTrigger>
                                 <DialogContent className="bg-[#0f0f1a]/95 border border-white/10 text-white sm:max-w-[425px] backdrop-blur-xl">
                                     <DialogHeader>
                                         <DialogTitle className="text-xl font-black uppercase tracking-wider text-primary">Convert Quotation</DialogTitle>
@@ -1608,7 +1655,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     </DialogFooter>
                                 </DialogContent>
                             </Dialog>
-                        )}
+                        ))}
                         {isLocked ? (
                             <Button
                                 variant="outline"
@@ -1760,6 +1807,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 } else if (paid > 0) {
                                     displayStatus = "PARTIAL PAYMENT";
                                     badgeColor = "bg-orange-500/10 text-orange-400 border-orange-500/20";
+                                } else if (invoice.type === 'QUOTE' && (isInvoiced || invoice.status === 'INVOICED')) {
+                                    displayStatus = "INVOICED";
+                                    badgeColor = "bg-indigo-500/15 text-indigo-400 border-indigo-500/30";
+                                } else if (invoice.status === 'INVOICED') {
+                                    displayStatus = "INVOICED";
+                                    badgeColor = "bg-indigo-500/15 text-indigo-400 border-indigo-500/30";
                                 } else if (invoice.status === 'SENT') {
                                     badgeColor = "bg-purple-500/10 text-purple-400 border-purple-500/20";
                                 } else if (invoice.status === 'DRAFT') {

@@ -196,11 +196,11 @@ export async function generateQuotationFromWBP(
 
     // 3. Update Existing Draft Invoice to Official Quote (SENT)
     // Robustness: Try to find the existing PROVISIONAL invoice created at SOW stage.
-    // Exclude REJECTED, CANCELLED, or ACCEPTED quotes so we do not reuse or overwrite them.
+    // Exclude REJECTED, CANCELLED, ACCEPTED, or INVOICED quotes so we do not reuse or overwrite them.
     let quote = await prisma.invoice.findFirst({
         where: { 
             wbpId: wbpId,
-            status: { notIn: ['REJECTED', 'CANCELLED', 'ACCEPTED'] }
+            status: { notIn: ['REJECTED', 'CANCELLED', 'ACCEPTED', 'INVOICED'] }
         }
     })
     let finalNumber = quote?.number || 0;
@@ -496,10 +496,10 @@ export async function approveQuote(quoteId: string) {
         }
     })
 
-    // 4. Mark original Quote as ACCEPTED (Sent -> Accepted)
+    // 4. Mark original Quote as INVOICED
     await prisma.invoice.update({
         where: { id: quoteId },
-        data: { status: 'ACCEPTED' }
+        data: { status: 'INVOICED' }
     })
 
     // 5. Update Project Stage

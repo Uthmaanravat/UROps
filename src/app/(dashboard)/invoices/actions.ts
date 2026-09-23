@@ -498,7 +498,7 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
     // 5. Update the original Quote status to reflect it's been converted, but keep as QUOTE
     await prisma.invoice.update({
         where: { id: quote.id },
-        data: { status: 'ACCEPTED' }
+        data: { status: 'INVOICED' }
     })
 
     // 6. Update Project Stage

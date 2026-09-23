@@ -21,7 +21,13 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                     orderBy: { position: 'asc' }
                 },
                 payments: true,
-                project: true
+                project: {
+                    include: {
+                        invoices: {
+                            select: { id: true, number: true, quoteNumber: true, type: true, status: true, date: true }
+                        }
+                    }
+                }
             } as any
         }),
         getCompanySettings(),
