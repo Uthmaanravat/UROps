@@ -176,7 +176,7 @@ export async function getPricingSuggestions(items: { description: string }[]) {
         if (historicalItem && historicalItem.unitPrice) {
             suggestions[item.description] = {
                 typicalPrice: historicalItem.unitPrice,
-                source: 'Historical Quotes'
+                source: historicalItem.reason ? `Historical (${historicalItem.reason})` : 'Historical Quotes'
             };
         }
     }

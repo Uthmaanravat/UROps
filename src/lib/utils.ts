@@ -25,3 +25,17 @@ export function toTitleCase(str: string) {
         return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
     });
 }
+
+export const LINE_ITEM_REASONS = [
+    "Wear and Tear",
+    "Damage",
+    "Malfunction",
+    "Preventative Maintenance",
+    "Client Request",
+    "Weather / Storm Damage",
+    "Regulatory / Compliance",
+    "End of Life / Replacement"
+] as const;
+
+export type LineItemReason = typeof LINE_ITEM_REASONS[number];
+

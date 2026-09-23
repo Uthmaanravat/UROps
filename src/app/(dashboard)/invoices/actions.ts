@@ -11,7 +11,7 @@ export async function createInvoiceAction(data: {
     clientId: string
     projectId?: string
     date: string
-    items: { description: string; quantity: number; unitPrice: number; area?: string; unit?: string }[]
+    items: { description: string; quantity: number; unitPrice: number; area?: string; unit?: string; reason?: string }[]
     site?: string
     quoteNumber?: string
     reference?: string
@@ -206,6 +206,7 @@ export async function createInvoiceAction(data: {
                     unitPrice: item.unitPrice,
                     area: (item.area || ""),
                     unit: (item.unit || ""),
+                    reason: (item.reason || null),
                     total: item.quantity * item.unitPrice,
                     position: idx
                 }))

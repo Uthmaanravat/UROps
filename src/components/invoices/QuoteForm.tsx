@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy, CopyPlus, Sparkles } from "lucide-react"
 import { createInvoiceAction, getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
 import { getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -66,7 +66,9 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [projectId, setProjectId] = useState(initialProjectId || "")
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
 
-    const [items, setItems] = useState(initialScope ? [] : [{ code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
+    const [items, setItems] = useState<Array<{ code?: string; description: string; quantity: number; unit?: string; unitPrice: number; area?: string; reason?: string }>>(
+        initialScope ? [] : [{ code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "", reason: "" }]
+    )
     const [site, setSite] = useState("")
     const [quoteNumber, setQuoteNumber] = useState("")
     const [reference, setReference] = useState("")
@@ -312,7 +314,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
             quantity: 1,
             unit: (catalogItem.unit || "").toUpperCase(),
             unitPrice: catalogItem.unitPrice,
-            area: ""
+            area: "",
+            reason: ""
         }
 
         if (items.length === 1 && !items[0].description && items[0].unitPrice === 0) {
@@ -325,7 +328,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     }
 
     const addItem = () => {
-        setItems([...items, { code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
+        setItems([...items, { code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "", reason: "" }])
     }
 
     const removeItem = (index: number) => {
@@ -485,7 +488,7 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                 variant="ghost"
                                 onClick={async () => {
                                     setSubmitted(false)
-                                    setItems([{ code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "" }])
+                                    setItems([{ code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "", reason: "" }])
                                     const docNumber = await getQuoteSequenceAction();
                                     if (docNumber) setQuoteNumber(docNumber);
                                 }}
@@ -668,7 +671,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                             quantity: i.quantity || 1,
                             unit: (i.unit || "").toUpperCase(),
                             unitPrice: i.unitPrice || 0,
-                            area: ""
+                            area: "",
+                            reason: ""
                         }));
                         setItems(formattedItems);
                     }
@@ -716,7 +720,8 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                                         quantity: i.quantity || 1,
                                                         unit: "",
                                                         unitPrice: i.unitPrice || 0,
-                                                        area: ""
+                                                        area: "",
+                                                        reason: ""
                                                     }));
 
                                                     if (confirm(`AI found ${formattedItems.length} items. Replace current items?`)) {
@@ -861,16 +866,53 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                                     }}
                                     className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row relative ${dragOverIndex === index ? 'border-t-2 border-t-primary' : ''}`}
                                 >
-                                    {/* Heading Input placed ON TOP of each item */}
-                                    <div className="flex items-center gap-2 px-1">
-                                        <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
-                                        <Input
-                                            placeholder="SECTION/HEADING (E.G. PREPARATIONS, ROOM 1)"
-                                            // @ts-ignore
-                                            value={item.area || ""}
-                                            onChange={(e) => updateItem(index, 'area', e.target.value)}
-                                            className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
-                                        />
+                                    {/* Heading & Reason/Justification placed ON TOP of each item */}
+                                    <div className="flex flex-wrap items-center justify-between gap-3 px-1 border-b border-white/5 pb-1 mb-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
+                                            <Input
+                                                placeholder="SECTION/HEADING (E.G. PREPARATIONS, ROOM 1)"
+                                                // @ts-ignore
+                                                value={item.area || ""}
+                                                onChange={(e) => updateItem(index, 'area', e.target.value)}
+                                                className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 w-36 md:w-48"
+                                            />
+                                        </div>
+
+                                        {/* Structured Reason / Justification */}
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[9px] uppercase font-black text-amber-400/80 tracking-widest">Justification:</span>
+                                            <select
+                                                // @ts-ignore
+                                                value={LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : (item.reason ? "Custom" : "")}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === "Custom") {
+                                                        // @ts-ignore
+                                                        updateItem(index, 'reason', item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : "Custom: ");
+                                                    } else {
+                                                        updateItem(index, 'reason', val);
+                                                    }
+                                                }}
+                                                className="bg-[#14141E] border border-white/10 rounded px-2 py-0.5 text-[10px] font-semibold text-gray-200 focus:outline-none focus:border-amber-400/50 cursor-pointer"
+                                            >
+                                                <option value="">(No Justification)</option>
+                                                {LINE_ITEM_REASONS.map(r => (
+                                                    <option key={r} value={r}>Due to: {r}</option>
+                                                ))}
+                                                <option value="Custom">Custom Justification...</option>
+                                            </select>
+                                            {/* @ts-ignore */}
+                                            {(item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) || item.reason === "Custom") && (
+                                                <Input
+                                                    // @ts-ignore
+                                                    value={item.reason === "Custom" ? "" : (item.reason || "")}
+                                                    onChange={(e) => updateItem(index, 'reason', e.target.value)}
+                                                    placeholder="Due to [cause]..."
+                                                    className="bg-[#14141E] border-white/10 text-[10px] h-6 px-2 w-44 text-amber-200 placeholder:text-muted-foreground/50 focus:border-amber-400/50"
+                                                />
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Main Row Inputs */}

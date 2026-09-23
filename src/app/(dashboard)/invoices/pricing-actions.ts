@@ -6,7 +6,7 @@ import { updateProjectStatus } from "../projects/actions"
 import { ensureAuth } from "@/lib/auth-actions"
 import { convertToInvoiceAction } from "./actions"
 
-export async function updateInvoiceItemsAction(invoiceId: string, items: { id: string, unitPrice?: number, description?: string, unit?: string, quantity?: number, area?: string }[]) {
+export async function updateInvoiceItemsAction(invoiceId: string, items: { id: string, unitPrice?: number, description?: string, unit?: string, quantity?: number, area?: string, reason?: string }[]) {
     const companyId = await ensureAuth()
 
     // Validate invoice ownership once
@@ -49,6 +49,7 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                         description: item.description ?? "",
                         unit: item.unit,
                         area: item.area,
+                        reason: item.reason,
                         total: (item.quantity !== undefined && item.unitPrice !== undefined)
                             ? item.quantity * item.unitPrice
                             : undefined,
@@ -67,6 +68,7 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                         unitPrice: item.unitPrice || 0,
                         unit: item.unit || "ea",
                         area: item.area || "",
+                        reason: item.reason || null,
                         total: (item.quantity || 1) * (item.unitPrice || 0),
                         position: i
                     }

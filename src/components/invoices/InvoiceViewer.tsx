@@ -2,7 +2,7 @@
 import React from 'react'
 
 import { Button } from "@/components/ui/button"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
 import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -120,6 +120,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             unitPrice: 0,
             unit: "EA",
             area: "",
+            reason: "",
             total: 0
         };
         const next = [...(itemsRef.current || items), newItem];
@@ -457,7 +458,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 area: item.area,
                 quantity: item.quantity,
                 unit: item.unit,
-                unitPrice: item.unitPrice
+                unitPrice: item.unitPrice,
+                reason: item.reason
             }));
 
             let savedItems = null;
@@ -787,6 +789,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             }
             group.items.forEach((item: any, iIdx: number) => {
                 let desc = item.description;
+                if (item.reason) {
+                    desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
+                }
                 if (item.notes) {
                     const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
                     const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
@@ -1149,6 +1154,9 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     const row = worksheet.getRow(currentRow);
                     row.height = 18; // Even more compact
                     let desc = item.description;
+                    if (item.reason) {
+                        desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
+                    }
                     if (item.notes) {
                         const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
                         const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
@@ -2056,18 +2064,51 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                         }}
                                                         className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border transition-all group/row relative ${isRowInvalid ? 'border-amber-500/30 bg-amber-500/[0.02]' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.02]'} ${dragOverIndex === originalIndex ? 'border-t-2 border-t-primary' : ''}`}
                                                     >
-                                                        {/* Heading Input placed ON TOP of each item */}
-                                                        <div className="flex items-center gap-2 px-1">
-                                                            <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
-                                                            <Input
-                                                                value={item.area || ""}
-                                                                onChange={(e) => {
-                                                                    const newArea = e.target.value;
-                                                                    handleItemUpdate(item.id, 'area', newArea);
-                                                                }}
-                                                                className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
-                                                                placeholder="HEADING"
-                                                            />
+                                                        {/* Heading & Reason/Justification placed ON TOP of each item */}
+                                                        <div className="flex flex-wrap items-center justify-between gap-3 px-1 border-b border-white/5 pb-1 mb-0.5">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
+                                                                <Input
+                                                                    value={item.area || ""}
+                                                                    onChange={(e) => {
+                                                                        const newArea = e.target.value;
+                                                                        handleItemUpdate(item.id, 'area', newArea);
+                                                                    }}
+                                                                    className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 w-36 md:w-48"
+                                                                    placeholder="HEADING"
+                                                                />
+                                                            </div>
+
+                                                            {/* Structured Reason / Justification */}
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[9px] uppercase font-black text-amber-400/80 tracking-widest">Justification:</span>
+                                                                <select
+                                                                    value={LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : (item.reason ? "Custom" : "")}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        if (val === "Custom") {
+                                                                            handleItemUpdate(item.id, 'reason', item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : "Custom: ");
+                                                                        } else {
+                                                                            handleItemUpdate(item.id, 'reason', val);
+                                                                        }
+                                                                    }}
+                                                                    className="bg-[#14141E] border border-white/10 rounded px-2 py-0.5 text-[10px] font-semibold text-gray-200 focus:outline-none focus:border-amber-400/50 cursor-pointer"
+                                                                >
+                                                                    <option value="">(No Justification)</option>
+                                                                    {LINE_ITEM_REASONS.map(r => (
+                                                                        <option key={r} value={r}>Due to: {r}</option>
+                                                                    ))}
+                                                                    <option value="Custom">Custom Justification...</option>
+                                                                </select>
+                                                                {(item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) || item.reason === "Custom") && (
+                                                                    <Input
+                                                                        value={item.reason === "Custom" ? "" : (item.reason || "")}
+                                                                        onChange={(e) => handleItemUpdate(item.id, 'reason', e.target.value)}
+                                                                        placeholder="Due to [cause]..."
+                                                                        className="bg-[#14141E] border-white/10 text-[10px] h-6 px-2 w-44 text-amber-200 placeholder:text-muted-foreground/50 focus:border-amber-400/50"
+                                                                    />
+                                                                )}
+                                                            </div>
                                                         </div>
 
                                                         {/* Main Row Inputs */}
@@ -2263,6 +2304,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                             </td>
                                                             <td className="py-2.5 pr-8">
                                                                 <div className="text-[13px] md:text-sm font-bold text-white tracking-tight leading-snug">{item.description}</div>
+                                                                {item.reason && (
+                                                                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-300 font-medium">
+                                                                        <span className="text-[8px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">Due to</span>
+                                                                        <span>{item.reason.replace(/^due to:?\s*/i, '')}</span>
+                                                                    </div>
+                                                                )}
                                                             </td>
                                                             <td className="py-2.5 text-center align-top">
                                                                 <span className="text-xs font-black text-gray-400">{item.quantity} <span className="text-[9px] uppercase ml-1 opacity-50">{item.unit || "ea"}</span></span>
