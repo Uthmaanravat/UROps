@@ -3,7 +3,8 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles, ClipboardPaste } from "lucide-react"
+import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -327,6 +328,34 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         } finally {
             setIsLoadingSuggestions(false);
         }
+    };
+
+    const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+
+    const handleBulkImport = (newParsedItems: ParsedBulkItem[], replaceMode: boolean) => {
+        const mapped = newParsedItems.map((item, idx) => ({
+            id: `bulk-${Date.now()}-${idx}`,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            area: item.area || "",
+            reason: item.reason || "",
+            total: item.quantity * item.unitPrice
+        }));
+
+        const currentList = itemsRef.current || items;
+        let next: any[];
+        if (replaceMode) {
+            next = mapped;
+        } else {
+            const filteredCurrent = currentList.length === 1 && !currentList[0].description && currentList[0].unitPrice === 0
+                ? []
+                : currentList;
+            next = [...filteredCurrent, ...mapped];
+        }
+        itemsRef.current = next;
+        setItems(next);
     };
 
     // Check for local draft on mount
@@ -2445,6 +2474,16 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             <Button variant="secondary" onClick={handleAddItem} disabled={loading} className="h-14 px-8 border-2 border-dashed border-white/20">
                                 + Add Line Item
                             </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsBulkImportOpen(true)}
+                                disabled={loading}
+                                className="h-14 px-6 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/15 text-blue-400 font-bold text-xs"
+                            >
+                                <ClipboardPaste className="mr-2 h-4 w-4 text-blue-400" />
+                                Paste from Excel / CSV
+                            </Button>
                             {invoice.type === 'QUOTE' && (
                                 <Button
                                     type="button"
@@ -2508,6 +2547,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                         </div>
                     </div>
                 )}
+
+                {/* Bulk Line-Item Import Dialog */}
+                <BulkItemImportDialog
+                    open={isBulkImportOpen}
+                    onOpenChange={setIsBulkImportOpen}
+                    onImport={handleBulkImport}
+                    currentCount={items.length}
+                />
             </div>
         </div>
     )

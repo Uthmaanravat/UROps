@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy, CopyPlus, Sparkles } from "lucide-react"
+import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy, CopyPlus, Sparkles, ClipboardPaste } from "lucide-react"
 import { createInvoiceAction, getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
 import { getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
+import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -130,6 +131,29 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
             console.error("Auto suggest error:", err);
         } finally {
             setIsLoadingSuggestions(false);
+        }
+    };
+
+    const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+
+    const handleBulkImport = (newParsedItems: ParsedBulkItem[], replaceMode: boolean) => {
+        const mapped = newParsedItems.map(item => ({
+            code: "",
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            area: item.area || "",
+            reason: item.reason || ""
+        }));
+
+        if (replaceMode) {
+            setItems(mapped);
+        } else {
+            const filteredCurrent = items.length === 1 && !items[0].description && items[0].unitPrice === 0
+                ? []
+                : items;
+            setItems([...filteredCurrent, ...mapped]);
         }
     };
 
@@ -816,6 +840,16 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                         <div className="flex items-center gap-2">
                             <Button 
                                 type="button" 
+                                onClick={() => setIsBulkImportOpen(true)} 
+                                size="sm" 
+                                variant="outline"
+                                className="border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/15 text-blue-400 font-bold text-xs"
+                            >
+                                <ClipboardPaste className="mr-1.5 h-3.5 w-3.5 text-blue-400" />
+                                Paste from Excel / CSV
+                            </Button>
+                            <Button 
+                                type="button" 
                                 onClick={handleAutoSuggestAll} 
                                 size="sm" 
                                 variant="outline"
@@ -1190,6 +1224,13 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                 )}
             </div>
         </div>
+
+        <BulkItemImportDialog
+            open={isBulkImportOpen}
+            onOpenChange={setIsBulkImportOpen}
+            onImport={handleBulkImport}
+            currentCount={items.length}
+        />
     </div>
     )
 }
