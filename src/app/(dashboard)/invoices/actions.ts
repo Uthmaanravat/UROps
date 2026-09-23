@@ -391,6 +391,14 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
     });
     if (!quote) throw new Error("Quote not found");
 
+    if (!quote.items || quote.items.length === 0) {
+        throw new Error("Cannot convert quotation: Quote has no line items.");
+    }
+    const invalidItems = quote.items.filter(item => !item.quantity || Number(item.quantity) <= 0 || !item.unitPrice || Number(item.unitPrice) <= 0);
+    if (invalidItems.length > 0) {
+        throw new Error(`Cannot convert quotation to invoice: ${invalidItems.length} line item(s) have zero or blank prices/quantities. Please review and price all items first.`);
+    }
+
     const client = quote.client;
     const codePrefix = client.codePrefix;
     let nextInvoiceNumber = 0;

@@ -103,6 +103,22 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
 
 export async function finalizeQuoteAction(quoteId: string) {
     const companyId = await ensureAuth()
+
+    const quote = await prisma.invoice.findUnique({
+        where: { id: quoteId, companyId },
+        include: { items: true }
+    })
+    if (!quote) throw new Error("Quote not found")
+
+    if (!quote.items || quote.items.length === 0) {
+        throw new Error("Cannot mark quote ready to send: Quote has no line items.")
+    }
+
+    const invalidItems = quote.items.filter(item => !item.quantity || Number(item.quantity) <= 0 || !item.unitPrice || Number(item.unitPrice) <= 0);
+    if (invalidItems.length > 0) {
+        throw new Error(`Cannot mark quote ready to send: ${invalidItems.length} line item(s) have zero or blank prices/quantities. Please review and price all items first.`)
+    }
+
     // 1. Mark Quote as SENT (Ready for client)
     await prisma.invoice.update({
         where: { id: quoteId, companyId },
@@ -110,7 +126,6 @@ export async function finalizeQuoteAction(quoteId: string) {
     })
 
     // Update Project Status if needed
-    const quote = await prisma.invoice.findUnique({ where: { id: quoteId, companyId } })
     if (quote?.projectId) {
         await prisma.project.update({
             where: { id: quote.projectId, companyId },

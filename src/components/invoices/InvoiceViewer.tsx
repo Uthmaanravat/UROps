@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -255,6 +255,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         setItems(nextItems);
     };
 
+    const checkInvalidItems = (itemList: any[]) => {
+        return (itemList || []).filter(item => {
+            const qty = Number(item.quantity);
+            const price = Number(item.unitPrice);
+            return !qty || isNaN(qty) || qty <= 0 || !price || isNaN(price) || price <= 0;
+        });
+    };
+
     const [note, setNote] = useState(invoice.notes || "");
 
     const DRAFT_KEY = `urops_draft_invoice_${invoice.id}`;
@@ -486,15 +494,19 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     }
 
     const handleApprove = async () => {
+        const currentList = itemsRef.current || items;
+        const invalid = checkInvalidItems(currentList);
+        if (invalid.length > 0) {
+            alert(`Cannot approve & convert quote:\n\n${invalid.length} line item(s) have zero or blank prices/quantities.\n\nPlease ensure all items have valid quantities (> 0) and prices (> 0) before generating an invoice.`);
+            return;
+        }
+
         if (!confirm("Approve this Quote? This will lock it and generate a Draft Invoice.")) return;
         setLoading(true);
         await saveChanges();
         await convertToInvoiceAction(invoice.id);
         setLoading(false);
         router.refresh(); // Refresh to show new status
-        // router.push(`/work-breakdown-pricing`); // Maybe stay on page or go to list?
-        // Actually, flow says "Move project to Invoice stage".
-        // The user might want to stay on the invoice page which is now an invoice.
     }
 
     // Default company details if not set
@@ -519,6 +531,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         const emails = recipientEmails.split(',').map((e: string) => e.trim()).filter(Boolean);
         if (emails.length === 0) {
             alert("Invalid email format.");
+            return;
+        }
+
+        const currentList = itemsRef.current || items;
+        const invalid = checkInvalidItems(currentList);
+        if (invalid.length > 0) {
+            alert(`Cannot send document:\n\n${invalid.length} line item(s) have zero or blank prices/quantities.\n\nPlease review and price all items before sending.`);
             return;
         }
 
@@ -1234,6 +1253,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     };
 
     const executeConvert = async () => {
+        const currentList = itemsRef.current || items;
+        const invalid = checkInvalidItems(currentList);
+        if (invalid.length > 0) {
+            alert(`Cannot convert quotation to invoice:\n\n${invalid.length} line item(s) have zero or blank prices/quantities.\n\nPlease ensure all items have valid quantities (> 0) and prices (> 0) before converting.`);
+            return;
+        }
+
         setIsConvertDialogOpen(false);
         setLoading(true);
 
@@ -1942,6 +1968,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                         <div className="space-y-2">
                                             {group.items.map((item: any, iIdx: number) => {
                                                 const originalIndex = item.originalIndex;
+                                                const isQtyInvalid = isPricingMode && (!item.quantity || isNaN(Number(item.quantity)) || Number(item.quantity) <= 0);
+                                                const isPriceInvalid = isPricingMode && (!item.unitPrice || isNaN(Number(item.unitPrice)) || Number(item.unitPrice) <= 0);
+                                                const isRowInvalid = isQtyInvalid || isPriceInvalid;
+
                                                 return (
                                                     <div
                                                         key={item.id}
@@ -1960,14 +1990,17 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                 handleDragEnd();
                                                             }
                                                         }}
-                                                        className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row relative ${dragOverIndex === originalIndex ? 'border-t-2 border-t-primary' : ''}`}
+                                                        className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border transition-all group/row relative ${isRowInvalid ? 'border-amber-500/30 bg-amber-500/[0.02]' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.02]'} ${dragOverIndex === originalIndex ? 'border-t-2 border-t-primary' : ''}`}
                                                     >
                                                         {/* Heading Input placed ON TOP of each item */}
                                                         <div className="flex items-center gap-2 px-1">
                                                             <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
                                                             <Input
                                                                 value={item.area || ""}
-                                                                onChange={(e) => handleItemUpdate(item.id, 'area', e.target.value)}
+                                                                onChange={(e) => {
+                                                                    const newArea = e.target.value;
+                                                                    handleItemUpdate(item.id, 'area', newArea);
+                                                                }}
                                                                 className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 max-w-sm"
                                                                 placeholder="HEADING"
                                                             />
@@ -2011,9 +2044,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                     type="number"
                                                                     value={item.quantity}
                                                                     onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs"
+                                                                    className={`bg-[#14141E] focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs ${isQtyInvalid ? 'border-amber-500/80 bg-amber-500/10 text-amber-200 focus:border-amber-400' : 'border-white/10'}`}
                                                                     required
                                                                 />
+                                                                {isQtyInvalid && <span className="text-[8px] font-black text-amber-400 block text-center mt-0.5 uppercase tracking-wider">Qty &gt; 0</span>}
                                                             </div>
 
                                                             {/* Unit */}
@@ -2036,10 +2070,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                         type="number"
                                                                         value={item.unitPrice}
                                                                         onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                                        className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs"
+                                                                        className={`bg-[#14141E] focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs ${isPriceInvalid ? 'border-amber-500/80 bg-amber-500/10 text-amber-200 focus:border-amber-400' : 'border-white/10'}`}
                                                                         required
                                                                     />
                                                                 </div>
+                                                                {isPriceInvalid && <span className="text-[8px] font-black text-amber-400 block text-right pr-1 mt-0.5 uppercase tracking-wider">Price &gt; 0</span>}
                                                             </div>
 
                                                             {/* Total */}
@@ -2283,11 +2318,17 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 </div>
 
                 {isPricingMode && (
-                    <div className="mt-12 flex justify-between gap-3 print:hidden">
+                    <div className="mt-12 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 print:hidden">
                         <Button variant="secondary" onClick={handleAddItem} disabled={loading} className="h-14 px-8 border-2 border-dashed border-white/20">
                             + Add Line Item
                         </Button>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                            {invoice.type === 'QUOTE' && checkInvalidItems(items).length > 0 && (
+                                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold">
+                                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                                    <span>{checkInvalidItems(items).length} {checkInvalidItems(items).length === 1 ? 'item requires' : 'items require'} price / qty</span>
+                                </div>
+                            )}
                             <AutoSaveIndicator lastSavedTimestamp={lastSavedTimestamp} isSaving={isSavingDraft} />
                             <Button 
                                 size="lg" 
@@ -2299,7 +2340,13 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 {loading ? "Saving..." : justSavedManually ? "✓ Saved to Database!" : "Save Changes"}
                             </Button>
                             {invoice.type === 'QUOTE' && (
-                                <Button size="lg" onClick={handleApprove} disabled={loading} className="h-14 px-10 bg-blue-600 hover:bg-blue-700 font-bold shadow-xl">
+                                <Button 
+                                    size="lg" 
+                                    onClick={handleApprove} 
+                                    disabled={loading} 
+                                    className={`h-14 px-10 font-bold shadow-xl ${checkInvalidItems(items).length > 0 ? 'bg-blue-600/70 hover:bg-blue-600 border border-amber-400/40' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                    title={checkInvalidItems(items).length > 0 ? `${checkInvalidItems(items).length} items require valid price and quantity before converting` : undefined}
+                                >
                                     {loading ? "Processing..." : "Approve & Generate Invoice"}
                                 </Button>
                             )}

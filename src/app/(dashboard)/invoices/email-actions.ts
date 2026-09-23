@@ -7,11 +7,23 @@ export async function sendInvoiceEmail(invoiceId: string, recipients?: string[],
     try {
         const invoice = await prisma.invoice.findUnique({
             where: { id: invoiceId },
-            include: { client: true }
+            include: { client: true, items: true }
         })
 
         if (!invoice) {
             return { success: false, error: "Invoice not found" }
+        }
+
+        if (!invoice.items || invoice.items.length === 0) {
+            return { success: false, error: "Cannot send document: Document has no line items." }
+        }
+
+        const invalidItems = invoice.items.filter(item => !item.quantity || Number(item.quantity) <= 0 || !item.unitPrice || Number(item.unitPrice) <= 0);
+        if (invalidItems.length > 0) {
+            return {
+                success: false,
+                error: `Cannot send document: ${invalidItems.length} line item(s) have zero or blank prices/quantities. Please review and price all items first.`
+            }
         }
 
         const toEmails = recipients && recipients.length > 0 ? recipients : [invoice.client.email].filter(Boolean) as string[];
