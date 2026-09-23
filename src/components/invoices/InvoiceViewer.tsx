@@ -881,7 +881,15 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         });
 
         autoTable(doc, {
-            head: [['#', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL']],
+            margin: { left: 14, right: 14 },
+            head: [[
+                { content: '#', styles: { halign: 'center' } },
+                { content: 'DESCRIPTION', styles: { halign: 'left' } },
+                { content: 'QTY', styles: { halign: 'center' } },
+                { content: 'UNIT', styles: { halign: 'center' } },
+                { content: 'PRICE', styles: { halign: 'right' } },
+                { content: 'TOTAL', styles: { halign: 'right' } }
+            ]],
             body: tableBody,
             startY: startTableY,
             theme: 'striped',
@@ -890,20 +898,20 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 textColor: [163, 230, 53],
                 fontStyle: 'bold',
                 fontSize: 8.5,
-                halign: 'left'
+                cellPadding: 2
             },
             bodyStyles: {
                 fontSize: 7.5,
                 textColor: [20, 20, 30],
-                cellPadding: 1.5
+                cellPadding: 2
             },
             columnStyles: {
-                0: { cellWidth: 8, halign: 'center' },
-                1: { cellWidth: 87 },
-                2: { halign: 'center' },
-                3: { halign: 'center' },
-                4: { halign: 'right' },
-                5: { halign: 'right', fontStyle: 'bold' }
+                0: { cellWidth: 10, halign: 'center' },
+                1: { cellWidth: 85, halign: 'left' },
+                2: { cellWidth: 15, halign: 'center' },
+                3: { cellWidth: 16, halign: 'center' },
+                4: { cellWidth: 26, halign: 'right' },
+                5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
             },
             alternateRowStyles: {
                 fillColor: [252, 254, 255]
@@ -1246,8 +1254,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     
                     row.getCell(1).alignment = { horizontal: 'center' };
                     row.getCell(3).alignment = { wrapText: true, horizontal: 'left' };
-                    row.getCell(4).alignment = { horizontal: 'right' };
-                    row.getCell(5).alignment = { horizontal: 'right' };
+                    row.getCell(4).alignment = { horizontal: 'center' };
+                    row.getCell(5).alignment = { horizontal: 'center' };
                     row.getCell(6).alignment = { horizontal: 'right' };
                     row.getCell(6).numFmt = '"R"#,##0.00';
                     row.getCell(7).alignment = { horizontal: 'right' };

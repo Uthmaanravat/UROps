@@ -140,14 +140,22 @@ export function SOWChecklistButton({ project, latestScope, settings, className, 
             // Generate autotable
             autoTable(doc, {
                 startY: headerY + 6,
-                head: [['Done', 'Area / Section', 'Scope Description', 'Qty', 'Unit', 'Laborer Comments']],
+                head: [[
+                    { content: 'Done', styles: { halign: 'center' } },
+                    { content: 'Area / Section', styles: { halign: 'left' } },
+                    { content: 'Scope Description', styles: { halign: 'left' } },
+                    { content: 'Qty', styles: { halign: 'center' } },
+                    { content: 'Unit', styles: { halign: 'center' } },
+                    { content: 'Laborer Comments', styles: { halign: 'left' } }
+                ]],
                 body: rows,
                 theme: 'striped',
                 headStyles: {
                     fillColor: [15, 23, 42], // slate-900 Navy
                     textColor: [163, 230, 53], // Lime pop
                     fontStyle: 'bold',
-                    fontSize: 9
+                    fontSize: 9,
+                    cellPadding: 4
                 },
                 bodyStyles: {
                     cellPadding: 4,

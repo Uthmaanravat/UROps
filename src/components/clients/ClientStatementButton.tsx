@@ -185,13 +185,20 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             // Table
             autoTable(doc, {
                 startY: headerY + 10,
-                head: [['Date', 'Document #', 'Site / Project', 'Total', 'Outstanding']],
+                head: [[
+                    { content: 'Date', styles: { halign: 'left' } },
+                    { content: 'Document #', styles: { halign: 'left' } },
+                    { content: 'Site / Project', styles: { halign: 'left' } },
+                    { content: 'Total', styles: { halign: 'right' } },
+                    { content: 'Outstanding', styles: { halign: 'right' } }
+                ]],
                 body: rows,
                 theme: 'striped',
                 headStyles: {
                     fillColor: [20, 20, 30], // Professional Navy
                     textColor: [163, 230, 53], // Lime pop
-                    fontStyle: 'bold'
+                    fontStyle: 'bold',
+                    cellPadding: 3
                 },
                 bodyStyles: {
                     cellPadding: 3,
