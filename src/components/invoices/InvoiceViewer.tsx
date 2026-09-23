@@ -32,6 +32,12 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [loading, setLoading] = useState(false);
     // Use local state for items to allow instant UI updates for grouping/calculations
     const [items, setItems] = useState<any[]>(invoice.items);
+    const itemsRef = useRef<any[]>(invoice.items);
+    const draftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        itemsRef.current = items;
+    }, [items]);
     const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
     const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(invoice.type === 'QUOTE');
     const [logoAspectRatio, setLogoAspectRatio] = useState(1);
@@ -116,11 +122,15 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             area: "",
             total: 0
         };
-        setItems([...items, newItem]);
+        const next = [...(itemsRef.current || items), newItem];
+        itemsRef.current = next;
+        setItems(next);
     };
 
     const handleDeleteItem = (id: string) => {
-        setItems(prev => prev.filter(item => item.id !== id));
+        const next = (itemsRef.current || items).filter(item => item.id !== id);
+        itemsRef.current = next;
+        setItems(next);
     };
 
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -131,35 +141,32 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             ...itemToClone,
             id: `clone-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         };
-        setItems(prev => {
-            const next = [...prev];
-            next.splice(originalIndex + 1, 0, cloned);
-            return next;
-        });
+        const next = [...(itemsRef.current || items)];
+        next.splice(originalIndex + 1, 0, cloned);
+        itemsRef.current = next;
+        setItems(next);
     };
 
     const moveItemUp = (index: number) => {
         if (index === 0) return;
-        setItems(prev => {
-            const next = [...prev];
-            const temp = next[index - 1];
-            next[index - 1] = next[index];
-            next[index] = temp;
-            next[index - 1].area = temp.area;
-            return next;
-        });
+        const currentList = [...(itemsRef.current || items)];
+        const temp = currentList[index - 1];
+        currentList[index - 1] = currentList[index];
+        currentList[index] = temp;
+        currentList[index - 1].area = temp.area;
+        itemsRef.current = currentList;
+        setItems(currentList);
     };
 
     const moveItemDown = (index: number) => {
-        if (index === items.length - 1) return;
-        setItems(prev => {
-            const next = [...prev];
-            const temp = next[index + 1];
-            next[index + 1] = next[index];
-            next[index] = temp;
-            next[index + 1].area = temp.area;
-            return next;
-        });
+        const currentList = [...(itemsRef.current || items)];
+        if (index >= currentList.length - 1) return;
+        const temp = currentList[index + 1];
+        currentList[index + 1] = currentList[index];
+        currentList[index] = temp;
+        currentList[index + 1].area = temp.area;
+        itemsRef.current = currentList;
+        setItems(currentList);
     };
 
     const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -175,17 +182,16 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     const handleDragEnd = () => {
         if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
-            setItems(prev => {
-                const newItems = [...prev];
-                const itemToMove = { ...newItems[draggedIndex] };
-                const destItem = newItems[dragOverIndex];
-                if (destItem) {
-                    itemToMove.area = destItem.area;
-                }
-                newItems.splice(draggedIndex, 1);
-                newItems.splice(dragOverIndex, 0, itemToMove);
-                return newItems;
-            });
+            const newItems = [...(itemsRef.current || items)];
+            const itemToMove = { ...newItems[draggedIndex] };
+            const destItem = newItems[dragOverIndex];
+            if (destItem) {
+                itemToMove.area = destItem.area;
+            }
+            newItems.splice(draggedIndex, 1);
+            newItems.splice(dragOverIndex, 0, itemToMove);
+            itemsRef.current = newItems;
+            setItems(newItems);
         }
         setDraggedIndex(null);
         setDragOverIndex(null);
@@ -193,21 +199,21 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
     const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
         if (isNaN(targetPosition)) return;
-        setItems(prev => {
-            if (fromIndex < 0 || fromIndex >= prev.length) return prev;
-            const toIndex = Math.max(0, Math.min(prev.length - 1, targetPosition - 1));
-            if (fromIndex === toIndex) return prev;
+        const currentList = itemsRef.current || items;
+        if (fromIndex < 0 || fromIndex >= currentList.length) return;
+        const toIndex = Math.max(0, Math.min(currentList.length - 1, targetPosition - 1));
+        if (fromIndex === toIndex) return;
 
-            const newItems = [...prev];
-            const itemToMove = { ...newItems[fromIndex] };
-            const destItem = prev[toIndex];
-            if (destItem && destItem.area) {
-                itemToMove.area = destItem.area;
-            }
-            newItems.splice(fromIndex, 1);
-            newItems.splice(toIndex, 0, itemToMove);
-            return newItems;
-        });
+        const newItems = [...currentList];
+        const itemToMove = { ...newItems[fromIndex] };
+        const destItem = currentList[toIndex];
+        if (destItem && destItem.area) {
+            itemToMove.area = destItem.area;
+        }
+        newItems.splice(fromIndex, 1);
+        newItems.splice(toIndex, 0, itemToMove);
+        itemsRef.current = newItems;
+        setItems(newItems);
     };
 
     const [recipientEmails, setRecipientEmails] = useState(invoice.client.email || "");
@@ -231,17 +237,22 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const isPricingMode = !isLocked;
 
     const handleItemUpdate = (id: string, field: string, value: any) => {
-        setItems(prev => prev.map(item => {
+        const currentList = itemsRef.current || items;
+        const nextItems = currentList.map(item => {
             if (item.id === id) {
                 const updated = { ...item, [field]: value };
                 // Recalculate line total if price/qty changes
                 if (field === 'unitPrice' || field === 'quantity') {
-                    updated.total = updated.quantity * updated.unitPrice;
+                    const q = field === 'quantity' ? (Number(value) || 0) : (Number(item.quantity) || 0);
+                    const p = field === 'unitPrice' ? (Number(value) || 0) : (Number(item.unitPrice) || 0);
+                    updated.total = q * p;
                 }
                 return updated;
             }
             return item;
-        }));
+        });
+        itemsRef.current = nextItems;
+        setItems(nextItems);
     };
 
     const [note, setNote] = useState(invoice.notes || "");
@@ -319,12 +330,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
         if (!initialLoaded.current || isRestoring.current || loading || pendingDraft) return;
 
         setIsSavingDraft(true);
-        const timer = setTimeout(() => {
+        if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
+        draftTimeoutRef.current = setTimeout(() => {
+            const currentItems = itemsRef.current || items;
             const docTitle = invoice.type === 'QUOTE'
                 ? (quoteNumber ? `Quote ${quoteNumber}` : `Quote #${invoice.number}`) + (invoice.client?.name ? ` - ${invoice.client.name}` : '')
                 : `Invoice #${invoice.number}` + (invoice.client?.name ? ` - ${invoice.client.name}` : '');
 
-            const calcSubtotal = items.reduce((acc: number, item: any) => acc + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
+            const calcSubtotal = currentItems.reduce((acc: number, item: any) => acc + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
             const calcTotal = calcSubtotal * 1.15;
 
             saveDraft({
@@ -334,10 +347,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 title: docTitle,
                 url: `/invoices/${invoice.id}`,
                 updatedAt: Date.now(),
-                itemCount: items.length,
+                itemCount: currentItems.length,
                 total: calcTotal,
                 data: {
-                    items,
+                    items: currentItems,
                     site,
                     reference,
                     quoteNumber,
@@ -353,14 +366,28 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             setLastSavedTimestamp(Date.now());
         }, 800);
 
-        return () => clearTimeout(timer);
+        return () => {
+            if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
+        };
     }, [items, site, reference, quoteNumber, date, note, firstPaymentOption, customFirstPaymentPercentage, contactId, attentionTo, loading, pendingDraft]);
 
     const saveChanges = async () => {
+        // Blur active element to force committing any pending browser inputs
+        if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+
+        // Cancel any pending auto-save draft timer
+        if (draftTimeoutRef.current) {
+            clearTimeout(draftTimeoutRef.current);
+            draftTimeoutRef.current = null;
+        }
+
         setLoading(true);
         try {
+            const currentItems = itemsRef.current || items;
             // Map local items to the format expected by the server action
-            const updates = items.map(item => ({
+            const updates = currentItems.map(item => ({
                 id: item.id,
                 description: item.description,
                 area: item.area,
@@ -411,6 +438,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             }
 
             if (savedItems) {
+                itemsRef.current = savedItems;
                 setItems(savedItems);
             }
 
@@ -1881,12 +1909,15 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                 value={group.area}
                                                 onChange={(e) => {
                                                     const newArea = e.target.value;
-                                                    setItems(prev => prev.map((i, idx) => {
+                                                    const currentList = itemsRef.current || items;
+                                                    const nextItems = currentList.map((i, idx) => {
                                                         if (group.items.some((gi: any) => gi.originalIndex === idx)) {
                                                             return { ...i, area: newArea };
                                                         }
                                                         return i;
-                                                    }));
+                                                    });
+                                                    itemsRef.current = nextItems;
+                                                    setItems(nextItems);
                                                 }}
                                                 className="h-9 w-80 bg-[#14141E] border-white/10 focus:border-primary/50 text-[11px] font-black uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-3 rounded-lg"
                                                 placeholder="HEADING (OPTIONAL)"
