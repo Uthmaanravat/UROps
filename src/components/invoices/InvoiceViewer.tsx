@@ -15,8 +15,8 @@ import { saveAs } from "file-saver"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction, getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
-import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction } from "@/app/(dashboard)/invoices/project-actions"
-import { useState, useEffect, useRef, Fragment } from "react"
+import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction, renameProjectAction } from "@/app/(dashboard)/invoices/project-actions"
+import { useState, useEffect, useRef, useMemo, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -76,6 +76,38 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     };
 
     const attentionToNames = parseAttentionToNames(invoice.client.attentionTo);
+
+    const cleanedProjects = useMemo(() => {
+        const seen = new Set<string>();
+        const list: typeof availableProjects = [];
+        for (const p of availableProjects || []) {
+            const trimmedName = (p.name || "").trim();
+            const norm = trimmedName.toLowerCase();
+            if (!norm || seen.has(norm)) continue;
+            seen.add(norm);
+            list.push({ ...p, name: trimmedName });
+        }
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+    }, [availableProjects]);
+
+    const [isRenamingProject, setIsRenamingProject] = useState(false);
+    const [renameSuccess, setRenameSuccess] = useState(false);
+
+    const handleSaveProjectRename = async () => {
+        if (!invoice.projectId || !projectName.trim() || projectName.trim() === invoice.project?.name) return;
+        setIsRenamingProject(true);
+        try {
+            await renameProjectAction(invoice.projectId, projectName.trim());
+            setRenameSuccess(true);
+            setTimeout(() => setRenameSuccess(false), 2500);
+            router.refresh();
+        } catch (err) {
+            console.error("Failed to rename project:", err);
+            alert("Failed to rename project.");
+        } finally {
+            setIsRenamingProject(false);
+        }
+    };
 
 
     useEffect(() => {
@@ -516,7 +548,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             }
 
             const dbPct = invoice.firstPaymentPercentage;
-            if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "")) {
+            const isProjectRenamed = invoice.projectId && projectName.trim() && projectName.trim() !== invoice.project?.name;
+            if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed) {
                 promises.push(updateInvoiceDetailsAction(invoice.id, { 
                     site, 
                     reference, 
@@ -524,7 +557,8 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     date, 
                     firstPaymentPercentage: finalPct,
                     contactId: contactId || null,
-                    attentionTo: attentionTo || null
+                    attentionTo: attentionTo || null,
+                    projectName: projectName.trim() || undefined
                 }));
             }
 
@@ -1831,7 +1865,7 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                     disabled={isLocked}
                                 >
                                     <option value="" className="bg-[#1E293B]">Select Project</option>
-                                    {availableProjects.map((p: any) => (
+                                    {cleanedProjects.map((p: any) => (
                                         <option key={p.id} value={p.id} className="bg-[#1E293B] uppercase">{p.name}</option>
                                     ))}
                                 </select>
@@ -1839,19 +1873,36 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             {invoice.projectId && (
                                 <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                     <span className="text-gray-400 font-black uppercase tracking-widest text-[8px]">Rename</span>
-                                    <input
-                                        value={projectName}
-                                        onChange={(e) => setProjectName(e.target.value)}
-                                        onBlur={async () => {
-                                            if (projectName !== invoice.project?.name) {
-                                                const { updateProject } = await import("@/app/(dashboard)/projects/actions");
-                                                await updateProject(invoice.projectId!, { name: projectName });
-                                                router.refresh();
-                                            }
-                                        }}
-                                        className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
-                                        disabled={isLocked}
-                                    />
+                                    <div className="flex items-center gap-1.5 justify-end">
+                                        <input
+                                            value={projectName}
+                                            onChange={(e) => setProjectName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleSaveProjectRename();
+                                                }
+                                            }}
+                                            onBlur={handleSaveProjectRename}
+                                            placeholder="Project name"
+                                            className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[140px]"
+                                            disabled={isLocked || isRenamingProject}
+                                        />
+                                        {projectName.trim() !== invoice.project?.name && (
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveProjectRename}
+                                                disabled={isRenamingProject || !projectName.trim()}
+                                                className="px-1.5 py-0.5 text-[9px] font-bold bg-primary text-black rounded hover:bg-primary/80 transition-all shrink-0"
+                                                title="Save Project Name immediately (or press Enter)"
+                                            >
+                                                {isRenamingProject ? "..." : "Save"}
+                                            </button>
+                                        )}
+                                        {renameSuccess && (
+                                            <span className="text-[9px] font-bold text-emerald-400 shrink-0">✓ Saved</span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             {invoice.projectId && (

@@ -156,22 +156,35 @@ export async function createInvoiceAction(data: {
     }
     let effectiveProjectId = data.projectId;
 
-    // Always create a project for new quotes if not already linked
+    // Always associate a project for new quotes
     if (!effectiveProjectId) {
         // Build default name: [Site] - [Reference] (No redundant dates)
         const defaultName = [data.site, data.reference].filter(Boolean).join(" - ") || "New Project";
+        const candidateName = (data.projectName || defaultName).trim();
 
-        const project = await prisma.project.create({
-            data: {
+        const existingProject = await prisma.project.findFirst({
+            where: {
                 companyId,
-                name: data.projectName || defaultName,
                 clientId: data.clientId,
-                status: 'SOW',
-                workflowStage: 'SOW',
-                description: `Created from Quotation ${formattedQuoteNumber} on ${data.date}`
+                name: { equals: candidateName, mode: 'insensitive' }
             }
         });
-        effectiveProjectId = project.id;
+
+        if (existingProject) {
+            effectiveProjectId = existingProject.id;
+        } else {
+            const project = await prisma.project.create({
+                data: {
+                    companyId,
+                    name: candidateName,
+                    clientId: data.clientId,
+                    status: 'SOW',
+                    workflowStage: 'SOW',
+                    description: `Created from Quotation ${formattedQuoteNumber} on ${data.date}`
+                }
+            });
+            effectiveProjectId = project.id;
+        }
     }
 
     const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)

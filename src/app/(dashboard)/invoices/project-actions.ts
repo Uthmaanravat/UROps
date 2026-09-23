@@ -31,7 +31,7 @@ export async function updateInvoiceProjectAction(invoiceId: string, projectId: s
     revalidatePath(`/invoices/${invoiceId}`)
     revalidatePath("/projects")
 }
-export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string, firstPaymentPercentage?: number | null, contactId?: string | null, attentionTo?: string | null }) {
+export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string, firstPaymentPercentage?: number | null, contactId?: string | null, attentionTo?: string | null, projectName?: string }) {
     const companyId = await ensureAuth()
 
     const invoiceRecord = await prisma.invoice.findUnique({
@@ -104,7 +104,12 @@ export async function updateInvoiceDetailsAction(invoiceId: string, data: { site
         include: { project: true }
     })
 
-    if (invoice.project && data.reference) {
+    if (invoice.projectId && data.projectName && data.projectName.trim()) {
+        await prisma.project.update({
+            where: { id: invoice.projectId, companyId },
+            data: { name: data.projectName.trim() }
+        })
+    } else if (invoice.project && data.reference) {
         await prisma.project.update({
             where: { id: invoice.projectId!, companyId },
             data: { name: data.reference }
@@ -113,6 +118,20 @@ export async function updateInvoiceDetailsAction(invoiceId: string, data: { site
 
     revalidatePath(`/invoices/${invoiceId}`)
     revalidatePath("/projects")
+}
+
+export async function renameProjectAction(projectId: string, newName: string) {
+    const companyId = await ensureAuth()
+    const trimmed = newName.trim()
+    if (!trimmed) throw new Error("Project name cannot be empty")
+
+    const updated = await prisma.project.update({
+        where: { id: projectId, companyId },
+        data: { name: trimmed }
+    })
+
+    revalidatePath("/projects")
+    return updated
 }
 
 export async function updateProjectCommercialStatusAction(projectId: string, status: 'AWAITING_PO' | 'PO_RECEIVED' | 'EMERGENCY_WORK' | 'REACTIVE_WORK') {
