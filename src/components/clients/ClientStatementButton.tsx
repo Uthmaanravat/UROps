@@ -207,6 +207,13 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 columnStyles: {
                     3: { halign: 'right' },
                     4: { halign: 'right', fontStyle: 'bold' }
+                },
+                didParseCell: (data) => {
+                    if (data.column.index === 0 || data.column.index === 1 || data.column.index === 2) {
+                        data.cell.styles.halign = 'left';
+                    } else if (data.column.index === 3 || data.column.index === 4) {
+                        data.cell.styles.halign = 'right';
+                    }
                 }
             })
 

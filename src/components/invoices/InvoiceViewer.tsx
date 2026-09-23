@@ -915,6 +915,27 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
             },
             alternateRowStyles: {
                 fillColor: [252, 254, 255]
+            },
+            didParseCell: (data) => {
+                // Section banner spanning all columns stays left-aligned
+                if (data.row.raw && Array.isArray(data.row.raw) && (data.row.raw[0] as any)?.colSpan) {
+                    data.cell.styles.halign = 'left';
+                    return;
+                }
+                // Enforce column alignments unconditionally across head and body
+                if (data.column.index === 0) {
+                    data.cell.styles.halign = 'center';
+                } else if (data.column.index === 1) {
+                    data.cell.styles.halign = 'left';
+                } else if (data.column.index === 2) {
+                    data.cell.styles.halign = 'center';
+                } else if (data.column.index === 3) {
+                    data.cell.styles.halign = 'center';
+                } else if (data.column.index === 4) {
+                    data.cell.styles.halign = 'right';
+                } else if (data.column.index === 5) {
+                    data.cell.styles.halign = 'right';
+                }
             }
         });
 

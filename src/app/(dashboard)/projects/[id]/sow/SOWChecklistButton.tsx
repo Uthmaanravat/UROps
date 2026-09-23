@@ -164,11 +164,18 @@ export function SOWChecklistButton({ project, latestScope, settings, className, 
                 },
                 columnStyles: {
                     0: { cellWidth: 15, halign: 'center' }, // Checkbox
-                    1: { cellWidth: 35 },                   // Area
-                    2: { cellWidth: 80 },                   // Description
+                    1: { cellWidth: 35, halign: 'left' },   // Area
+                    2: { cellWidth: 80, halign: 'left' },   // Description
                     3: { cellWidth: 14, halign: 'center' }, // Qty
                     4: { cellWidth: 14, halign: 'center' }, // Unit
-                    5: { cellWidth: 24 }                    // Comments space
+                    5: { cellWidth: 24, halign: 'left' }    // Comments space
+                },
+                didParseCell: (data) => {
+                    if (data.column.index === 0 || data.column.index === 3 || data.column.index === 4) {
+                        data.cell.styles.halign = 'center';
+                    } else {
+                        data.cell.styles.halign = 'left';
+                    }
                 },
                 didDrawCell: (data) => {
                     // Draw checkbox rectangle in the first column's body cells
