@@ -1,11 +1,11 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { formatCurrency, LINE_ITEM_REASONS, cn } from "@/lib/utils"
-import { Plus, GripVertical, Copy, Trash2, Lock, Unlock, AlertCircle, Sparkles, Check, ChevronDown } from "lucide-react"
+import { formatCurrency, LINE_ITEM_REASONS, compareItemCodes, cn } from "@/lib/utils"
+import { Plus, GripVertical, Copy, Trash2, Lock, Unlock, AlertCircle, Sparkles, Check, ChevronDown, Search } from "lucide-react"
 import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -118,6 +118,92 @@ export function LineItemEditor({
     const [unlockReason, setUnlockReason] = useState("")
     const [unlocking, setUnlocking] = useState(false)
 
+    // Quick Catalog Search Bar state
+    const [quickSearchQuery, setQuickSearchQuery] = useState("")
+    const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false)
+    const [quickSearchIndex, setQuickSearchIndex] = useState(0)
+    const quickSearchInputRef = useRef<HTMLInputElement | null>(null)
+    const quickSearchDropdownRef = useRef<HTMLDivElement | null>(null)
+
+    // Helper: determine unit price for catalog item according to tender rate year
+    const getCatalogItemPrice = useCallback((catItem: any) => {
+        if (workType === "TENDER") {
+            if (rateYear === 1) return catItem.year1Price ?? catItem.unitPrice ?? 0
+            if (rateYear === 2) return catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0
+            if (rateYear === 3) return catItem.year3Price ?? catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0
+        }
+        return catItem.unitPrice ?? 0
+    }, [workType, rateYear])
+
+    // Filter catalog for quick search
+    const quickSearchMatches = useMemo(() => {
+        const q = quickSearchQuery.trim().toLowerCase()
+        if (!q) return []
+        return catalog
+            .filter((c: any) => {
+                const codeMatch = c.code && c.code.toLowerCase().includes(q)
+                const descMatch = c.description && c.description.toLowerCase().includes(q)
+                return codeMatch || descMatch
+            })
+            .sort((a: any, b: any) => compareItemCodes(a.code, b.code))
+            .slice(0, 15)
+    }, [catalog, quickSearchQuery])
+
+    const handleAddCatalogItem = (catItem: any) => {
+        const price = getCatalogItemPrice(catItem)
+        const isTender = workType === "TENDER" || Boolean(catItem.tenderId)
+
+        const newItem: LineItem = {
+            code: catItem.code || "",
+            description: catItem.description || "",
+            quantity: 1,
+            unit: catItem.unit || "each",
+            unitPrice: price,
+            total: price,
+            area: "",
+            reason: "",
+            isLocked: isTender,
+            rateYear: isTender ? rateYear : undefined
+        }
+
+        let next: LineItem[]
+        let targetIdx: number
+        if (items.length === 1 && !items[0].description && !items[0].code && (items[0].unitPrice || 0) === 0) {
+            next = [newItem]
+            targetIdx = 0
+        } else {
+            next = [...items, newItem]
+            targetIdx = next.length - 1
+        }
+
+        onChange(next)
+        setActiveHighlight(targetIdx)
+        setQuickSearchQuery("")
+        setIsQuickSearchOpen(false)
+
+        setTimeout(() => {
+            rowRefs.current[targetIdx]?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+            quickSearchInputRef.current?.focus()
+        }, 50)
+    }
+
+    const handleQuickSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (!isQuickSearchOpen || quickSearchMatches.length === 0) return
+
+        if (e.key === "ArrowDown") {
+            e.preventDefault()
+            setQuickSearchIndex((prev) => (prev + 1) % quickSearchMatches.length)
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault()
+            setQuickSearchIndex((prev) => (prev - 1 + quickSearchMatches.length) % quickSearchMatches.length)
+        } else if (e.key === "Enter") {
+            e.preventDefault()
+            handleAddCatalogItem(quickSearchMatches[quickSearchIndex])
+        } else if (e.key === "Escape") {
+            setIsQuickSearchOpen(false)
+        }
+    }
+
     // Listen to highlightIndex prop changes
     useEffect(() => {
         if (highlightIndex !== null && highlightIndex !== undefined) {
@@ -131,11 +217,19 @@ export function LineItemEditor({
         }
     }, [highlightIndex])
 
-    // Close code dropdown on outside click
+    // Close dropdowns on outside click
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
                 setActiveCodeDropdownIndex(null)
+            }
+            if (
+                quickSearchDropdownRef.current &&
+                !quickSearchDropdownRef.current.contains(e.target as Node) &&
+                quickSearchInputRef.current &&
+                !quickSearchInputRef.current.contains(e.target as Node)
+            ) {
+                setIsQuickSearchOpen(false)
             }
         }
         document.addEventListener("mousedown", handleClickOutside)
@@ -244,16 +338,6 @@ export function LineItemEditor({
         setDragOverIndex(null)
     }
 
-    // Helper: determine unit price for catalog item according to tender rate year
-    const getCatalogItemPrice = (catItem: any) => {
-        if (workType === "TENDER") {
-            if (rateYear === 1) return catItem.year1Price ?? catItem.unitPrice ?? 0
-            if (rateYear === 2) return catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0
-            if (rateYear === 3) return catItem.year3Price ?? catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0
-        }
-        return catItem.unitPrice ?? 0
-    }
-
     // Apply catalog match to item
     const applyCatalogItem = (index: number, catItem: any) => {
         const price = getCatalogItemPrice(catItem)
@@ -311,7 +395,105 @@ export function LineItemEditor({
     }
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-4">
+            {/* Quick Catalog Search Bar (Requirement: Type code or words to find and add item) */}
+            <div className="relative">
+                <div className="relative flex items-center">
+                    <Search className="absolute left-3.5 h-4 w-4 text-primary shrink-0 pointer-events-none" />
+                    <Input
+                        ref={quickSearchInputRef}
+                        type="text"
+                        placeholder={
+                            workType === "TENDER"
+                                ? `Quick Add: Type tender code or item name (e.g. "17.30", "swing", "bench") to add to quote...`
+                                : `Quick Add: Type catalog code or service description to add item...`
+                        }
+                        value={quickSearchQuery}
+                        onChange={(e) => {
+                            setQuickSearchQuery(e.target.value)
+                            setIsQuickSearchOpen(true)
+                            setQuickSearchIndex(0)
+                        }}
+                        onFocus={() => {
+                            if (quickSearchQuery.trim()) setIsQuickSearchOpen(true)
+                        }}
+                        onKeyDown={handleQuickSearchKeyDown}
+                        className="pl-10 pr-20 h-11 bg-[#0F0F1A] border-white/15 focus:border-primary text-xs md:text-sm text-white placeholder:text-muted-foreground/60 rounded-xl shadow-inner font-medium"
+                    />
+                    {quickSearchQuery && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setQuickSearchQuery("")
+                                setIsQuickSearchOpen(false)
+                            }}
+                            className="absolute right-3 text-xs text-muted-foreground hover:text-white px-2 py-1 rounded bg-white/5"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
+
+                {/* Dropdown with search results */}
+                {isQuickSearchOpen && quickSearchMatches.length > 0 && (
+                    <div
+                        ref={quickSearchDropdownRef}
+                        className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[#14141E] border border-primary/30 shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-white/5 backdrop-blur-xl"
+                    >
+                        <div className="px-3 py-1.5 bg-black/40 text-[10px] font-black uppercase tracking-wider text-muted-foreground flex justify-between">
+                            <span>Matching Catalog Items ({quickSearchMatches.length})</span>
+                            <span className="text-primary font-normal">Press Enter or click + Add</span>
+                        </div>
+                        {quickSearchMatches.map((catItem: any, idx: number) => {
+                            const price = getCatalogItemPrice(catItem)
+                            const isSelected = idx === quickSearchIndex
+                            return (
+                                <div
+                                    key={catItem.id || `quick-${idx}`}
+                                    onMouseEnter={() => setQuickSearchIndex(idx)}
+                                    onClick={() => handleAddCatalogItem(catItem)}
+                                    className={cn(
+                                        "flex items-center justify-between gap-3 p-3 cursor-pointer transition-colors",
+                                        isSelected ? "bg-primary/20 text-white" : "hover:bg-white/5 text-gray-200"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        {catItem.code && (
+                                            <span className="font-mono text-xs font-black text-primary px-2 py-0.5 rounded bg-primary/10 border border-primary/20 shrink-0">
+                                                {catItem.code}
+                                            </span>
+                                        )}
+                                        <span className="text-xs font-medium truncate">
+                                            {catItem.description}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <span className="text-xs font-mono font-bold text-gray-300">
+                                            {formatCurrency(price, currencySymbol)} / {catItem.unit || "ea"}
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className="h-7 px-3 bg-primary text-black font-black text-xs hover:bg-primary/90"
+                                        >
+                                            <Plus className="w-3 h-3 mr-1" /> Add
+                                        </Button>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+                {isQuickSearchOpen && quickSearchQuery.trim() && quickSearchMatches.length === 0 && (
+                    <div
+                        ref={quickSearchDropdownRef}
+                        className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[#14141E] border border-white/10 shadow-2xl p-4 text-center text-xs text-muted-foreground italic"
+                    >
+                        No catalog items found matching &quot;{quickSearchQuery}&quot;
+                    </div>
+                )}
+            </div>
+
             {/* Table Header Row (Hidden on mobile) */}
             <div className="hidden md:flex items-center gap-2.5 px-3 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
                 <div className="w-14 text-center shrink-0">#</div>
@@ -371,35 +553,61 @@ export function LineItemEditor({
                                     />
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[9px] uppercase font-black text-amber-400/80 tracking-widest">Justification:</span>
-                                    <select
-                                        value={LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : (item.reason ? "Custom" : "")}
-                                        onChange={(e) => {
-                                            const val = e.target.value
-                                            if (val === "Custom") {
-                                                updateItem(index, "reason", item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : "Custom: ")
-                                            } else {
-                                                updateItem(index, "reason", val)
-                                            }
-                                        }}
-                                        className="bg-[#14141E] border border-white/10 rounded px-2 py-0.5 text-[10px] font-semibold text-gray-200 focus:outline-none focus:border-amber-400/50 cursor-pointer"
-                                    >
-                                        <option value="">(No Justification)</option>
-                                        {LINE_ITEM_REASONS.map((r) => (
-                                            <option key={r} value={r}>Due to: {r}</option>
-                                        ))}
-                                        <option value="Custom">Custom Justification...</option>
-                                    </select>
-                                    {(item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) || item.reason === "Custom") && (
-                                        <Input
-                                            value={item.reason === "Custom" ? "" : (item.reason || "")}
-                                            onChange={(e) => updateItem(index, "reason", e.target.value)}
-                                            placeholder="Due to [cause]..."
-                                            className="bg-[#14141E] border-white/10 text-[10px] h-6 px-2 w-44 text-amber-200 placeholder:text-muted-foreground/50 focus:border-amber-400/50"
-                                        />
-                                    )}
-                                </div>
+                                {/* For Tender work: Justification is completely REMOVED. Tender Fixed Rate badge displayed on the right */}
+                                {workType === "TENDER" ? (
+                                    isTenderLocked ? (
+                                        <div className="flex items-center gap-1.5 ml-auto">
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                                                <Lock className="w-3 h-3" /> Fixed Tender Rate
+                                            </span>
+                                            {isAdmin && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => {
+                                                        setItemToUnlockIndex(index)
+                                                        setUnlockDialogOpen(true)
+                                                    }}
+                                                    className="h-6 px-2 text-[10px] font-bold text-amber-300 hover:text-white hover:bg-amber-500/20 border border-amber-500/30 rounded"
+                                                    title="Unlock fixed tender rate for this item"
+                                                >
+                                                    <Unlock className="w-3 h-3 mr-1" /> Unlock
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ) : null
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[9px] uppercase font-black text-amber-400/80 tracking-widest">Justification:</span>
+                                        <select
+                                            value={LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : (item.reason ? "Custom" : "")}
+                                            onChange={(e) => {
+                                                const val = e.target.value
+                                                if (val === "Custom") {
+                                                    updateItem(index, "reason", item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : "Custom: ")
+                                                } else {
+                                                    updateItem(index, "reason", val)
+                                                }
+                                            }}
+                                            className="bg-[#14141E] border border-white/10 rounded px-2 py-0.5 text-[10px] font-semibold text-gray-200 focus:outline-none focus:border-amber-400/50 cursor-pointer"
+                                        >
+                                            <option value="">(No Justification)</option>
+                                            {LINE_ITEM_REASONS.map((r) => (
+                                                <option key={r} value={r}>Due to: {r}</option>
+                                            ))}
+                                            <option value="Custom">Custom Justification...</option>
+                                        </select>
+                                        {(item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) || item.reason === "Custom") && (
+                                            <Input
+                                                value={item.reason === "Custom" ? "" : (item.reason || "")}
+                                                onChange={(e) => updateItem(index, "reason", e.target.value)}
+                                                placeholder="Due to [cause]..."
+                                                className="bg-[#14141E] border-white/10 text-[10px] h-6 px-2 w-44 text-amber-200 placeholder:text-muted-foreground/50 focus:border-amber-400/50"
+                                            />
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Main Inputs Row */}
@@ -556,32 +764,7 @@ export function LineItemEditor({
                                                     if (index === items.length - 1) addItem()
                                                 }
                                             }}
-                                            className={cn(
-                                                isTenderLocked ? "pr-20" : ""
-                                            )}
                                         />
-                                        {isTenderLocked && (
-                                            <div className="absolute right-2 top-2 flex items-center gap-1.5">
-                                                <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
-                                                    <Lock className="w-2.5 h-2.5" /> Locked
-                                                </span>
-                                                {isAdmin && (
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => {
-                                                            setItemToUnlockIndex(index)
-                                                            setUnlockDialogOpen(true)
-                                                        }}
-                                                        className="h-5 px-1.5 text-[9px] text-amber-300 hover:text-white hover:bg-amber-500/20"
-                                                        title="Unlock fixed tender rate for this item"
-                                                    >
-                                                        <Unlock className="w-2.5 h-2.5 mr-0.5" /> Unlock
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
 

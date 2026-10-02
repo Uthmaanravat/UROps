@@ -155,56 +155,84 @@ export function QuoteForm({
         return rawCatalog.filter((item: any) => !item.tenderId && (!item.clientId || item.clientId === clientId))
     }, [rawCatalog, workType, selectedTenderId, clientId])
 
-    // Load draft on mount
+    const isDiscardedRef = useRef(false)
+    const hasUserEditedRef = useRef(false)
+
+    // Load draft on mount: silently restore if genuine unsaved work exists
     useEffect(() => {
         if (initialLoaded.current) return
         initialLoaded.current = true
         const draft = getDraft<any>(STORAGE_KEY)
         if (draft && draft.data) {
-            setPendingDraft(draft)
+            const d = draft.data
+            const draftHasContent = Boolean(
+                (d.items && d.items.some((i: any) => (i.code && i.code.trim()) || (i.description && i.description.trim()) || (i.unitPrice && i.unitPrice > 0))) ||
+                Boolean(d.site && d.site.trim()) ||
+                Boolean(d.reference && d.reference.trim())
+            )
+            if (draftHasContent) {
+                isRestoring.current = true
+                if (d.clientId) setClientId(d.clientId)
+                if (d.projectId) setProjectId(d.projectId)
+                if (d.date) setDate(d.date)
+                if (d.items && d.items.length > 0) setItems(d.items)
+                if (d.site) setSite(d.site)
+                if (d.quoteNumber) setQuoteNumber(d.quoteNumber)
+                if (d.reference) setReference(d.reference)
+                if (d.projectName) {
+                    setProjectName(d.projectName)
+                    setIsProjectNameManual(true)
+                }
+                if (d.workType) setWorkType(d.workType)
+                if (d.selectedTenderId) setSelectedTenderId(d.selectedTenderId)
+                if (d.manualRateYear) setManualRateYear(d.manualRateYear)
+                if (d.paymentNotes) setPaymentNotes(d.paymentNotes)
+                if (d.firstPaymentOption) setFirstPaymentOption(d.firstPaymentOption)
+                if (d.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(d.customFirstPaymentPercentage)
+                if (d.showPaymentNotes !== undefined) setShowPaymentNotes(d.showPaymentNotes)
+                if (d.contactId) setContactId(d.contactId)
+                if (d.attentionTo) setAttentionTo(d.attentionTo)
+                setLastSavedTimestamp(draft.updatedAt || Date.now())
+                hasUserEditedRef.current = true
+                setTimeout(() => {
+                    isRestoring.current = false
+                }, 200)
+            } else {
+                clearDraft(STORAGE_KEY)
+                clearDraft('quote-form-draft')
+            }
         }
     }, [STORAGE_KEY])
 
-    // Restore draft
-    const handleRestoreDraft = () => {
-        if (!pendingDraft?.data) return
-        isRestoring.current = true
-        const d = pendingDraft.data
-        if (d.clientId) setClientId(d.clientId)
-        if (d.projectId) setProjectId(d.projectId)
-        if (d.date) setDate(d.date)
-        if (d.items) setItems(d.items)
-        if (d.site) setSite(d.site)
-        if (d.quoteNumber) setQuoteNumber(d.quoteNumber)
-        if (d.reference) setReference(d.reference)
-        if (d.projectName) {
-            setProjectName(d.projectName)
-            setIsProjectNameManual(true)
-        }
-        if (d.workType) setWorkType(d.workType)
-        if (d.selectedTenderId) setSelectedTenderId(d.selectedTenderId)
-        if (d.manualRateYear) setManualRateYear(d.manualRateYear)
-        if (d.paymentNotes) setPaymentNotes(d.paymentNotes)
-        if (d.firstPaymentOption) setFirstPaymentOption(d.firstPaymentOption)
-        if (d.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(d.customFirstPaymentPercentage)
-        if (d.showPaymentNotes !== undefined) setShowPaymentNotes(d.showPaymentNotes)
-        if (d.contactId) setContactId(d.contactId)
-        if (d.attentionTo) setAttentionTo(d.attentionTo)
-
-        setPendingDraft(null)
-        setTimeout(() => {
-            isRestoring.current = false
-        }, 100)
-    }
-
+    // Permanently discard draft and clear form back to fresh blank state
     const handleDiscardDraft = () => {
+        isDiscardedRef.current = true
+        hasUserEditedRef.current = false
         clearDraft(STORAGE_KEY)
+        clearDraft('quote-form-draft')
         setPendingDraft(null)
+        setLastSavedTimestamp(null)
+        setItems([{ code: "", description: "", quantity: 1, unit: "each", unitPrice: 0, total: 0 }])
+        setSite("")
+        setReference("")
+        setProjectName("")
+        setIsProjectNameManual(false)
+        setPaymentNotes("")
+        setFirstPaymentOption("none")
+        setCustomFirstPaymentPercentage("")
     }
 
-    // Auto-save draft
+    // Auto-save draft quietly in background ONLY when user actually edits meaningful content
     useEffect(() => {
-        if (submitted || pendingDraft || isRestoring.current) return
+        if (submitted || isRestoring.current || isDiscardedRef.current || !hasUserEditedRef.current) return
+
+        const hasContent = (
+            items.some((i) => (i.code && i.code.trim()) || (i.description && i.description.trim()) || (i.unitPrice && i.unitPrice > 0)) ||
+            Boolean(site && site.trim()) ||
+            Boolean(reference && reference.trim())
+        )
+        if (!hasContent) return
+
         setIsSavingDraft(true)
         const timer = setTimeout(() => {
             saveDraft({
@@ -243,7 +271,7 @@ export function QuoteForm({
         clientId, projectId, date, workType, selectedTenderId, manualRateYear, items,
         site, quoteNumber, reference, projectName, paymentNotes, firstPaymentOption,
         customFirstPaymentPercentage, showPaymentNotes, contactId, attentionTo,
-        submitted, pendingDraft, STORAGE_KEY, clients, docType
+        submitted, STORAGE_KEY, clients, docType
     ])
 
     // Load sequence number whenever client or workType or tender changes
@@ -417,6 +445,9 @@ export function QuoteForm({
             })
 
             clearDraft(STORAGE_KEY)
+            clearDraft('quote-form-draft')
+            isDiscardedRef.current = true
+            hasUserEditedRef.current = false
             setSubmitted(true)
             setLastInvoiceId(invoiceId)
             router.push(`/invoices/${invoiceId}`)
@@ -430,13 +461,6 @@ export function QuoteForm({
     return (
         <div className="flex flex-col lg:flex-row gap-6 items-start">
             <div className="flex-1 w-full space-y-6">
-                <EditorDraftBanner
-                    draft={pendingDraft}
-                    onRestore={handleRestoreDraft}
-                    onDiscard={handleDiscardDraft}
-                    documentType={docType === 'INVOICE' ? 'Invoice' : 'Quotation'}
-                />
-
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* WORK TYPE SELECTOR BAR (Requirement 1 & 2) */}
                     <div className="p-4 rounded-2xl bg-[#14141E] border border-white/10 shadow-lg space-y-3">
@@ -749,7 +773,18 @@ export function QuoteForm({
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 p-6 rounded-2xl bg-[#14141E] border border-white/5">
                         <div className="space-y-2 text-xs text-muted-foreground">
                             <p>All prices exclude 15% VAT until total.</p>
-                            <AutoSaveIndicator isSavingDraft={isSavingDraft} lastSavedTimestamp={lastSavedTimestamp} />
+                            <div className="flex items-center gap-3">
+                                <AutoSaveIndicator isSavingDraft={isSavingDraft} lastSavedTimestamp={lastSavedTimestamp} />
+                                {lastSavedTimestamp && (
+                                    <button
+                                        type="button"
+                                        onClick={handleDiscardDraft}
+                                        className="text-[11px] text-red-400 hover:text-red-300 underline font-semibold transition-colors"
+                                    >
+                                        Discard Draft
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         <div className="w-full md:w-80 space-y-2 text-right">

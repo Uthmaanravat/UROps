@@ -544,15 +544,25 @@ export function InvoiceViewer({
         }, 200);
     };
 
+    const isDiscardedRef = useRef(false);
+
     const handleDiscardDraft = () => {
+        isDiscardedRef.current = true;
         clearDraft(DRAFT_KEY);
         setPendingDraft(null);
         setLastSavedTimestamp(null);
+        setItems(invoice.items || []);
+        itemsRef.current = invoice.items || [];
+        setSite(invoice.site || "");
+        setReference(invoice.reference || "");
+        setQuoteNumber(invoice.quoteNumber || "");
+        setDate(invoice.date ? new Date(invoice.date).toISOString().split('T')[0] : "");
+        setNote(invoice.notes || "");
     };
 
     // Debounced Auto-Save to localStorage
     useEffect(() => {
-        if (!initialLoaded.current || isRestoring.current || loading || pendingDraft) return;
+        if (!initialLoaded.current || isRestoring.current || loading || pendingDraft || isDiscardedRef.current) return;
 
         setIsSavingDraft(true);
         if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
