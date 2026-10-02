@@ -11,10 +11,20 @@ interface KnowledgeBaseClientProps {
     historicalItems: any[]
     aiEnabled?: boolean
     clients?: { id: string; name: string }[]
+    tenders?: { id: string; name: string; tenderNumber: string }[]
+    initialTab?: 'historical' | 'fixed'
+    initialScope?: 'all' | 'general' | 'tender'
 }
 
-export function KnowledgeBaseClient({ historicalItems, aiEnabled = true, clients = [] }: KnowledgeBaseClientProps) {
-    const [activeTab, setActiveTab] = useState<'historical' | 'fixed'>('historical')
+export function KnowledgeBaseClient({ 
+    historicalItems, 
+    aiEnabled = true, 
+    clients = [],
+    tenders = [],
+    initialTab = 'historical',
+    initialScope = 'all'
+}: KnowledgeBaseClientProps) {
+    const [activeTab, setActiveTab] = useState<'historical' | 'fixed'>(initialTab)
 
     return (
         <div className="space-y-8 animate-in fade-in duration-700">
@@ -134,7 +144,11 @@ export function KnowledgeBaseClient({ historicalItems, aiEnabled = true, clients
                         </div>
                     </div>
 
-                    <FixedPriceManager clients={clients} />
+                    <FixedPriceManager 
+                        clients={clients} 
+                        tenders={tenders}
+                        initialScope={initialScope}
+                    />
                 </div>
             )}
         </div>

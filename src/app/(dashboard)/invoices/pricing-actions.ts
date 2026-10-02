@@ -6,7 +6,7 @@ import { updateProjectStatus } from "../projects/actions"
 import { ensureAuth } from "@/lib/auth-actions"
 import { convertToInvoiceAction } from "./actions"
 
-export async function updateInvoiceItemsAction(invoiceId: string, items: { id: string, unitPrice?: number, description?: string, unit?: string, quantity?: number, area?: string, reason?: string }[]) {
+export async function updateInvoiceItemsAction(invoiceId: string, items: { id: string, unitPrice?: number, description?: string, unit?: string, quantity?: number, area?: string, reason?: string, code?: string, isLocked?: boolean, rateYear?: number }[]) {
     const companyId = await ensureAuth()
 
     // Validate invoice ownership once
@@ -50,6 +50,9 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                         unit: item.unit,
                         area: item.area,
                         reason: item.reason,
+                        code: item.code !== undefined ? item.code : undefined,
+                        isLocked: item.isLocked !== undefined ? item.isLocked : undefined,
+                        rateYear: item.rateYear !== undefined ? item.rateYear : undefined,
                         total: (item.quantity !== undefined && item.unitPrice !== undefined)
                             ? item.quantity * item.unitPrice
                             : undefined,
@@ -69,6 +72,9 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
                         unit: item.unit || "ea",
                         area: item.area || "",
                         reason: item.reason || null,
+                        code: item.code || null,
+                        isLocked: Boolean(item.isLocked),
+                        rateYear: item.rateYear || null,
                         total: (item.quantity || 1) * (item.unitPrice || 0),
                         position: i
                     }

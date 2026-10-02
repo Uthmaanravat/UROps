@@ -8,7 +8,12 @@ export const dynamic = 'force-dynamic';
 
 export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
     const companyId = await ensureAuth();
-    const [invoice, companySettings, projects] = await Promise.all([
+    const supabase = (await import("@/lib/supabase/server")).createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const dbUser = user ? await prisma.user.findUnique({ where: { id: user.id }, select: { role: true } }) : null;
+    const isAdmin = dbUser?.role === 'ADMIN';
+
+    const [invoice, companySettings, projects, tenders] = await Promise.all([
         prisma.invoice.findFirst({
             where: { id: params.id, companyId },
             include: {
@@ -21,6 +26,10 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                     orderBy: { position: 'asc' }
                 },
                 payments: true,
+                tender: true,
+                unlockLogs: {
+                    orderBy: { createdAt: 'desc' }
+                },
                 project: {
                     include: {
                         invoices: {
@@ -34,6 +43,11 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         prisma.project.findMany({
             where: { companyId },
             orderBy: { name: 'asc' }
+        }),
+        prisma.tender.findMany({
+            where: { companyId },
+            include: { client: true },
+            orderBy: { createdAt: 'asc' }
         })
     ]);
 
@@ -48,6 +62,8 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                 invoice={invoice}
                 companySettings={companySettings}
                 availableProjects={projects as any[]}
+                tenders={tenders as any[]}
+                isAdmin={isAdmin}
             />
         </div>
     )

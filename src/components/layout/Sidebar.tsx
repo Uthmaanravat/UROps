@@ -42,6 +42,7 @@ const navigation = [
         items: [
             { title: "Quotations", href: "/invoices?type=QUOTE" },
             { title: "Invoices", href: "/invoices?type=INVOICE" },
+            { title: "Tender 152G", href: "/tenders" },
             { title: "Payments", href: "/payments" },
         ]
     },

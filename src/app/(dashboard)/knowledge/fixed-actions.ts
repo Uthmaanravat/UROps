@@ -9,7 +9,10 @@ export async function getFixedPriceItemsAction() {
     try {
         return await prisma.fixedPriceItem.findMany({
             where: { companyId },
-            include: { client: { select: { id: true, name: true } } },
+            include: { 
+                client: { select: { id: true, name: true } },
+                tender: { select: { id: true, name: true, tenderNumber: true } }
+            },
             orderBy: { description: 'asc' }
         })
     } catch (error) {
@@ -25,22 +28,33 @@ export async function saveFixedPriceItemAction(data: {
     unit?: string,
     category?: string,
     clientId?: string | null,
-    code?: string | null
+    code?: string | null,
+    tenderId?: string | null,
+    year1Price?: number | null,
+    year2Price?: number | null,
+    year3Price?: number | null
 }) {
     const companyId = await ensureAuth()
     try {
         console.log("Saving fixed price item:", data);
+
+        const y1 = data.year1Price !== undefined && data.year1Price !== null ? data.year1Price : data.unitPrice;
+        const effectiveUnitPrice = y1 ?? data.unitPrice;
 
         if (data.id) {
             await prisma.fixedPriceItem.update({
                 where: { id: data.id, companyId },
                 data: {
                     description: data.description,
-                    unitPrice: data.unitPrice,
+                    unitPrice: effectiveUnitPrice,
                     unit: data.unit,
                     category: data.category,
                     clientId: data.clientId || null,
-                    code: data.code || null
+                    code: data.code || null,
+                    tenderId: data.tenderId || null,
+                    year1Price: y1,
+                    year2Price: data.year2Price || null,
+                    year3Price: data.year3Price || null
                 }
             })
         } else {
@@ -48,11 +62,15 @@ export async function saveFixedPriceItemAction(data: {
                 data: {
                     companyId,
                     description: data.description,
-                    unitPrice: data.unitPrice,
+                    unitPrice: effectiveUnitPrice,
                     unit: data.unit,
                     category: data.category,
                     clientId: data.clientId || null,
-                    code: data.code || null
+                    code: data.code || null,
+                    tenderId: data.tenderId || null,
+                    year1Price: y1,
+                    year2Price: data.year2Price || null,
+                    year3Price: data.year3Price || null
                 }
             })
         }

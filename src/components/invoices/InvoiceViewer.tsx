@@ -3,8 +3,13 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
+import { LineItemEditor } from "@/components/invoices/LineItemEditor"
+import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
+import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-actions"
+import { calculateTenderRateYear } from "@/lib/tender-utils"
+import { logItemUnlockAction } from "@/app/(dashboard)/tenders/actions"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -28,7 +33,19 @@ import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/Editor
 import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
 
 
-export function InvoiceViewer({ invoice, companySettings, availableProjects = [] }: { invoice: any, companySettings?: any, availableProjects?: any[] }) {
+export function InvoiceViewer({ 
+    invoice, 
+    companySettings, 
+    availableProjects = [],
+    tenders = [],
+    isAdmin = false
+}: { 
+    invoice: any, 
+    companySettings?: any, 
+    availableProjects?: any[],
+    tenders?: any[],
+    isAdmin?: boolean
+}) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     // Use local state for items to allow instant UI updates for grouping/calculations
@@ -68,6 +85,83 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
     const [showStatusOnQuote, setShowStatusOnQuote] = useState(false);
     const [contactId, setContactId] = useState(invoice.contactId || "");
     const [attentionTo, setAttentionTo] = useState(invoice.attentionTo || "");
+
+    // Work Type & Tender state
+    const [workType, setWorkType] = useState<"GENERAL" | "TENDER">(invoice.workType || "GENERAL");
+    const [selectedTenderId, setSelectedTenderId] = useState<string>(
+        invoice.tenderId || (tenders.length > 0 ? tenders[0].id : "")
+    );
+    const [manualRateYear, setManualRateYear] = useState<number | null>(invoice.rateYear || null);
+    const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+    const [showCatalogPanel, setShowCatalogPanel] = useState(false);
+    const [rawCatalog, setRawCatalog] = useState<any[]>([]);
+
+    const activeTender = useMemo(() => {
+        return tenders.find((t: any) => t.id === selectedTenderId) || invoice.tender || tenders[0];
+    }, [tenders, selectedTenderId, invoice.tender]);
+
+    const autoRateYear = useMemo(() => {
+        if (!activeTender || !activeTender.startDate) return 1;
+        return calculateTenderRateYear(activeTender.startDate, new Date(date));
+    }, [activeTender, date]);
+
+    const effectiveRateYear = manualRateYear ?? autoRateYear;
+
+    useEffect(() => {
+        const loadCatalog = async () => {
+            try {
+                const data = await getFixedPriceItemsAction();
+                setRawCatalog(data);
+            } catch (err) {
+                console.error("Failed to load catalog", err);
+            }
+        };
+        loadCatalog();
+    }, []);
+
+    const activeCatalog = useMemo(() => {
+        if (workType === "TENDER") {
+            return rawCatalog.filter((item: any) => item.tenderId === selectedTenderId);
+        }
+        return rawCatalog.filter((item: any) => !item.tenderId && (!item.clientId || item.clientId === invoice.clientId));
+    }, [rawCatalog, workType, selectedTenderId, invoice.clientId]);
+
+    const handleAddFromCatalog = (catItem: any) => {
+        const isTender = workType === "TENDER" || Boolean(catItem.tenderId);
+        let price = catItem.unitPrice || 0;
+        if (isTender) {
+            if (effectiveRateYear === 1) price = catItem.year1Price ?? catItem.unitPrice ?? 0;
+            else if (effectiveRateYear === 2) price = catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0;
+            else if (effectiveRateYear === 3) price = catItem.year3Price ?? catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0;
+        }
+
+        const newItem = {
+            id: `new-${Date.now()}`,
+            code: catItem.code || "",
+            description: catItem.description || "",
+            quantity: 1,
+            unit: catItem.unit || "each",
+            unitPrice: price,
+            total: price,
+            area: "",
+            reason: "",
+            isLocked: isTender,
+            rateYear: isTender ? effectiveRateYear : undefined
+        };
+
+        const currentList = itemsRef.current || items;
+        if (currentList.length === 1 && !currentList[0].description && currentList[0].unitPrice === 0) {
+            const next = [newItem];
+            itemsRef.current = next;
+            setItems(next);
+            setHighlightIndex(0);
+        } else {
+            const next = [...currentList, newItem];
+            itemsRef.current = next;
+            setItems(next);
+            setHighlightIndex(next.length - 1);
+        }
+    };
 
     const linkedInvoice = invoice.type === 'QUOTE'
         ? (invoice.project?.invoices?.find((i: any) => i.type === 'INVOICE' && i.id !== invoice.id) || null)
@@ -525,7 +619,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                 quantity: item.quantity,
                 unit: item.unit,
                 unitPrice: item.unitPrice,
-                reason: item.reason
+                reason: item.reason,
+                code: item.code || null,
+                isLocked: item.isLocked || false,
+                rateYear: item.rateYear || null
             }));
 
             let savedItems = null;
@@ -554,7 +651,11 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
 
             const dbPct = invoice.firstPaymentPercentage;
             const isProjectRenamed = invoice.projectId && projectName.trim() && projectName.trim() !== invoice.project?.name;
-            if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed) {
+            const workTypeChanged = workType !== invoice.workType;
+            const tenderIdChanged = (workType === 'TENDER' ? selectedTenderId : null) !== invoice.tenderId;
+            const rateYearChanged = effectiveRateYear !== invoice.rateYear;
+
+            if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed || workTypeChanged || tenderIdChanged || rateYearChanged) {
                 promises.push(updateInvoiceDetailsAction(invoice.id, { 
                     site, 
                     reference, 
@@ -563,7 +664,10 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     firstPaymentPercentage: finalPct,
                     contactId: contactId || null,
                     attentionTo: attentionTo || null,
-                    projectName: projectName.trim() || undefined
+                    projectName: projectName.trim() || undefined,
+                    workType,
+                    tenderId: workType === 'TENDER' ? selectedTenderId : null,
+                    rateYear: effectiveRateYear
                 }));
             }
 
@@ -1851,9 +1955,17 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                 }
                                 
                                 return (
-                                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-widest mb-1 ${badgeColor}`}>
-                                        {displayStatus}
-                                    </span>
+                                    <div className="flex flex-wrap items-center justify-center md:justify-end gap-1.5 mb-1">
+                                        {workType === 'TENDER' && (
+                                            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                                TENDER {activeTender?.tenderNumber || '152G'} · Y{effectiveRateYear}
+                                            </span>
+                                        )}
+                                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-widest ${badgeColor}`}>
+                                            {displayStatus}
+                                        </span>
+                                    </div>
                                 );
                             })()}
                             <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-[#1E293B]">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
@@ -1880,6 +1992,61 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                             <InfoTooltip content="Basic details of the document. You can modify these inline to automatically update the document." />
                         </h3>
                         <div className="bg-[#1E293B] p-4 rounded-2xl w-full border border-white/5 space-y-2 group shadow-xl ring-1 ring-white/5">
+                            <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
+                                <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Work Type</span>
+                                <select
+                                    value={workType}
+                                    onChange={(e) => {
+                                        const nextType = e.target.value as "GENERAL" | "TENDER";
+                                        setWorkType(nextType);
+                                        if (nextType === "TENDER" && !selectedTenderId && tenders.length > 0) {
+                                            setSelectedTenderId(tenders[0].id);
+                                        }
+                                    }}
+                                    onBlur={saveChanges}
+                                    className="bg-transparent border-none text-right font-black text-white outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
+                                    disabled={isLocked}
+                                >
+                                    <option value="GENERAL" className="bg-[#1E293B]">General Work</option>
+                                    <option value="TENDER" className="bg-[#1E293B]">Tender Work</option>
+                                </select>
+                            </div>
+                            {workType === "TENDER" && (
+                                <>
+                                    {tenders.length > 1 && (
+                                        <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
+                                            <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Tender</span>
+                                            <select
+                                                value={selectedTenderId}
+                                                onChange={(e) => setSelectedTenderId(e.target.value)}
+                                                onBlur={saveChanges}
+                                                className="bg-transparent border-none text-right font-bold text-amber-300 outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
+                                                disabled={isLocked}
+                                            >
+                                                {tenders.map((t: any) => (
+                                                    <option key={t.id} value={t.id} className="bg-[#1E293B]">
+                                                        {t.tenderNumber}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
+                                        <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Rate Year</span>
+                                        <select
+                                            value={effectiveRateYear}
+                                            onChange={(e) => setManualRateYear(Number(e.target.value))}
+                                            onBlur={saveChanges}
+                                            className="bg-transparent border-none text-right font-bold text-amber-300 outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
+                                            disabled={isLocked}
+                                        >
+                                            <option value={1} className="bg-[#1E293B]">Year 1 Rate (2025/26)</option>
+                                            <option value={2} className="bg-[#1E293B]">Year 2 Rate (2026/27)</option>
+                                            <option value={3} className="bg-[#1E293B]">Year 3 Rate (2027/28)</option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
                             <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Date Issued</span>
                                 <input
@@ -2138,283 +2305,68 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                     </div>
                 </div>
 
-                {/* Items Section - Modern High-Contrast Style */}
+                {/* Items Section - Modern Unified LineItemEditor */}
                 {isPricingMode ? (
-                    <div className="mb-10 min-h-[400px] space-y-6">
-                        {(() => {
-                            const sequentialGroups: { area: string, items: any[] }[] = [];
-                            items.forEach((item: any, index: number) => {
-                                const area = item.area?.trim() || "GENERAL"
-                                const lastGroup = sequentialGroups[sequentialGroups.length - 1];
-                                if (lastGroup && lastGroup.area === area) {
-                                    lastGroup.items.push({ ...item, originalIndex: index });
-                                } else {
-                                    sequentialGroups.push({ area, items: [{ ...item, originalIndex: index }] });
-                                }
-                            });
-
-                            return sequentialGroups.map((group: any, gIdx: number) => {
-                                // Calculate global start index for this group
-                                let globalStartIndex = 0;
-                                for (let i = 0; i < gIdx; i++) {
-                                    globalStartIndex += sequentialGroups[i].items.length;
-                                }
-
-                                return (
-                                    <div key={`edit-group-${group.area}-${gIdx}`} className="space-y-4 bg-white/[0.01] p-5 rounded-2xl border border-white/5 shadow-sm">
-                                        {/* Group Heading Header */}
-                                        <div className="flex items-center gap-3 pb-3 border-b border-white/5">
-                                            <div className="h-2.5 w-2.5 rounded-full bg-primary" />
-                                            <Input
-                                                value={group.area}
-                                                onChange={(e) => {
-                                                    const newArea = e.target.value;
-                                                    const currentList = itemsRef.current || items;
-                                                    const nextItems = currentList.map((i, idx) => {
-                                                        if (group.items.some((gi: any) => gi.originalIndex === idx)) {
-                                                            return { ...i, area: newArea };
-                                                        }
-                                                        return i;
-                                                    });
-                                                    itemsRef.current = nextItems;
-                                                    setItems(nextItems);
-                                                }}
-                                                className="h-9 w-80 bg-[#14141E] border-white/10 focus:border-primary/50 text-[11px] font-black uppercase tracking-[0.2em] text-primary italic focus:ring-0 px-3 rounded-lg"
-                                                placeholder="HEADING (OPTIONAL)"
-                                            />
-                                            <span className="text-[10px] text-muted-foreground font-semibold italic ml-auto">
-                                                {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
-                                            </span>
-                                        </div>
-
-                                        {/* Table-like Header Row (hidden on mobile) */}
-                                        <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-                                            <div className="w-16 text-center">#</div>
-                                            <div className="flex-1">Service Description</div>
-                                            <div className="w-16 text-center">Qty</div>
-                                            <div className="w-16 text-center">Unit</div>
-                                            <div className="w-28 text-right">Price</div>
-                                            <div className="w-28 text-right">Total</div>
-                                            <div className="w-28"></div> {/* Actions spacer */}
-                                        </div>
-
-                                        {/* Group Items Rows */}
-                                        <div className="space-y-2">
-                                            {group.items.map((item: any, iIdx: number) => {
-                                                const originalIndex = item.originalIndex;
-                                                const isQtyInvalid = isPricingMode && (!item.quantity || isNaN(Number(item.quantity)) || Number(item.quantity) <= 0);
-                                                const isPriceInvalid = isPricingMode && (!item.unitPrice || isNaN(Number(item.unitPrice)) || Number(item.unitPrice) <= 0);
-                                                const isRowInvalid = isQtyInvalid || isPriceInvalid;
-
-                                                return (
-                                                    <div
-                                                        key={item.id}
-                                                        onDragEnter={(e) => {
-                                                            if (draggedIndex !== null) handleDragEnter(e, originalIndex);
-                                                        }}
-                                                        onDragOver={(e) => {
-                                                            if (draggedIndex !== null) {
-                                                                e.preventDefault();
-                                                                e.dataTransfer.dropEffect = 'move';
-                                                            }
-                                                        }}
-                                                        onDrop={(e) => {
-                                                            if (draggedIndex !== null) {
-                                                                e.preventDefault();
-                                                                handleDragEnd();
-                                                            }
-                                                        }}
-                                                        className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border transition-all group/row relative ${isRowInvalid ? 'border-amber-500/30 bg-amber-500/[0.02]' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.02]'} ${dragOverIndex === originalIndex ? 'border-t-2 border-t-primary' : ''}`}
-                                                    >
-                                                        {/* Heading & Reason/Justification placed ON TOP of each item */}
-                                                        <div className="flex flex-wrap items-center justify-between gap-3 px-1 border-b border-white/5 pb-1 mb-0.5">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
-                                                                <Input
-                                                                    value={item.area || ""}
-                                                                    onChange={(e) => {
-                                                                        const newArea = e.target.value;
-                                                                        handleItemUpdate(item.id, 'area', newArea);
-                                                                    }}
-                                                                    className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 w-36 md:w-48"
-                                                                    placeholder="HEADING"
-                                                                />
-                                                            </div>
-
-                                                            {/* Structured Reason / Justification */}
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[9px] uppercase font-black text-amber-400/80 tracking-widest">Justification:</span>
-                                                                <select
-                                                                    value={LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : (item.reason ? "Custom" : "")}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value;
-                                                                        if (val === "Custom") {
-                                                                            handleItemUpdate(item.id, 'reason', item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : "Custom: ");
-                                                                        } else {
-                                                                            handleItemUpdate(item.id, 'reason', val);
-                                                                        }
-                                                                    }}
-                                                                    className="bg-[#14141E] border border-white/10 rounded px-2 py-0.5 text-[10px] font-semibold text-gray-200 focus:outline-none focus:border-amber-400/50 cursor-pointer"
-                                                                >
-                                                                    <option value="">(No Justification)</option>
-                                                                    {LINE_ITEM_REASONS.map(r => (
-                                                                        <option key={r} value={r}>Due to: {r}</option>
-                                                                    ))}
-                                                                    <option value="Custom">Custom Justification...</option>
-                                                                </select>
-                                                                {(item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) || item.reason === "Custom") && (
-                                                                    <Input
-                                                                        value={item.reason === "Custom" ? "" : (item.reason || "")}
-                                                                        onChange={(e) => handleItemUpdate(item.id, 'reason', e.target.value)}
-                                                                        placeholder="Due to [cause]..."
-                                                                        className="bg-[#14141E] border-white/10 text-[10px] h-6 px-2 w-44 text-amber-200 placeholder:text-muted-foreground/50 focus:border-amber-400/50"
-                                                                    />
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Main Row Inputs */}
-                                                        <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3">
-                                                            {/* Drag Handle & Editable # */}
-                                                            <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 justify-start md:justify-center">
-                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2 select-none">Pos</span>
-                                                                <div 
-                                                                    draggable={isPricingMode}
-                                                                    onDragStart={(e) => handleDragStart(e, originalIndex)}
-                                                                    onDragEnd={handleDragEnd}
-                                                                    className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0"
-                                                                    title="Drag to reorder"
-                                                                >
-                                                                    <GripVertical className="h-4 w-4" />
-                                                                </div>
-                                                                <ItemPositionInput
-                                                                    position={originalIndex + 1}
-                                                                    totalItems={items.length}
-                                                                    onMove={(newPos) => moveItemToPosition(originalIndex, newPos)}
-                                                                />
-                                                            </div>
-
-                                                            {/* Description */}
-                                                            <div className="flex-1 flex flex-col md:block">
-                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Service Description</span>
-                                                                <Textarea
-                                                                    value={item.description}
-                                                                    onChange={(e) => handleItemUpdate(item.id, 'description', e.target.value)}
-                                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
-                                                                />
-                                                            </div>
-
-                                                            {/* Qty */}
-                                                            <div className="md:w-16 flex flex-col md:block">
-                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Qty</span>
-                                                                <Input
-                                                                    type="number"
-                                                                    value={item.quantity}
-                                                                    onChange={(e) => handleItemUpdate(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                    className={`bg-[#14141E] focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs ${isQtyInvalid ? 'border-amber-500/80 bg-amber-500/10 text-amber-200 focus:border-amber-400' : 'border-white/10'}`}
-                                                                    required
-                                                                />
-                                                                {isQtyInvalid && <span className="text-[8px] font-black text-amber-400 block text-center mt-0.5 uppercase tracking-wider">Qty &gt; 0</span>}
-                                                            </div>
-
-                                                            {/* Unit */}
-                                                            <div className="md:w-16 flex flex-col md:block">
-                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Unit</span>
-                                                                <Input
-                                                                    value={item.unit || ""}
-                                                                    onChange={(e) => handleItemUpdate(item.id, 'unit', e.target.value)}
-                                                                    placeholder="ea"
-                                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center h-9 w-full text-xs"
-                                                                />
-                                                            </div>
-
-                                                            {/* Price */}
-                                                            <div className="md:w-28 flex flex-col md:block">
-                                                                <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Price</span>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[9px] font-black text-muted-foreground/30">{currencySymbol}</span>
-                                                                    <Input
-                                                                        type="number"
-                                                                        value={item.unitPrice}
-                                                                        onChange={(e) => handleItemUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                                        className={`bg-[#14141E] focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs ${isPriceInvalid ? 'border-amber-500/80 bg-amber-500/10 text-amber-200 focus:border-amber-400' : 'border-white/10'}`}
-                                                                        required
-                                                                    />
-                                                                </div>
-                                                                {isPriceInvalid && <span className="text-[8px] font-black text-amber-400 block text-right pr-1 mt-0.5 uppercase tracking-wider">Price &gt; 0</span>}
-                                                                {invoice.type === 'QUOTE' && pricingSuggestions[item.description] && (!item.unitPrice || Number(item.unitPrice) <= 0) && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleItemUpdate(item.id, 'unitPrice', pricingSuggestions[item.description].typicalPrice)}
-                                                                        className="mt-1 flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded transition-all w-full justify-center"
-                                                                        title={`Click to apply rate of R${pricingSuggestions[item.description].typicalPrice} from ${pricingSuggestions[item.description].source}`}
-                                                                    >
-                                                                        <Sparkles className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
-                                                                        <span>Apply R{pricingSuggestions[item.description].typicalPrice.toFixed(2)}</span>
-                                                                    </button>
-                                                                )}
-                                                            </div>
-
-                                                            {/* Total */}
-                                                            <div className="md:w-28 flex items-center justify-between md:justify-end gap-2 md:gap-0 mt-2 md:mt-0 pt-2 md:pt-0 border-t border-white/5 md:border-none">
-                                                                <span className="text-[9px] uppercase font-black text-primary/60 md:hidden block">Line Total</span>
-                                                                <span className="text-sm font-black text-white pr-2 text-right md:w-full block md:pt-2">
-                                                                    {formatCurrency(item.quantity * item.unitPrice, currencySymbol)}
-                                                                </span>
-                                                            </div>
-
-                                                            {/* Actions */}
-                                                            <div className="md:w-28 flex items-center justify-end md:justify-center gap-1 mt-2 md:mt-0 md:pt-1">
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/10"
-                                                                    onClick={() => handleDuplicateItem(item, originalIndex)}
-                                                                    title="Duplicate Item Row (adds a copy below)"
-                                                                >
-                                                                    <CopyPlus className="h-4.5 w-4.5" />
-                                                                </Button>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10"
-                                                                    onClick={() => moveItemUp(originalIndex)}
-                                                                    title="Move Up"
-                                                                >
-                                                                    <ArrowUp className="h-4.5 w-4.5" />
-                                                                </Button>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10"
-                                                                    onClick={() => moveItemDown(originalIndex)}
-                                                                    title="Move Down"
-                                                                >
-                                                                    <ArrowDown className="h-4.5 w-4.5" />
-                                                                </Button>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 rounded-lg text-red-500 hover:bg-red-500/10"
-                                                                    onClick={() => handleDeleteItem(item.id)}
-                                                                    title="Delete Item"
-                                                                >
-                                                                    <Trash2 className="h-4.5 w-4.5" />
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                    <div className="mb-10 min-h-[400px]">
+                        <div className="flex flex-col lg:flex-row gap-6 items-start">
+                            <div className="flex-1 min-w-0 w-full">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Line Items</span>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-gray-400">
+                                            {items.length} {items.length === 1 ? 'item' : 'items'}
+                                        </span>
                                     </div>
-                                );
-                            });
-                        })()}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowCatalogPanel(!showCatalogPanel)}
+                                        className={cn(
+                                            "h-8 text-xs font-bold gap-2",
+                                            showCatalogPanel ? "bg-primary/10 text-primary border-primary/30" : "bg-white/5 text-gray-300 border-white/10"
+                                        )}
+                                    >
+                                        <Book className="h-3.5 w-3.5" />
+                                        {showCatalogPanel ? "Hide Catalog Panel" : "Browse Catalog"}
+                                    </Button>
+                                </div>
+                                <LineItemEditor
+                                    items={items}
+                                    onChange={(newItems) => {
+                                        itemsRef.current = newItems;
+                                        setItems(newItems);
+                                    }}
+                                    catalog={activeCatalog}
+                                    workType={workType}
+                                    rateYear={effectiveRateYear}
+                                    currencySymbol={currencySymbol}
+                                    pricingSuggestions={pricingSuggestions}
+                                    isAdmin={isAdmin}
+                                    onLogUnlock={async ({ itemId, itemCode, reason }) => {
+                                        await logItemUnlockAction({
+                                            invoiceId: invoice.id,
+                                            itemId,
+                                            itemCode,
+                                            reason
+                                        });
+                                    }}
+                                    highlightIndex={highlightIndex}
+                                />
+                            </div>
+                            {showCatalogPanel && (
+                                <CatalogSidePanel
+                                    catalog={activeCatalog}
+                                    items={items}
+                                    onAddItem={handleAddFromCatalog}
+                                    workType={workType}
+                                    selectedTender={activeTender}
+                                    clientName={invoice.client?.companyName || invoice.client?.name}
+                                    rateYear={effectiveRateYear}
+                                    currencySymbol={currencySymbol}
+                                />
+                            )}
+                        </div>
                     </div>
                 ) : (
                     <div className="mb-10 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
@@ -2465,7 +2417,14 @@ export function InvoiceViewer({ invoice, companySettings, availableProjects = []
                                                                 <span className="text-[10px] font-black text-gray-600 pl-4">{globalStartIndex + iIdx + 1}</span>
                                                             </td>
                                                             <td className="py-2.5 pr-8">
+                                                                <div className="flex items-start gap-2">
+                                                                {item.code && (
+                                                                    <span className="font-mono text-xs font-black px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 shrink-0">
+                                                                        {item.code}
+                                                                    </span>
+                                                                )}
                                                                 <div className="text-[13px] md:text-sm font-bold text-white tracking-tight leading-snug">{item.description}</div>
+                                                            </div>
                                                                 {item.reason && (
                                                                     <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-300 font-medium">
                                                                         <span className="text-[8px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">Due to</span>

@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function InvoicesPage({
     searchParams
 }: {
-    searchParams: { q?: string; status?: string; type?: string; clientId?: string; commercialStatus?: string; sort?: string }
+    searchParams: { q?: string; status?: string; type?: string; clientId?: string; commercialStatus?: string; sort?: string; workType?: string }
 }) {
     const companyId = await ensureAuth();
     const query = searchParams.q || "";
@@ -24,6 +24,7 @@ export default async function InvoicesPage({
     const clientIdFilter = searchParams.clientId || "";
     const commercialStatusFilter = searchParams.commercialStatus || "";
     const sortParam = searchParams.sort || "date_desc";
+    const workTypeFilter = searchParams.workType || "";
     let invoices: any[] = [];
     let clients: { id: string; name: string }[] = [];
 
@@ -48,6 +49,16 @@ export default async function InvoicesPage({
             return { status: { notIn: ['PAID', 'CANCELLED'] as const } };
         };
 
+        const workTypePrismaCondition = () => {
+            if (workTypeFilter === 'TENDER') {
+                return { workType: 'TENDER' };
+            }
+            if (workTypeFilter === 'GENERAL') {
+                return { workType: { not: 'TENDER' } };
+            }
+            return {};
+        };
+
         invoices = await prisma.invoice.findMany({
             where: {
                 companyId,
@@ -62,12 +73,14 @@ export default async function InvoicesPage({
                     clientIdFilter ? { clientId: clientIdFilter } : {},
                     commercialStatusFilter ? { project: { commercialStatus: commercialStatusFilter as any } } : {},
                     statusPrismaCondition(),
-                    typeFilter ? { type: typeFilter as 'INVOICE' | 'QUOTE' } : {}
+                    typeFilter ? { type: typeFilter as 'INVOICE' | 'QUOTE' } : {},
+                    workTypePrismaCondition()
                 ]
             },
             include: { 
                 client: true, 
                 payments: true, 
+                tender: true,
                 project: {
                     include: {
                         invoices: {
@@ -154,6 +167,7 @@ export default async function InvoicesPage({
         if (typeFilter) params.set("type", typeFilter);
         if (clientIdFilter) params.set("clientId", clientIdFilter);
         if (commercialStatusFilter) params.set("commercialStatus", commercialStatusFilter);
+        if (workTypeFilter) params.set("workType", workTypeFilter);
         
         let targetSort = `${column}_desc`;
         if (sortParam === `${column}_desc`) {
@@ -185,8 +199,21 @@ export default async function InvoicesPage({
         if (typeFilter) params.set("type", typeFilter);
         if (clientIdFilter) params.set("clientId", clientIdFilter);
         if (commercialStatusFilter) params.set("commercialStatus", commercialStatusFilter);
+        if (workTypeFilter) params.set("workType", workTypeFilter);
         if (statusValue) params.set("status", statusValue);
         if (sortValue) params.set("sort", sortValue);
+        return `?${params.toString()}`;
+    };
+
+    const getWorkTypeFilterUrl = (wtValue: string) => {
+        const params = new URLSearchParams();
+        if (query) params.set("q", query);
+        if (typeFilter) params.set("type", typeFilter);
+        if (clientIdFilter) params.set("clientId", clientIdFilter);
+        if (commercialStatusFilter) params.set("commercialStatus", commercialStatusFilter);
+        if (statusFilter) params.set("status", statusFilter);
+        if (sortParam) params.set("sort", sortParam);
+        if (wtValue) params.set("workType", wtValue);
         return `?${params.toString()}`;
     };
 
@@ -209,6 +236,45 @@ export default async function InvoicesPage({
                     <Button>
                         <Plus className="mr-2 h-4 w-4" /> {typeFilter === 'INVOICE' ? 'New Invoice' : 'New Quote'}
                     </Button>
+                </Link>
+            </div>
+
+            {/* Work Type Filter Tabs: All | General Work | Tender 152G */}
+            <div className="flex items-center gap-2 border-b border-border/40 pb-3 flex-wrap">
+                <span className="text-xs font-bold text-muted-foreground mr-1 uppercase tracking-wider text-[10px]">Work Type:</span>
+                <Link
+                    href={getWorkTypeFilterUrl("")}
+                    className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                        !workTypeFilter
+                            ? "bg-primary text-black shadow-sm"
+                            : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                    )}
+                >
+                    All Work
+                </Link>
+                <Link
+                    href={getWorkTypeFilterUrl("GENERAL")}
+                    className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                        workTypeFilter === "GENERAL"
+                            ? "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm"
+                            : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                    )}
+                >
+                    General Work
+                </Link>
+                <Link
+                    href={getWorkTypeFilterUrl("TENDER")}
+                    className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                        workTypeFilter === "TENDER"
+                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm font-black"
+                            : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                    )}
+                >
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    Tender 152G Work
                 </Link>
             </div>
 
@@ -311,8 +377,21 @@ export default async function InvoicesPage({
                                 return (
                                     <tr key={invoice.id} className="border-b transition-colors hover:bg-muted/50">
                                         <td className="p-4 align-middle font-black">
-                                            <div className="flex flex-col">
-                                                <span>{invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`)}</span>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span>{invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`)}</span>
+                                                    {invoice.workType === 'TENDER' && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                                            TENDER {invoice.tender?.tenderNumber || '152G'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {invoice.workType === 'TENDER' && (
+                                                    <span className="text-[10px] text-amber-400/80 font-semibold">
+                                                        Year {invoice.rateYear || 1} Rate
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="p-4 align-middle">{invoice.client?.name}</td>

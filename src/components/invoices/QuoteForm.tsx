@@ -1,14 +1,14 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Trash, Wand2, Loader2, FileText, GripVertical, Copy, CopyPlus, Sparkles, ClipboardPaste } from "lucide-react"
-import { createInvoiceAction, getQuoteSequenceAction } from "@/app/(dashboard)/invoices/actions"
+import { Wand2, Loader2, FileText, ClipboardPaste, Sparkles, Building2, Briefcase, FileCheck, CheckCircle2 } from "lucide-react"
+import { createInvoiceAction, getQuoteSequenceAction, getInvoiceSequenceAction } from "@/app/(dashboard)/invoices/actions"
 import { getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
-import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
+import { formatCurrency, cn } from "@/lib/utils"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
@@ -18,13 +18,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea"
 import { getFixedPriceItemsAction } from "@/app/(dashboard)/knowledge/fixed-actions"
 import { VoiceRecorder } from "@/components/voice/VoiceRecorder"
-import { Search, Book } from "lucide-react"
 import { InfoTooltip } from "@/components/ui/InfoTooltip"
 import { saveDraft, getDraft, clearDraft } from "@/lib/drafts"
 import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
-import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
-
-
+import { LineItemEditor, LineItem } from "@/components/invoices/LineItemEditor"
+import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
+import { calculateTenderRateYear } from "@/lib/tender-utils"
 
 interface QuoteFormProps {
     clients: {
@@ -42,15 +41,31 @@ interface QuoteFormProps {
         }[];
     }[]
     projects: { id: string; name: string, clientId: string }[]
+    tenders?: any[]
     initialClientId?: string
     initialProjectId?: string
     initialScope?: string
+    initialType?: 'QUOTE' | 'INVOICE'
+    initialTenderId?: string
     aiEnabled?: boolean
+    isAdmin?: boolean
 }
 
-export function QuoteForm({ clients, projects, initialClientId, initialProjectId, initialScope, aiEnabled = true }: QuoteFormProps) {
+export function QuoteForm({
+    clients,
+    projects,
+    tenders = [],
+    initialClientId,
+    initialProjectId,
+    initialScope,
+    initialType = 'QUOTE',
+    initialTenderId,
+    aiEnabled = true,
+    isAdmin = true
+}: QuoteFormProps) {
     const router = useRouter()
-    const STORAGE_KEY = `urops_draft_quote_new`
+    const docType = initialType
+    const STORAGE_KEY = `urops_draft_${docType.toLowerCase()}_new`
     const isRestoring = useRef(false)
     const initialLoaded = useRef(false)
     const [pendingDraft, setPendingDraft] = useState<any | null>(null)
@@ -63,13 +78,39 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [submitted, setSubmitted] = useState(false)
     const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null)
 
-    const [clientId, setClientId] = useState(initialClientId || (clients.length > 0 ? clients[0].id : ""))
-    const [projectId, setProjectId] = useState(initialProjectId || "")
+    // Work Type and Tender selection
+    const defaultTender = tenders.length > 0 ? (initialTenderId ? tenders.find(t => t.id === initialTenderId) : tenders[0]) : null
+    const [workType, setWorkType] = useState<"GENERAL" | "TENDER">(initialTenderId ? "TENDER" : "GENERAL")
+    const [selectedTenderId, setSelectedTenderId] = useState<string>(initialTenderId || defaultTender?.id || "")
+
+    const activeTender = useMemo(() => {
+        return tenders.find(t => t.id === selectedTenderId) || defaultTender
+    }, [tenders, selectedTenderId, defaultTender])
+
+    // Date state
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
 
-    const [items, setItems] = useState<Array<{ code?: string; description: string; quantity: number; unit?: string; unitPrice: number; area?: string; reason?: string }>>(
-        initialScope ? [] : [{ code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "", reason: "" }]
+    // Rate Year (calculated automatically, with manual override)
+    const [manualRateYear, setManualRateYear] = useState<number | null>(null)
+    const autoRateYear = useMemo(() => {
+        if (!activeTender?.startDate) return 1
+        return calculateTenderRateYear(activeTender.startDate, date)
+    }, [activeTender?.startDate, date])
+
+    const effectiveRateYear = manualRateYear ?? autoRateYear
+
+    // Client & Project selection
+    const [clientId, setClientId] = useState(
+        initialClientId || (initialTenderId && activeTender?.clientId ? activeTender.clientId : (clients.length > 0 ? clients[0].id : ""))
     )
+    const [projectId, setProjectId] = useState(initialProjectId || "")
+
+    // Line items
+    const [items, setItems] = useState<LineItem[]>(
+        initialScope ? [] : [{ code: "", description: "", quantity: 1, unit: "each", unitPrice: 0, total: 0, area: "", reason: "", isLocked: false }]
+    )
+    const [highlightIndex, setHighlightIndex] = useState<number | null>(null)
+
     const [site, setSite] = useState("")
     const [quoteNumber, setQuoteNumber] = useState("")
     const [reference, setReference] = useState("")
@@ -88,174 +129,98 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
     const [pricingSuggestions, setPricingSuggestions] = useState<Record<string, { typicalPrice: number; source: string }>>({})
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
 
-    const descriptionsKey = items.map(i => i.description).join('||');
-    // Debounced fetch of pricing suggestions when item descriptions change
-    useEffect(() => {
-        const descriptions = items.map(i => i.description).filter(d => d && d.trim().length > 1);
-        if (descriptions.length === 0) return;
+    // Full catalog from database
+    const [rawCatalog, setRawCatalog] = useState<any[]>([])
 
-        const timer = setTimeout(async () => {
+    // Load full catalog once
+    useEffect(() => {
+        const loadCatalog = async () => {
             try {
-                const res = await getPricingSuggestionsAction(descriptions.map(d => ({ description: d })));
-                setPricingSuggestions(res || {});
+                const data = await getFixedPriceItemsAction()
+                setRawCatalog(data)
             } catch (err) {
-                console.error("Failed to fetch pricing suggestions:", err);
+                console.error("Failed to load catalog", err)
             }
-        }, 500);
-
-        return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [descriptionsKey]);
-
-    const handleAutoSuggestAll = async () => {
-        const unpriced = items.filter(i => !i.unitPrice || Number(i.unitPrice) <= 0);
-        if (unpriced.length === 0) {
-            alert("All items already have pricing set.");
-            return;
         }
-        setIsLoadingSuggestions(true);
-        try {
-            const res = await getPricingSuggestionsAction(items.map(i => ({ description: i.description })));
-            let appliedCount = 0;
-            setItems(prev => prev.map(item => {
-                const sug = res[item.description];
-                if (sug && (!item.unitPrice || Number(item.unitPrice) <= 0)) {
-                    appliedCount++;
-                    return { ...item, unitPrice: sug.typicalPrice };
-                }
-                return item;
-            }));
-            setPricingSuggestions(res || {});
-            alert(`Applied ${appliedCount} pricing rate${appliedCount === 1 ? '' : 's'} from Pricing Intelligence!`);
-        } catch (err) {
-            console.error("Auto suggest error:", err);
-        } finally {
-            setIsLoadingSuggestions(false);
+        loadCatalog()
+    }, [])
+
+    // Filter catalog strictly based on workType
+    // Tender: ONLY that tender's items
+    // General: ONLY general items (no tenderId), global + this client's general items
+    const activeCatalog = useMemo(() => {
+        if (workType === "TENDER") {
+            return rawCatalog.filter((item: any) => item.tenderId === selectedTenderId)
         }
-    };
+        return rawCatalog.filter((item: any) => !item.tenderId && (!item.clientId || item.clientId === clientId))
+    }, [rawCatalog, workType, selectedTenderId, clientId])
 
-    const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
-
-    const handleBulkImport = (newParsedItems: ParsedBulkItem[], replaceMode: boolean) => {
-        const mapped = newParsedItems.map(item => ({
-            code: "",
-            description: item.description,
-            quantity: item.quantity,
-            unit: item.unit,
-            unitPrice: item.unitPrice,
-            area: item.area || "",
-            reason: item.reason || ""
-        }));
-
-        if (replaceMode) {
-            setItems(mapped);
-        } else {
-            const filteredCurrent = items.length === 1 && !items[0].description && items[0].unitPrice === 0
-                ? []
-                : items;
-            setItems([...filteredCurrent, ...mapped]);
-        }
-    };
-
-    const handleFirstPaymentOptionChange = (val: string) => {
-        setFirstPaymentOption(val);
-        if (val === "none") {
-            setPaymentNotes("");
-        } else if (val === "20") {
-            setPaymentNotes("20% partial payment required before project commences.");
-        } else if (val === "50") {
-            setPaymentNotes("50% partial payment required before project commences.");
-        } else if (val === "75") {
-            setPaymentNotes("75% partial payment required before project commences.");
-        } else if (val === "custom") {
-            setPaymentNotes("50% partial payment required before project commences.");
-            setCustomFirstPaymentPercentage("50");
-        }
-    };
-
-    const handleCustomPercentageChange = (pct: string) => {
-        setCustomFirstPaymentPercentage(pct);
-        const parsed = parseFloat(pct);
-        if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
-            setPaymentNotes(`${parsed}% partial payment required before project commences.`);
-        }
-    };
-
-    // Catalog state
-    const [catalog, setCatalog] = useState<any[]>([])
-    const [catalogSearch, setCatalogSearch] = useState("")
-    const [isCatalogOpen, setIsCatalogOpen] = useState(false)
-
-    // Check localStorage on mount
+    // Load draft on mount
     useEffect(() => {
-        const saved = getDraft(STORAGE_KEY) || getDraft('quote-form-draft');
-        if (saved && saved.data) {
-            setPendingDraft(saved);
+        if (initialLoaded.current) return
+        initialLoaded.current = true
+        const draft = getDraft<any>(STORAGE_KEY)
+        if (draft && draft.data) {
+            setPendingDraft(draft)
         }
-        setTimeout(() => {
-            initialLoaded.current = true;
-        }, 300);
     }, [STORAGE_KEY])
 
+    // Restore draft
     const handleRestoreDraft = () => {
-        if (!pendingDraft || !pendingDraft.data) return;
-        isRestoring.current = true;
-        const parsed = pendingDraft.data;
-        if (parsed.clientId) setClientId(parsed.clientId)
-        if (parsed.projectId) setProjectId(parsed.projectId)
-        if (parsed.date) setDate(parsed.date)
-        if (parsed.items) setItems(parsed.items)
-        if (parsed.site) setSite(parsed.site)
-        if (parsed.quoteNumber) setQuoteNumber(parsed.quoteNumber)
-        if (parsed.reference) setReference(parsed.reference)
-        if (parsed.projectName) setProjectName(parsed.projectName)
-        if (parsed.paymentNotes) setPaymentNotes(parsed.paymentNotes)
-        if (parsed.firstPaymentOption) setFirstPaymentOption(parsed.firstPaymentOption)
-        if (parsed.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(parsed.customFirstPaymentPercentage)
-        if (parsed.showPaymentNotes !== undefined) setShowPaymentNotes(parsed.showPaymentNotes)
-        if (parsed.contactId) setContactId(parsed.contactId)
-        if (parsed.attentionTo) setAttentionTo(parsed.attentionTo)
-        setLastSavedTimestamp(pendingDraft.updatedAt)
+        if (!pendingDraft?.data) return
+        isRestoring.current = true
+        const d = pendingDraft.data
+        if (d.clientId) setClientId(d.clientId)
+        if (d.projectId) setProjectId(d.projectId)
+        if (d.date) setDate(d.date)
+        if (d.items) setItems(d.items)
+        if (d.site) setSite(d.site)
+        if (d.quoteNumber) setQuoteNumber(d.quoteNumber)
+        if (d.reference) setReference(d.reference)
+        if (d.projectName) {
+            setProjectName(d.projectName)
+            setIsProjectNameManual(true)
+        }
+        if (d.workType) setWorkType(d.workType)
+        if (d.selectedTenderId) setSelectedTenderId(d.selectedTenderId)
+        if (d.manualRateYear) setManualRateYear(d.manualRateYear)
+        if (d.paymentNotes) setPaymentNotes(d.paymentNotes)
+        if (d.firstPaymentOption) setFirstPaymentOption(d.firstPaymentOption)
+        if (d.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(d.customFirstPaymentPercentage)
+        if (d.showPaymentNotes !== undefined) setShowPaymentNotes(d.showPaymentNotes)
+        if (d.contactId) setContactId(d.contactId)
+        if (d.attentionTo) setAttentionTo(d.attentionTo)
+
         setPendingDraft(null)
         setTimeout(() => {
             isRestoring.current = false
         }, 100)
-    };
+    }
 
     const handleDiscardDraft = () => {
-        clearDraft(STORAGE_KEY);
-        clearDraft('quote-form-draft');
-        setPendingDraft(null);
-        setLastSavedTimestamp(null);
-    };
+        clearDraft(STORAGE_KEY)
+        setPendingDraft(null)
+    }
 
-    // Debounced Auto-save to localStorage
+    // Auto-save draft
     useEffect(() => {
-        if (!initialLoaded.current || submitted || isRestoring.current || pendingDraft) return;
-
-        const hasContent = items.some(i => (i.description && i.description.trim()) || Number(i.unitPrice) > 0 || (i.area && i.area.trim())) || site.trim() || projectName.trim() || reference.trim();
-        if (!hasContent) return;
-
-        setIsSavingDraft(true);
+        if (submitted || pendingDraft || isRestoring.current) return
+        setIsSavingDraft(true)
         const timer = setTimeout(() => {
-            const subtotal = items.reduce((acc, item) => acc + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
-            const total = subtotal * 1.15;
-            const clientObj = clients.find(c => c.id === clientId);
-            const docTitle = (projectName ? `Quote: ${projectName}` : 'New Quotation Draft') + (clientObj ? ` (${clientObj.name})` : '');
-
             saveDraft({
                 key: STORAGE_KEY,
-                type: 'QUOTATION',
-                id: 'new',
-                title: docTitle,
-                url: '/invoices/new?type=QUOTE',
-                updatedAt: Date.now(),
+                type: docType === 'INVOICE' ? 'INVOICE' : 'QUOTATION',
+                title: `${docType === 'INVOICE' ? 'Invoice' : 'Quote'} Draft - ${clients.find(c => c.id === clientId)?.name || 'New'}`,
+                url: `/invoices/new?type=${docType}`,
                 itemCount: items.length,
-                total,
+                total: items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * 1.15,
                 data: {
                     clientId,
                     projectId,
                     date,
+                    workType,
+                    selectedTenderId,
+                    manualRateYear,
                     items,
                     site,
                     quoteNumber,
@@ -268,969 +233,582 @@ export function QuoteForm({ clients, projects, initialClientId, initialProjectId
                     contactId,
                     attentionTo
                 }
-            });
-            setIsSavingDraft(false);
-            setLastSavedTimestamp(Date.now());
-        }, 800);
+            })
+            setIsSavingDraft(false)
+            setLastSavedTimestamp(Date.now())
+        }, 800)
 
-        return () => clearTimeout(timer);
-    }, [clientId, projectId, date, items, site, quoteNumber, reference, projectName, paymentNotes, firstPaymentOption, customFirstPaymentPercentage, showPaymentNotes, contactId, attentionTo, submitted, pendingDraft, STORAGE_KEY, clients]);
+        return () => clearTimeout(timer)
+    }, [
+        clientId, projectId, date, workType, selectedTenderId, manualRateYear, items,
+        site, quoteNumber, reference, projectName, paymentNotes, firstPaymentOption,
+        customFirstPaymentPercentage, showPaymentNotes, contactId, attentionTo,
+        submitted, pendingDraft, STORAGE_KEY, clients, docType
+    ])
 
-    // Sync sequence number when clientId changes
+    // Load sequence number whenever client or workType or tender changes
     useEffect(() => {
         const loadSequence = async () => {
-            if (isRestoring.current) return;
-            if (clientId) {
-                const docNumber = await getQuoteSequenceAction(clientId);
-                if (docNumber) setQuoteNumber(docNumber);
+            if (isRestoring.current) return
+            try {
+                const docNumber = docType === 'INVOICE'
+                    ? await getInvoiceSequenceAction(clientId, workType, selectedTenderId)
+                    : await getQuoteSequenceAction(clientId, workType, selectedTenderId)
+                if (docNumber) setQuoteNumber(docNumber)
+            } catch (e) {
+                console.error("Failed to get document sequence:", e)
             }
         }
-        loadSequence();
-    }, [clientId])
+        loadSequence()
+    }, [clientId, workType, selectedTenderId, docType])
 
     // Sync contacts when clientId changes
     useEffect(() => {
-        if (isRestoring.current) return;
-        const selectedClient = clients.find(c => c.id === clientId);
-        const contacts = selectedClient?.contacts || [];
+        if (isRestoring.current) return
+        const selectedClient = clients.find(c => c.id === clientId)
+        const contacts = selectedClient?.contacts || []
         if (contacts.length > 0) {
-            setContactId(contacts[0].id);
-            setAttentionTo(contacts[0].name);
+            setContactId(contacts[0].id)
+            setAttentionTo(contacts[0].name)
         } else {
-            setContactId("");
-            setAttentionTo(selectedClient?.attentionTo || "");
+            setContactId("")
+            setAttentionTo(selectedClient?.attentionTo || "")
         }
-    }, [clientId, clients]);
+    }, [clientId, clients])
 
+    // Sync Project Name with Reference
     useEffect(() => {
-        const loadCatalog = async () => {
-            try {
-                const data = await getFixedPriceItemsAction()
-                setCatalog(data)
-            } catch (err) {
-                console.error("Failed to load catalog", err)
+        if (isRestoring.current) return
+        if (!isProjectNameManual) {
+            setProjectName(reference)
+        }
+    }, [reference, isProjectNameManual])
+
+    // Handle Work Type Change
+    const handleWorkTypeChange = (newType: "GENERAL" | "TENDER") => {
+        setWorkType(newType)
+        if (newType === "TENDER" && activeTender) {
+            if (activeTender.clientId) {
+                setClientId(activeTender.clientId)
             }
         }
-        loadCatalog()
-    }, [])
+    }
 
-    // Sync Project Name with Reference pattern (simplified to avoid redundancy with Site field)
-    useEffect(() => {
-        if (isRestoring.current) return;
-        if (!isProjectNameManual) {
-            setProjectName(reference);
+    // Add item from Catalog side panel
+    const handleAddFromCatalog = (catItem: any) => {
+        const isTender = workType === "TENDER" || Boolean(catItem.tenderId)
+        let price = catItem.unitPrice || 0
+        if (isTender) {
+            if (effectiveRateYear === 1) price = catItem.year1Price ?? catItem.unitPrice ?? 0
+            else if (effectiveRateYear === 2) price = catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0
+            else if (effectiveRateYear === 3) price = catItem.year3Price ?? catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0
         }
-    }, [reference, isProjectNameManual]);
 
-    const filteredCatalog = catalog.filter(item =>
-        (!item.clientId || item.clientId === clientId) &&
-        (item.description.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-        item.category?.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-        item.code?.toLowerCase().includes(catalogSearch.toLowerCase()))
-    )
-
-    const addFromCatalog = (catalogItem: any) => {
-        // If the last item is empty, replace it, otherwise add new
-        const lastItem = items[items.length - 1]
-        const newItem = {
-            code: catalogItem.code || "",
-            description: (catalogItem.description || "").toUpperCase(),
+        const newItem: LineItem = {
+            code: catItem.code || "",
+            description: catItem.description || "",
             quantity: 1,
-            unit: (catalogItem.unit || "").toUpperCase(),
-            unitPrice: catalogItem.unitPrice,
+            unit: catItem.unit || "each",
+            unitPrice: price,
+            total: price,
             area: "",
-            reason: ""
+            reason: "",
+            isLocked: isTender,
+            rateYear: isTender ? effectiveRateYear : undefined
         }
 
         if (items.length === 1 && !items[0].description && items[0].unitPrice === 0) {
             setItems([newItem])
+            setHighlightIndex(0)
         } else {
-            setItems([...items, newItem])
+            const next = [...items, newItem]
+            setItems(next)
+            setHighlightIndex(next.length - 1)
         }
-        setIsCatalogOpen(false)
-        setCatalogSearch("")
     }
 
-    const addItem = () => {
-        setItems([...items, { code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "", reason: "" }])
-    }
+    // Bulk Import Dialog
+    const [isBulkImportOpen, setIsBulkImportOpen] = useState(false)
+    const handleBulkImport = (newParsedItems: ParsedBulkItem[]) => {
+        const mapped: LineItem[] = newParsedItems.map(item => ({
+            code: "",
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit || "each",
+            unitPrice: item.unitPrice,
+            total: item.quantity * item.unitPrice,
+            area: item.area || "",
+            reason: item.reason || "",
+            isLocked: false
+        }))
 
-    const removeItem = (index: number) => {
-        const newItems = [...items]
-        newItems.splice(index, 1)
-        setItems(newItems)
-    }
-
-    const updateItem = (index: number, field: string, value: any) => {
-        const newItems = [...items]
-        // @ts-ignore
-        newItems[index][field] = value
-        setItems(newItems)
-    }
-
-    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
-    const handleDragStart = (e: React.DragEvent, index: number) => {
-        setDraggedIndex(index);
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', index.toString());
-    };
-
-    const handleDragEnter = (e: React.DragEvent, index: number) => {
-        e.preventDefault();
-        setDragOverIndex(index);
-    };
-
-    const handleDragEnd = () => {
-        if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
-            setItems(prev => {
-                const newItems = [...prev];
-                const itemToMove = { ...newItems[draggedIndex] };
-                const destItem = newItems[dragOverIndex];
-                if (destItem && destItem.area) {
-                    itemToMove.area = destItem.area;
-                }
-                newItems.splice(draggedIndex, 1);
-                newItems.splice(dragOverIndex, 0, itemToMove);
-                return newItems;
-            });
+        if (items.length === 1 && !items[0].description && items[0].unitPrice === 0) {
+            setItems(mapped)
+            setHighlightIndex(0)
+        } else {
+            const startIdx = items.length
+            setItems([...items, ...mapped])
+            setHighlightIndex(startIdx)
         }
-        setDraggedIndex(null);
-        setDragOverIndex(null);
-    };
+    }
 
-    const duplicateItem = (index: number) => {
-        setItems(prev => {
-            const newItems = [...prev];
-            const itemToClone = prev[index];
-            newItems.splice(index + 1, 0, {
-                ...itemToClone,
-                code: itemToClone.code || "",
-                description: itemToClone.description || "",
-                quantity: itemToClone.quantity || 1,
-                unit: itemToClone.unit || "",
-                unitPrice: itemToClone.unitPrice || 0,
-                area: itemToClone.area || ""
-            });
-            return newItems;
-        });
-    };
-
-    const moveItemToPosition = (fromIndex: number, targetPosition: number) => {
-        if (isNaN(targetPosition)) return;
-        setItems(prev => {
-            if (fromIndex < 0 || fromIndex >= prev.length) return prev;
-            const toIndex = Math.max(0, Math.min(prev.length - 1, targetPosition - 1));
-            if (fromIndex === toIndex) return prev;
-
-            const newItems = [...prev];
-            const itemToMove = { ...newItems[fromIndex] };
-            const destItem = prev[toIndex];
-            if (destItem && destItem.area) {
-                itemToMove.area = destItem.area;
-            }
-            newItems.splice(fromIndex, 1);
-            newItems.splice(toIndex, 0, itemToMove);
-            return newItems;
-        });
-    };
-
-    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
+    // Calculations
+    const subtotal = items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0)
     const tax = subtotal * 0.15
     const total = subtotal + tax
 
+    const selectedClient = clients.find(c => c.id === clientId)
+    const clientContacts = selectedClient?.contacts || []
+
+    const parseAttentionToNames = (attn: string | null | undefined): string[] => {
+        if (!attn) return []
+        const names = attn.split(/[/,;|]+/).map(n => n.trim()).filter(Boolean)
+        return names.length > 1 ? names : []
+    }
+    const attentionToNames = parseAttentionToNames(selectedClient?.attentionTo)
+    const hasMultipleContacts = clientContacts.length > 0 || attentionToNames.length > 0
+
+    // Submit handler
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
 
-        let finalFirstPaymentPercentage: number | undefined = undefined;
-        if (firstPaymentOption === "20") finalFirstPaymentPercentage = 20;
-        else if (firstPaymentOption === "50") finalFirstPaymentPercentage = 50;
-        else if (firstPaymentOption === "75") finalFirstPaymentPercentage = 75;
+        let finalFirstPaymentPercentage: number | undefined = undefined
+        if (firstPaymentOption === "20") finalFirstPaymentPercentage = 20
+        else if (firstPaymentOption === "50") finalFirstPaymentPercentage = 50
+        else if (firstPaymentOption === "75") finalFirstPaymentPercentage = 75
         else if (firstPaymentOption === "custom") {
-            const parsed = parseFloat(customFirstPaymentPercentage);
-            if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
-                finalFirstPaymentPercentage = parsed;
+            const parsed = parseFloat(customFirstPaymentPercentage)
+            if (!isNaN(parsed) && parsed > 0 && parsed <= 100) {
+                finalFirstPaymentPercentage = parsed
             }
         }
 
         try {
+            const formattedItems = items.map(i => ({
+                code: i.code || undefined,
+                description: i.description,
+                quantity: i.quantity || 1,
+                unit: i.unit || "each",
+                unitPrice: i.unitPrice || 0,
+                area: i.area,
+                reason: i.reason,
+                isLocked: Boolean(i.isLocked),
+                rateYear: i.rateYear || (workType === "TENDER" ? effectiveRateYear : undefined)
+            }))
+
             const invoiceId = await createInvoiceAction({
                 clientId,
                 projectId: projectId || undefined,
                 date,
-                items,
+                items: formattedItems,
                 site,
                 quoteNumber,
                 reference,
                 projectName,
+                type: docType,
                 paymentNotes: showPaymentNotes ? paymentNotes : undefined,
                 firstPaymentPercentage: finalFirstPaymentPercentage,
-                contactId: contactId || undefined,
-                attentionTo: attentionTo || undefined
+                contactId: contactId || null,
+                attentionTo: attentionTo || null,
+                workType,
+                tenderId: workType === "TENDER" ? selectedTenderId : null,
+                rateYear: workType === "TENDER" ? effectiveRateYear : 1
             })
-            setLastInvoiceId(invoiceId)
-            setSubmitted(true)
+
             clearDraft(STORAGE_KEY)
-            clearDraft('quote-form-draft')
-            setPendingDraft(null)
-            setLastSavedTimestamp(null)
-            router.refresh()
-            window.scrollTo({ top: 0, behavior: 'smooth' })
+            setSubmitted(true)
+            setLastInvoiceId(invoiceId)
+            router.push(`/invoices/${invoiceId}`)
         } catch (error) {
             console.error(error)
-        } finally {
+            alert(error instanceof Error ? error.message : "Failed to create document")
             setLoading(false)
         }
     }
 
-    if (submitted) {
-        return (
-            <div className="space-y-6 max-w-lg mx-auto py-10">
-                <Card className="bg-primary/10 border-primary shadow-2xl overflow-hidden rounded-2xl animate-in fade-in slide-in-from-top-4 duration-500">
-                    <CardContent className="p-8 text-center space-y-6">
-                        <div className="mx-auto bg-primary rounded-full p-4 w-16 h-16 flex items-center justify-center">
-                            <FileText className="h-8 w-8 text-primary-foreground" />
-                        </div>
-                        <div className="space-y-2">
-                            <h2 className="text-2xl font-black text-primary uppercase tracking-wider">
-                                ✅ Quotation submitted
-                            </h2>
-                            <p className="text-muted-foreground font-medium">
-                                Your quotation has been generated and is ready for client review.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-col gap-3 pt-4">
-                            <Link href={`/invoices/${lastInvoiceId}`} className="w-full">
-                                <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black h-12">
-                                    View Official Document
-                                </Button>
-                            </Link>
-                            <Button
-                                variant="ghost"
-                                onClick={async () => {
-                                    setSubmitted(false)
-                                    setItems([{ code: "", description: "", quantity: 1, unit: "", unitPrice: 0, area: "", reason: "" }])
-                                    const docNumber = await getQuoteSequenceAction();
-                                    if (docNumber) setQuoteNumber(docNumber);
-                                }}
-                                className="text-muted-foreground hover:text-white font-bold"
-                            >
-                                Create Another Quotation
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        )
-    }
-    const clientCatalog = catalog.filter(item => 
-        !item.clientId || item.clientId === clientId
-    );
-    const selectedClient = clients.find(c => c.id === clientId);
-    const clientContacts = selectedClient?.contacts || [];
-
-    const parseAttentionToNames = (attn: string | null | undefined): string[] => {
-        if (!attn) return [];
-        const names = attn.split(/[/,;|]+/).map(n => n.trim()).filter(Boolean);
-        return names.length > 1 ? names : [];
-    };
-
-    const attentionToNames = selectedClient ? parseAttentionToNames(selectedClient.attentionTo) : [];
-    const hasMultipleContacts = clientContacts.length > 0 || attentionToNames.length > 0;
- 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 items-start max-w-7xl mx-auto pb-20 relative">
-            {pendingDraft && (
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+            <div className="flex-1 w-full space-y-6">
                 <EditorDraftBanner
-                    draftTimestamp={pendingDraft.updatedAt}
-                    itemCount={pendingDraft.itemCount}
+                    draft={pendingDraft}
                     onRestore={handleRestoreDraft}
                     onDiscard={handleDiscardDraft}
-                    documentType="Quotation"
+                    documentType={docType === 'INVOICE' ? 'Invoice' : 'Quotation'}
                 />
-            )}
-            <div className="flex-1 w-full rounded-lg border bg-card p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-6 pb-3 border-b border-white/5">
-                    <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Quotation Editor</span>
-                    <AutoSaveIndicator lastSavedTimestamp={lastSavedTimestamp} isSaving={isSavingDraft} />
-                </div>
-                <form onSubmit={handleSubmit} className="space-y-8">
-                {/* Header Details */}
-                <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5">
-                                Client
-                                <InfoTooltip content="Select the client for whom this quotation is being created." />
-                            </Label>
-                            <select
-                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                value={clientId}
-                                onChange={(e) => {
-                                    setClientId(e.target.value);
-                                    setProjectId(""); // Reset project when client changes
-                                }}
-                                required
-                            >
-                                <option value="" disabled>Select a client</option>
-                                {clients.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        {hasMultipleContacts && (
-                            <div className="space-y-2">
-                                <Label className="flex items-center gap-1.5">
-                                    Select Contact (Optional)
-                                    <InfoTooltip content="Choose a specific contact person from this client's organization or select from multiple Attention To names." />
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* WORK TYPE SELECTOR BAR (Requirement 1 & 2) */}
+                    <div className="p-4 rounded-2xl bg-[#14141E] border border-white/10 shadow-lg space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <Label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                    Work Classification:
                                 </Label>
-                                <select
-                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                    value={contactId || (attentionToNames.includes(attentionTo) ? attentionTo : "")}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        const contact = clientContacts.find(c => c.id === val);
-                                        if (contact) {
-                                            setContactId(contact.id);
-                                            setAttentionTo(contact.name);
-                                        } else {
-                                            setContactId("");
-                                            setAttentionTo(val || selectedClient?.attentionTo || "");
-                                        }
-                                    }}
-                                >
-                                    <option value="">-- Select Contact --</option>
-                                    {selectedClient?.attentionTo && (
-                                        <option value={selectedClient.attentionTo}>
-                                            [Default] {selectedClient.attentionTo}
-                                        </option>
-                                    )}
-                                    {attentionToNames.map(name => (
-                                        <option key={name} value={name}>
-                                            {name}
-                                        </option>
-                                    ))}
-                                    {clientContacts.map(c => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name} {c.role ? `(${c.role})` : ""}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="inline-flex rounded-xl bg-black/40 p-1 border border-white/5">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleWorkTypeChange("GENERAL")}
+                                        className={cn(
+                                            "px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5",
+                                            workType === "GENERAL"
+                                                ? "bg-primary text-black shadow-md"
+                                                : "text-muted-foreground hover:text-white"
+                                        )}
+                                    >
+                                        <Briefcase className="w-3.5 h-3.5" /> General Work
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleWorkTypeChange("TENDER")}
+                                        className={cn(
+                                            "px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5",
+                                            workType === "TENDER"
+                                                ? "bg-amber-400 text-black shadow-md"
+                                                : "text-muted-foreground hover:text-white"
+                                        )}
+                                    >
+                                        <Building2 className="w-3.5 h-3.5" /> Tender Work
+                                    </button>
+                                </div>
                             </div>
-                        )}
-                        <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5">
-                                Attention To
-                                <InfoTooltip content="The name of the individual or department this document is addressed to." />
-                            </Label>
-                            <Input
-                                placeholder="e.g. Mr. Smith"
-                                value={attentionTo}
-                                onChange={(e) => setAttentionTo(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Date</Label>
-                            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Site Name / Address</Label>
-                            <Input
-                                placeholder="e.g. 123 MAIN ST"
-                                value={site}
-                                onChange={(e) => setSite(e.target.value)}
-                                className="bg-transparent border-white/10 font-bold"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="flex justify-between">
-                                Project Name
-                                <span className="text-[10px] text-primary/50 font-normal italic">
-                                    {isProjectNameManual ? "(Manual)" : "(Auto-syncing)"}
-                                </span>
-                            </Label>
-                            <Input
-                                placeholder="e.g. SITE - REFERENCE"
-                                value={projectName}
-                                onChange={(e) => {
-                                    setProjectName(e.target.value);
-                                    setIsProjectNameManual(true);
-                                }}
-                                className="bg-transparent border-white/10 font-bold"
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Quote # (Optional)</Label>
-                                <Input
-                                    placeholder="e.g. Q-2024-001"
-                                    value={quoteNumber}
-                                    onChange={(e) => setQuoteNumber(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Reference</Label>
-                                <Input
-                                    placeholder="e.g. PO-789"
-                                    value={reference}
-                                    onChange={(e) => setReference(e.target.value)}
-                                    className="bg-transparent border-white/10 font-bold"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                {/* Voice Action */}
-                <VoiceRecorder onParsed={(newItems) => {
-                    if (newItems && newItems.length > 0) {
-                        const formattedItems = newItems.map(i => ({
-                            code: i.code || "",
-                            description: (i.description || "").toUpperCase(),
-                            quantity: i.quantity || 1,
-                            unit: (i.unit || "").toUpperCase(),
-                            unitPrice: i.unitPrice || 0,
-                            area: "",
-                            reason: ""
-                        }));
-                        setItems(formattedItems);
-                    }
-                }} />
-
-                {/* AI Action */}
-                {aiEnabled && (
-                    <div className="rounded-md bg-muted/50 p-4 border border-blue-100 dark:border-blue-900">
-                        <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium">Use AI to generate items from scope?</div>
-
-                            <Dialog open={scopeOpen} onOpenChange={setScopeOpen}>
-                                <DialogTrigger asChild>
-                                    <Button type="button" variant="secondary" size="sm">
-                                        <Wand2 className="mr-2 h-3 w-3" />
-                                        Paste Scope
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent className="sm:max-w-[425px]">
-                                    <DialogHeader>
-                                        <DialogTitle>Paste Scope of Work</DialogTitle>
-                                        <DialogDescription>
-                                            Paste the email, message, or notes here. The AI will break it down into priced line items.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid gap-4 py-4">
-                                        <Textarea
-                                            placeholder="e.g. Install 3 new AC units in the main hall..."
-                                            className="min-h-[150px]"
-                                            value={scopeText}
-                                            onChange={(e) => setScopeText(e.target.value)}
-                                        />
-                                    </div>
-                                    <DialogFooter>
-                                        <Button type="button" onClick={async () => {
-                                            if (!scopeText) return;
-                                            setIsProcessingScope(true);
-                                            try {
-                                                const newItems = await parseScopeAction(scopeText);
-                                                // @ts-ignore
-                                                if (newItems && newItems.length > 0) {
-                                                    // @ts-ignore
-                                                    const formattedItems = newItems.map(i => ({
-                                                        description: (i.description || "").toUpperCase(),
-                                                        quantity: i.quantity || 1,
-                                                        unit: "",
-                                                        unitPrice: i.unitPrice || 0,
-                                                        area: "",
-                                                        reason: ""
-                                                    }));
-
-                                                    if (confirm(`AI found ${formattedItems.length} items. Replace current items?`)) {
-                                                        setItems(formattedItems);
-                                                        setScopeOpen(false);
-                                                    }
-                                                } else {
-                                                    alert("Could not extract items. Try being more specific.");
-                                                }
-                                            } catch (e) {
-                                                alert("AI Error. Please check API Key.");
-                                            } finally {
-                                                setIsProcessingScope(false);
-                                            }
-                                        }} disabled={isProcessingScope}>
-                                            {isProcessingScope && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Generate Items
-                                        </Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
-                        </div>
-                    </div>
-                )}
-
-                {/* Catalog Picker */}
-                {catalog.length > 0 && (
-                    <div className="relative">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Book className="h-4 w-4 text-primary" />
-                            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground italic">Standard Catalog</h3>
-                        </div>
-                        <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Search className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                            </div>
-                            <Input
-                                placeholder="Search your standard catalog (e.g. Call-out, Labor...)"
-                                className="pl-10 bg-primary/5 border-primary/20 hover:border-primary/40 focus:border-primary transition-all text-sm font-bold h-11"
-                                value={catalogSearch}
-                                onChange={(e) => {
-                                    setCatalogSearch(e.target.value)
-                                    setIsCatalogOpen(true)
-                                }}
-                                onFocus={() => setIsCatalogOpen(true)}
-                            />
-
-                            {isCatalogOpen && catalogSearch && (
-                                <div className="absolute z-50 w-full mt-2 bg-[#1A1A2E] border border-primary/20 rounded-xl shadow-2xl max-h-60 overflow-auto animate-in fade-in zoom-in-95 duration-200">
-                                    {filteredCatalog.length === 0 ? (
-                                        <div className="p-4 text-center text-xs text-muted-foreground italic">
-                                            No matching standard items found.
-                                        </div>
-                                    ) : (
-                                        <div className="p-1">
-                                            {filteredCatalog.map(item => (
-                                                <button
-                                                    key={item.id}
-                                                    type="button"
-                                                    onClick={() => addFromCatalog(item)}
-                                                    className="w-full text-left p-3 hover:bg-primary/10 rounded-lg flex items-center justify-between group/item transition-colors"
-                                                >
-                                                    <div>
-                                                        <p className="font-bold text-white group-hover/item:text-primary transition-colors">{item.description}</p>
-                                                        {item.category && <p className="text-[10px] text-muted-foreground uppercase">{item.category}</p>}
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="font-black text-primary">{formatCurrency(item.unitPrice)}</p>
-                                                        <p className="text-[10px] text-muted-foreground uppercase">{item.unit || 'ea'}</p>
-                                                    </div>
-                                                </button>
+                            {/* Tender Details & Rate Year Selector */}
+                            {workType === "TENDER" && (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    {tenders.length > 1 && (
+                                        <select
+                                            value={selectedTenderId}
+                                            onChange={(e) => setSelectedTenderId(e.target.value)}
+                                            className="h-8 rounded-lg bg-[#0F0F1A] border border-amber-500/30 text-amber-300 px-2 text-xs font-bold"
+                                        >
+                                            {tenders.map(t => (
+                                                <option key={t.id} value={t.id}>{t.tenderNumber} - {t.name}</option>
                                             ))}
-                                        </div>
+                                        </select>
                                     )}
+
+                                    {/* 3-Year Rate Label & Manual Override */}
+                                    <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                                            Rate Period:
+                                        </span>
+                                        <select
+                                            value={effectiveRateYear}
+                                            onChange={(e) => setManualRateYear(Number(e.target.value) as 1 | 2 | 3)}
+                                            className="bg-transparent text-amber-400 font-black text-xs border-none focus:outline-none cursor-pointer"
+                                        >
+                                            <option value={1} className="bg-[#14141E] text-white">Year 1 Rate (2025/26)</option>
+                                            <option value={2} className="bg-[#14141E] text-white">Year 2 Rate (2026/27)</option>
+                                            <option value={3} className="bg-[#14141E] text-white">Year 3 Rate (2027/28)</option>
+                                        </select>
+                                        {manualRateYear !== null && manualRateYear !== autoRateYear && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setManualRateYear(null)}
+                                                className="text-[9px] text-amber-400/80 hover:text-white underline ml-1"
+                                                title="Reset to auto-calculated rate based on document date"
+                                            >
+                                                (reset to auto: Y{autoRateYear})
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                        <FileCheck className="w-3 h-3" /> TENDER 152G
+                                    </span>
                                 </div>
                             )}
                         </div>
-                        {isCatalogOpen && catalogSearch && (
-                            <div
-                                className="fixed inset-0 z-40 transition-opacity"
-                                onClick={() => setIsCatalogOpen(false)}
-                            />
-                        )}
-                    </div>
-                )}
-
-
-                {/* Items */}
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b pb-2">
-                        <h3 className="font-semibold">Line Items</h3>
-                        <div className="flex items-center gap-2">
-                            <Button 
-                                type="button" 
-                                onClick={() => setIsBulkImportOpen(true)} 
-                                size="sm" 
-                                variant="outline"
-                                className="border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/15 text-blue-400 font-bold text-xs"
-                            >
-                                <ClipboardPaste className="mr-1.5 h-3.5 w-3.5 text-blue-400" />
-                                Paste from Excel / CSV
-                            </Button>
-                            <Button 
-                                type="button" 
-                                onClick={handleAutoSuggestAll} 
-                                size="sm" 
-                                variant="outline"
-                                disabled={isLoadingSuggestions}
-                                className="border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 font-bold text-xs"
-                            >
-                                <Sparkles className="mr-1.5 h-3.5 w-3.5 text-emerald-400" />
-                                {isLoadingSuggestions ? "Checking..." : "Auto-Price Unpriced Items"}
-                            </Button>
-                            <Button type="button" onClick={addItem} size="sm" variant="outline">
-                                <Plus className="mr-2 h-4 w-4" /> Add Item
-                            </Button>
-                        </div>
                     </div>
 
-                    <div className="space-y-3">
-                        {/* Table-like Header Row (hidden on mobile) */}
-                        <div className="hidden md:flex items-center gap-3 px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-                            <div className="w-16 text-center">#</div>
-                            <div className="w-24">Code</div>
-                            <div className="flex-1">Service Description & Details</div>
-                            <div className="w-16 text-center">Qty</div>
-                            <div className="w-16 text-center">Unit</div>
-                            <div className="w-28 text-right">Price</div>
-                            <div className="w-28 text-right">Total</div>
-                            <div className="w-16 text-center">Actions</div>
-                        </div>
-
-                        {/* List of Rows */}
-                        <div className="space-y-3">
-                            {items.map((item, index) => (
-                                <div 
-                                    key={index} 
-                                    onDragEnter={(e) => {
-                                        if (draggedIndex !== null) handleDragEnter(e, index);
-                                    }}
-                                    onDragOver={(e) => {
-                                        if (draggedIndex !== null) {
-                                            e.preventDefault();
-                                            e.dataTransfer.dropEffect = 'move';
-                                        }
-                                    }}
-                                    onDrop={(e) => {
-                                        if (draggedIndex !== null) {
-                                            e.preventDefault();
-                                            handleDragEnd();
-                                        }
-                                    }}
-                                    className={`flex flex-col gap-2 p-3 md:p-2.5 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.02] transition-all group/row relative ${dragOverIndex === index ? 'border-t-2 border-t-primary' : ''}`}
-                                >
-                                    {/* Heading & Reason/Justification placed ON TOP of each item */}
-                                    <div className="flex flex-wrap items-center justify-between gap-3 px-1 border-b border-white/5 pb-1 mb-0.5">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[9px] uppercase font-black text-primary/70 tracking-widest">Heading:</span>
-                                            <Input
-                                                placeholder="SECTION/HEADING (E.G. PREPARATIONS, ROOM 1)"
-                                                // @ts-ignore
-                                                value={item.area || ""}
-                                                onChange={(e) => updateItem(index, 'area', e.target.value)}
-                                                className="bg-transparent border-none focus:ring-0 text-[10px] font-bold text-primary uppercase tracking-widest h-6 p-0 w-36 md:w-48"
-                                            />
-                                        </div>
-
-                                        {/* Structured Reason / Justification */}
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[9px] uppercase font-black text-amber-400/80 tracking-widest">Justification:</span>
-                                            <select
-                                                // @ts-ignore
-                                                value={LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : (item.reason ? "Custom" : "")}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val === "Custom") {
-                                                        // @ts-ignore
-                                                        updateItem(index, 'reason', item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) ? item.reason : "Custom: ");
-                                                    } else {
-                                                        updateItem(index, 'reason', val);
-                                                    }
-                                                }}
-                                                className="bg-[#14141E] border border-white/10 rounded px-2 py-0.5 text-[10px] font-semibold text-gray-200 focus:outline-none focus:border-amber-400/50 cursor-pointer"
-                                            >
-                                                <option value="">(No Justification)</option>
-                                                {LINE_ITEM_REASONS.map(r => (
-                                                    <option key={r} value={r}>Due to: {r}</option>
-                                                ))}
-                                                <option value="Custom">Custom Justification...</option>
-                                            </select>
-                                            {/* @ts-ignore */}
-                                            {(item.reason && !LINE_ITEM_REASONS.includes(item.reason as any) || item.reason === "Custom") && (
-                                                <Input
-                                                    // @ts-ignore
-                                                    value={item.reason === "Custom" ? "" : (item.reason || "")}
-                                                    onChange={(e) => updateItem(index, 'reason', e.target.value)}
-                                                    placeholder="Due to [cause]..."
-                                                    className="bg-[#14141E] border-white/10 text-[10px] h-6 px-2 w-44 text-amber-200 placeholder:text-muted-foreground/50 focus:border-amber-400/50"
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Main Row Inputs */}
-                                    <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3">
-                                        {/* Drag Handle & Editable # */}
-                                        <div className="md:w-16 flex items-center gap-1 pt-1.5 md:pt-1 justify-start md:justify-center">
-                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden block mr-2 select-none">Pos</span>
-                                            <div 
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, index)}
-                                                onDragEnd={handleDragEnd}
-                                                className="text-white/20 hover:text-primary cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-white/5 transition-colors shrink-0"
-                                                title="Drag to reorder"
-                                            >
-                                                <GripVertical className="h-4 w-4" />
-                                            </div>
-                                            <ItemPositionInput
-                                                position={index + 1}
-                                                totalItems={items.length}
-                                                onMove={(newPos) => moveItemToPosition(index, newPos)}
-                                            />
-                                        </div>
-
-                                        {/* Code */}
-                                        <div className="md:w-24 flex flex-col md:block">
-                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Code</span>
-                                            <Input
-                                                placeholder="Code"
-                                                // @ts-ignore
-                                                value={item.code || ""}
-                                                onChange={(e) => {
-                                                    const codeVal = e.target.value.toUpperCase();
-                                                    updateItem(index, 'code', codeVal);
-                                                    // Lookup in catalog
-                                                    const matched = catalog.find(c => 
-                                                        c.code?.toUpperCase() === codeVal && 
-                                                        (!c.clientId || c.clientId === clientId)
-                                                    );
-                                                    if (matched) {
-                                                        updateItem(index, 'description', matched.description.toUpperCase());
-                                                        updateItem(index, 'unit', (matched.unit || "").toUpperCase());
-                                                        updateItem(index, 'unitPrice', matched.unitPrice);
-                                                    }
-                                                }}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-mono uppercase text-center font-bold h-9 w-full text-xs"
-                                            />
-                                        </div>
-
-                                        {/* Description */}
-                                        <div className="flex-1 flex flex-col md:block">
-                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Description & Details</span>
-                                            <Textarea
-                                                value={item.description}
-                                                onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium min-h-[60px] h-10 w-full text-xs py-1.5 resize-y"
-                                                required
-                                            />
-                                        </div>
-
-                                        {/* Qty */}
-                                        <div className="md:w-16 flex flex-col md:block">
-                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Qty</span>
-                                            <Input
-                                                type="number"
-                                                placeholder="1"
-                                                value={item.quantity}
-                                                onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-bold text-center h-9 w-full text-xs"
-                                                required
-                                            />
-                                        </div>
-
-                                        {/* Unit */}
-                                        <div className="md:w-16 flex flex-col md:block">
-                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Unit</span>
-                                            <Input
-                                                placeholder="ea"
-                                                // @ts-ignore
-                                                value={item.unit || ""}
-                                                onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                                className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-medium italic text-center h-9 w-full text-xs"
-                                            />
-                                        </div>
-
-                                        {/* Price */}
-                                        <div className="md:w-28 flex flex-col md:block">
-                                            <span className="text-[9px] uppercase font-black text-muted-foreground/50 md:hidden mb-1 block">Price</span>
-                                            <div className="relative">
-                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground/30">R</span>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="0.00"
-                                                    value={item.unitPrice}
-                                                    onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
-                                                    className="bg-[#14141E] border-white/10 focus:border-primary/50 text-white font-black pl-6 h-9 w-full text-xs"
-                                                    required
-                                                />
-                                            </div>
-                                            {pricingSuggestions[item.description] && (!item.unitPrice || item.unitPrice === 0) && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => updateItem(index, 'unitPrice', pricingSuggestions[item.description].typicalPrice)}
-                                                    className="mt-1 flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded transition-all w-full justify-center"
-                                                    title={`Click to apply rate of R${pricingSuggestions[item.description].typicalPrice} from ${pricingSuggestions[item.description].source}`}
-                                                >
-                                                    <Sparkles className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
-                                                    <span>Apply R{pricingSuggestions[item.description].typicalPrice.toFixed(2)}</span>
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        {/* Total */}
-                                        <div className="md:w-28 flex items-center justify-between md:justify-end gap-2 md:gap-0 mt-2 md:mt-0 pt-2 md:pt-0 border-t border-white/5 md:border-none">
-                                            <span className="text-[9px] uppercase font-black text-primary/60 md:hidden block">Line Total</span>
-                                            <span className="text-sm font-black text-white pr-2 text-right md:w-full block md:pt-2">
-                                                {formatCurrency(item.quantity * item.unitPrice)}
-                                            </span>
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="md:w-16 flex justify-end md:justify-center items-center gap-1 mt-2 md:mt-0 md:pt-1">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
-                                                onClick={() => duplicateItem(index)}
-                                                title="Duplicate Item Row (adds a copy below)"
-                                            >
-                                                <CopyPlus className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                                                onClick={() => removeItem(index)}
-                                                disabled={items.length === 1}
-                                                title="Delete Item"
-                                            >
-                                                <Trash className="h-4.5 w-4.5" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* First Payment / Deposit Option */}
-                <div className="space-y-4 border-t pt-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5">
-                                Partial Payment Option
-                                <InfoTooltip content="Specify if a deposit/partial payment is required. If set, tracking will highlight when this percentage is met." />
-                            </Label>
-                            <select
-                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                value={firstPaymentOption}
-                                onChange={(e) => handleFirstPaymentOptionChange(e.target.value)}
-                            >
-                                <option value="none">Full Payment (100%)</option>
-                                <option value="20">20% Partial Payment</option>
-                                <option value="50">50% Partial Payment</option>
-                                <option value="75">75% Partial Payment</option>
-                                <option value="custom">Custom Percentage</option>
-                            </select>
-                        </div>
-                        {firstPaymentOption === "custom" && (
+                    {/* Header Details Card */}
+                    <div className="grid gap-6 md:grid-cols-2 p-6 rounded-2xl bg-[#14141E] border border-white/5 shadow-xl">
+                        <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label>Custom Percentage (%)</Label>
+                                <Label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                    Client <span className="text-primary">*</span>
+                                </Label>
+                                <select
+                                    className="flex h-9 w-full rounded-md border border-input bg-[#0F0F1A] px-3 py-1 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    value={clientId}
+                                    onChange={(e) => {
+                                        setClientId(e.target.value)
+                                        setProjectId("")
+                                    }}
+                                    required
+                                >
+                                    <option value="" disabled>Select a client</option>
+                                    {clients.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {hasMultipleContacts && (
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                        Select Contact (Optional)
+                                    </Label>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-input bg-[#0F0F1A] px-3 py-1 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                        value={contactId || (attentionToNames.includes(attentionTo) ? attentionTo : "")}
+                                        onChange={(e) => {
+                                            const val = e.target.value
+                                            const contact = clientContacts.find(c => c.id === val)
+                                            if (contact) {
+                                                setContactId(contact.id)
+                                                setAttentionTo(contact.name)
+                                            } else {
+                                                setContactId("")
+                                                setAttentionTo(val || selectedClient?.attentionTo || "")
+                                            }
+                                        }}
+                                    >
+                                        <option value="">-- Select Contact --</option>
+                                        {selectedClient?.attentionTo && (
+                                            <option value={selectedClient.attentionTo}>
+                                                [Default] {selectedClient.attentionTo}
+                                            </option>
+                                        )}
+                                        {attentionToNames.map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                        {clientContacts.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} {c.role ? `(${c.role})` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <Label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                    Attention To
+                                </Label>
                                 <Input
-                                    type="number"
-                                    min="1"
-                                    max="99"
-                                    placeholder="e.g. 40"
-                                    value={customFirstPaymentPercentage}
-                                    onChange={(e) => handleCustomPercentageChange(e.target.value)}
-                                    className="bg-transparent border-white/10"
+                                    placeholder="e.g. Mr. Smith"
+                                    value={attentionTo}
+                                    onChange={(e) => setAttentionTo(e.target.value)}
+                                    className="bg-[#0F0F1A]"
                                 />
                             </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Payment Notes */}
-                <div className="space-y-4 border-t pt-4">
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            id="showPaymentNotes"
-                            checked={showPaymentNotes}
-                            onChange={(e) => setShowPaymentNotes(e.target.checked)}
-                        />
-                        <Label htmlFor="showPaymentNotes">Include Payment Notes / Terms</Label>
-                    </div>
-                    {showPaymentNotes && (
-                        <Textarea
-                            value={paymentNotes}
-                            onChange={(e) => setPaymentNotes(e.target.value)}
-                            placeholder="e.g. 50% PARTIAL PAYMENT REQUIRED BEFORE PROJECT COMMENCES."
-                            rows={2}
-                            className="bg-transparent border-white/10 font-medium text-xs leading-relaxed"
-                        />
-                    )}
-                </div>
-
-                {/* Totals */}
-                <div className="flex flex-col items-end space-y-2 border-t pt-4">
-                    <div className="flex gap-8">
-                        <span className="text-muted-foreground">Subtotal:</span>
-                        <span className="font-medium">{formatCurrency(subtotal)}</span>
-                    </div>
-                    <div className="flex gap-8">
-                        <span className="text-muted-foreground">VAT (15%):</span>
-                        <span className="font-medium">{formatCurrency(tax)}</span>
-                    </div>
-                    <div className="flex gap-8 text-lg font-bold">
-                        <span>Total:</span>
-                        <span>{formatCurrency(total)}</span>
-                    </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => { localStorage.removeItem(STORAGE_KEY); router.back(); }}>Cancel</Button>
-                    <Button type="submit" disabled={loading}>
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save Quote
-                    </Button>
-                </div>
-            </form>
-        </div>
-
-        {/* Catalog Viewer Panel */}
-        <div className="w-full lg:w-80 shrink-0 bg-[#14141E]/80 border border-white/5 rounded-2xl p-5 h-fit sticky top-6 backdrop-blur-md">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4">
-                <div>
-                    <h3 className="text-sm font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
-                        <Book className="h-4 w-4" /> Catalog Viewer
-                    </h3>
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">
-                        {clients.find(c => c.id === clientId)?.name || "Selected Client"}&apos;s Catalog
-                    </p>
-                </div>
-            </div>
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1 scrollbar-thin">
-                {clientCatalog.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic text-center py-8">
-                        No catalog items linked to this client yet.
-                    </p>
-                ) : (
-                    clientCatalog.map(item => (
-                        <div 
-                            key={item.id}
-                            className="p-3 bg-white/5 border border-white/5 hover:border-primary/20 rounded-xl flex items-center justify-between gap-3 group transition-all"
-                        >
-                            <div className="min-w-0">
-                                <p className="text-xs font-mono font-bold text-primary uppercase">{item.code || "—"}</p>
-                                <p className="text-xs font-medium text-white truncate max-w-[150px]">{item.description}</p>
-                                <p className="text-[10px] text-muted-foreground uppercase">{formatCurrency(item.unitPrice)} / {item.unit || "ea"}</p>
-                            </div>
-                            <Button
-                                type="button"
-                                onClick={() => addFromCatalog(item)}
-                                size="sm"
-                                variant="outline"
-                                className="h-8 px-2.5 border-primary/20 hover:bg-primary hover:text-black shrink-0 transition-all font-black text-xs"
-                            >
-                                + Add
-                            </Button>
                         </div>
-                    ))
-                )}
-            </div>
-        </div>
 
-        <BulkItemImportDialog
-            open={isBulkImportOpen}
-            onOpenChange={setIsBulkImportOpen}
-            onImport={handleBulkImport}
-            currentCount={items.length}
-        />
-    </div>
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                    Date
+                                </Label>
+                                <Input
+                                    type="date"
+                                    value={date}
+                                    onChange={(e) => setDate(e.target.value)}
+                                    className="bg-[#0F0F1A]"
+                                    required
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                    {docType === 'INVOICE' ? 'Tax Invoice #' : 'Quote #'}
+                                    <InfoTooltip content="Auto-generated sequence number, customized per client or tender." />
+                                </Label>
+                                <Input
+                                    placeholder="Auto-generated or custom"
+                                    value={quoteNumber}
+                                    onChange={(e) => setQuoteNumber(e.target.value)}
+                                    className="bg-[#0F0F1A] font-mono font-bold"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                    Project / Reference
+                                </Label>
+                                <Input
+                                    placeholder="e.g. Wynberg Park Play Equipment"
+                                    value={reference}
+                                    onChange={(e) => setReference(e.target.value)}
+                                    className="bg-[#0F0F1A]"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                    Site / Location
+                                </Label>
+                                <Input
+                                    placeholder="e.g. Wynberg Park, Corner of Main & River"
+                                    value={site}
+                                    onChange={(e) => setSite(e.target.value)}
+                                    className="bg-[#0F0F1A]"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Line Items Card with AI & Bulk buttons */}
+                    <div className="p-6 rounded-2xl bg-[#14141E] border border-white/5 shadow-xl space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                            <div>
+                                <h3 className="text-base font-black uppercase tracking-wider text-white">
+                                    Line Items
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                    {workType === "TENDER"
+                                        ? "Tender items have fixed contract prices. Descriptions, units, and rates are locked."
+                                        : "General work line items are fully customizable."}
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsBulkImportOpen(true)}
+                                    className="border-white/10 text-xs font-bold"
+                                >
+                                    <ClipboardPaste className="mr-1.5 h-3.5 w-3.5 text-primary" /> Bulk Paste Items
+                                </Button>
+
+                                {aiEnabled && (
+                                    <Dialog open={scopeOpen} onOpenChange={setScopeOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button type="button" variant="secondary" size="sm" className="text-xs font-bold">
+                                                <Wand2 className="mr-1.5 h-3.5 w-3.5" /> AI Scope Extractor
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-md bg-[#1A1A2E] text-white">
+                                            <DialogHeader>
+                                                <DialogTitle>Paste Scope of Work</DialogTitle>
+                                                <DialogDescription className="text-gray-300 text-xs">
+                                                    Paste the email or document text. The AI will extract line items.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <Textarea
+                                                placeholder="Paste email scope here..."
+                                                value={scopeText}
+                                                onChange={(e) => setScopeText(e.target.value)}
+                                                className="min-h-[140px] bg-[#14141E] text-xs"
+                                            />
+                                            <DialogFooter>
+                                                <Button
+                                                    type="button"
+                                                    disabled={isProcessingScope || !scopeText.trim()}
+                                                    onClick={async () => {
+                                                        setIsProcessingScope(true)
+                                                        try {
+                                                            const newItems = await parseScopeAction(scopeText)
+                                                            if (newItems && newItems.length > 0) {
+                                                                const mapped: LineItem[] = newItems.map((i: any) => ({
+                                                                    description: i.description,
+                                                                    quantity: i.quantity || 1,
+                                                                    unit: "each",
+                                                                    unitPrice: i.unitPrice || 0,
+                                                                    total: (i.quantity || 1) * (i.unitPrice || 0),
+                                                                    area: "",
+                                                                    reason: ""
+                                                                }))
+                                                                setItems(mapped)
+                                                                setScopeOpen(false)
+                                                            }
+                                                        } catch (e) {
+                                                            alert("AI extraction failed.")
+                                                        } finally {
+                                                            setIsProcessingScope(false)
+                                                        }
+                                                    }}
+                                                    className="bg-primary text-black font-bold text-xs"
+                                                >
+                                                    {isProcessingScope ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                                                    Generate Items
+                                                </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Unified LineItemEditor (Shared Component) */}
+                        <LineItemEditor
+                            items={items}
+                            onChange={setItems}
+                            catalog={activeCatalog}
+                            workType={workType}
+                            rateYear={effectiveRateYear}
+                            isAdmin={isAdmin}
+                            highlightIndex={highlightIndex}
+                        />
+                    </div>
+
+                    {/* Totals & Submit */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 p-6 rounded-2xl bg-[#14141E] border border-white/5">
+                        <div className="space-y-2 text-xs text-muted-foreground">
+                            <p>All prices exclude 15% VAT until total.</p>
+                            <AutoSaveIndicator isSavingDraft={isSavingDraft} lastSavedTimestamp={lastSavedTimestamp} />
+                        </div>
+
+                        <div className="w-full md:w-80 space-y-2 text-right">
+                            <div className="flex justify-between text-sm text-gray-300">
+                                <span>Subtotal:</span>
+                                <span className="font-mono font-bold text-white">{formatCurrency(subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-gray-400">
+                                <span>VAT (15%):</span>
+                                <span className="font-mono font-bold">{formatCurrency(tax)}</span>
+                            </div>
+                            <div className="flex justify-between text-lg font-black text-white pt-2 border-t border-white/10">
+                                <span>Total:</span>
+                                <span className="font-mono text-primary text-xl">{formatCurrency(total)}</span>
+                            </div>
+
+                            <div className="pt-4 flex justify-end gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                        clearDraft(STORAGE_KEY)
+                                        router.back()
+                                    }}
+                                    className="border-white/10 text-xs"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={loading || items.length === 0}
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs px-6"
+                                >
+                                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {docType === 'INVOICE' ? 'Save Tax Invoice' : 'Save Quotation'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            {/* Catalog Side Panel (Shared Component) */}
+            <CatalogSidePanel
+                catalog={activeCatalog}
+                items={items}
+                onAddItem={handleAddFromCatalog}
+                workType={workType}
+                selectedTender={activeTender}
+                clientName={selectedClient?.name}
+                rateYear={effectiveRateYear}
+            />
+
+            <BulkItemImportDialog
+                open={isBulkImportOpen}
+                onOpenChange={setIsBulkImportOpen}
+                onImport={handleBulkImport}
+                currentCount={items.length}
+            />
+        </div>
     )
 }

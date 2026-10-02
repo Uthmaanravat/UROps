@@ -11,7 +11,7 @@ export async function createInvoiceAction(data: {
     clientId: string
     projectId?: string
     date: string
-    items: { description: string; quantity: number; unitPrice: number; area?: string; unit?: string; reason?: string }[]
+    items: { description: string; quantity: number; unitPrice: number; area?: string; unit?: string; reason?: string; code?: string; isLocked?: boolean; rateYear?: number }[]
     site?: string
     quoteNumber?: string
     reference?: string
@@ -21,12 +21,16 @@ export async function createInvoiceAction(data: {
     firstPaymentPercentage?: number
     contactId?: string | null
     attentionTo?: string | null
+    workType?: 'GENERAL' | 'TENDER'
+    tenderId?: string | null
+    rateYear?: number
 }) {
     const companyId = await ensureAuth()
     const year = new Date().getFullYear();
     let nextNumber = 0;
     let formattedQuoteNumber = data.quoteNumber;
     const isInvoice = data.type === 'INVOICE';
+    const isTender = data.workType === 'TENDER';
     
     const settings = await prisma.companySettings.findUnique({ where: { companyId } });
     if (!settings) throw new Error("Company settings not found");
@@ -36,9 +40,58 @@ export async function createInvoiceAction(data: {
     });
     if (!clientObj) throw new Error("Client not found");
 
+    // Fetch tender if workType is TENDER
+    const tender = isTender
+        ? (data.tenderId
+            ? await prisma.tender.findFirst({ where: { id: data.tenderId, companyId } })
+            : await prisma.tender.findFirst({ where: { companyId, status: "ACTIVE" } }))
+        : null;
+
     const codePrefix = clientObj.codePrefix;
 
-    if (codePrefix) {
+    if (isTender && tender) {
+        const tenderPrefix = isInvoice ? (tender.invoicePrefix || "CCT-TI") : (tender.quotePrefix || "CCT-T");
+        if (data.quoteNumber) {
+            formattedQuoteNumber = data.quoteNumber;
+            const match = data.quoteNumber.match(/(\d+)$/);
+            if (match) {
+                const manualSeq = parseInt(match[1]);
+                const currentSeq = isInvoice ? (clientObj.lastInvoiceNumber || 0) : (clientObj.lastQuoteNumber || 0);
+                if (manualSeq > currentSeq) {
+                    await prisma.client.update({
+                        where: { id: data.clientId },
+                        data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
+                    });
+                }
+                nextNumber = manualSeq;
+            } else {
+                nextNumber = (isInvoice ? (clientObj.lastInvoiceNumber || 0) : (clientObj.lastQuoteNumber || 0)) + 1;
+            }
+        } else {
+            let isUnique = false;
+            while (!isUnique) {
+                const updatedClient = await prisma.client.update({
+                    where: { id: data.clientId },
+                    data: isInvoice
+                        ? { lastInvoiceNumber: { increment: 1 } }
+                        : { lastQuoteNumber: { increment: 1 } }
+                });
+                nextNumber = isInvoice ? updatedClient.lastInvoiceNumber : updatedClient.lastQuoteNumber;
+                formattedQuoteNumber = `${tenderPrefix}-${year}-${nextNumber.toString().padStart(3, '0')}`;
+
+                const existing = await prisma.invoice.findFirst({
+                    where: {
+                        companyId,
+                        quoteNumber: formattedQuoteNumber,
+                        type: data.type || 'QUOTE'
+                    }
+                });
+                if (!existing) {
+                    isUnique = true;
+                }
+            }
+        }
+    } else if (codePrefix) {
         if (data.quoteNumber) {
             const manualNumber = data.quoteNumber;
             const match = manualNumber.match(/(\d+)$/);
@@ -212,6 +265,9 @@ export async function createInvoiceAction(data: {
             reference: data.reference,
             paymentNotes: data.paymentNotes,
             firstPaymentPercentage: data.firstPaymentPercentage,
+            workType: data.workType || 'GENERAL',
+            tenderId: data.tenderId || (isTender ? tender?.id : null),
+            rateYear: data.rateYear || 1,
             items: {
                 create: data.items.map((item, idx) => ({
                     description: item.description,
@@ -220,6 +276,9 @@ export async function createInvoiceAction(data: {
                     area: (item.area || ""),
                     unit: (item.unit || ""),
                     reason: (item.reason || null),
+                    code: (item.code || null),
+                    isLocked: Boolean(item.isLocked),
+                    rateYear: item.rateYear || (isTender ? (data.rateYear || 1) : null),
                     total: item.quantity * item.unitPrice,
                     position: idx
                 }))
@@ -321,9 +380,26 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
     }
 }
 
-export async function getQuoteSequenceAction(clientId?: string) {
+export async function getQuoteSequenceAction(clientId?: string, workType: 'GENERAL' | 'TENDER' = 'GENERAL', tenderId?: string) {
     const companyId = await ensureAuth();
     const year = new Date().getFullYear();
+
+    if (workType === 'TENDER') {
+        const tender = tenderId
+            ? await prisma.tender.findFirst({ where: { id: tenderId, companyId } })
+            : await prisma.tender.findFirst({ where: { companyId, status: "ACTIVE" } });
+        const prefix = tender?.quotePrefix || "CCT-T";
+        const client = clientId
+            ? await prisma.client.findFirst({ where: { id: clientId, companyId } })
+            : (tender ? await prisma.client.findFirst({ where: { id: tender.clientId } }) : null);
+
+        const lastQuote = await prisma.invoice.findFirst({
+            where: { companyId, workType: 'TENDER', type: 'QUOTE' },
+            orderBy: { number: 'desc' }
+        });
+        const nextNumber = Math.max(client?.lastQuoteNumber || 0, lastQuote?.number || 0) + 1;
+        return `${prefix}-${year}-${nextNumber.toString().padStart(3, '0')}`;
+    }
 
     if (clientId) {
         const client = await prisma.client.findFirst({
@@ -356,9 +432,26 @@ export async function getQuoteSequenceAction(clientId?: string) {
     return `Q-${year}-${nextNumber.toString().padStart(3, '0')}`;
 }
 
-export async function getInvoiceSequenceAction(clientId?: string) {
+export async function getInvoiceSequenceAction(clientId?: string, workType: 'GENERAL' | 'TENDER' = 'GENERAL', tenderId?: string) {
     const companyId = await ensureAuth();
     const year = new Date().getFullYear();
+
+    if (workType === 'TENDER') {
+        const tender = tenderId
+            ? await prisma.tender.findFirst({ where: { id: tenderId, companyId } })
+            : await prisma.tender.findFirst({ where: { companyId, status: "ACTIVE" } });
+        const prefix = tender?.invoicePrefix || "CCT-TI";
+        const client = clientId
+            ? await prisma.client.findFirst({ where: { id: clientId, companyId } })
+            : (tender ? await prisma.client.findFirst({ where: { id: tender.clientId } }) : null);
+
+        const lastInvoice = await prisma.invoice.findFirst({
+            where: { companyId, workType: 'TENDER', type: 'INVOICE' },
+            orderBy: { number: 'desc' }
+        });
+        const nextNumber = Math.max(client?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+        return `${prefix}-${year}-${nextNumber.toString().padStart(3, '0')}`;
+    }
 
     if (clientId) {
         const client = await prisma.client.findFirst({
@@ -414,15 +507,34 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
     }
 
     const client = quote.client;
+    const isTender = quote.workType === 'TENDER';
+    const tender = isTender
+        ? (quote.tenderId
+            ? await prisma.tender.findFirst({ where: { id: quote.tenderId, companyId } })
+            : await prisma.tender.findFirst({ where: { companyId, status: "ACTIVE" } }))
+        : null;
+
     const codePrefix = client.codePrefix;
     let nextInvoiceNumber = 0;
     const year = new Date().getFullYear();
     let formattedInvoiceNumber = "";
 
-    // 2. Get the next invoice number based on client prefix or settings
+    // 2. Get the next invoice number based on tender prefix, client prefix or settings
     let isUnique = false;
     while (!isUnique) {
-        if (codePrefix) {
+        if (isTender && tender) {
+            const tenderPrefix = tender.invoicePrefix || "CCT-TI";
+            const lastInvoice = await prisma.invoice.findFirst({
+                where: { companyId, workType: 'TENDER', type: 'INVOICE' },
+                orderBy: { number: 'desc' }
+            });
+            nextInvoiceNumber = Math.max(client.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+            await prisma.client.update({
+                where: { id: quote.clientId },
+                data: { lastInvoiceNumber: nextInvoiceNumber }
+            });
+            formattedInvoiceNumber = `${tenderPrefix}-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+        } else if (codePrefix) {
             const lastInvoice = await prisma.invoice.findFirst({
                 where: { companyId, clientId: quote.clientId, type: 'INVOICE' },
                 orderBy: { number: 'desc' }
@@ -468,6 +580,9 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             wbpId: quote.wbpId,
             contactId: quote.contactId || null,
             attentionTo: quote.attentionTo || null,
+            workType: quote.workType,
+            tenderId: quote.tenderId,
+            rateYear: quote.rateYear,
             type: 'INVOICE',
             status: 'DRAFT',
             number: nextInvoiceNumber,
@@ -482,15 +597,19 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             firstPaymentPercentage: firstPaymentPercentage !== undefined ? firstPaymentPercentage : quote.firstPaymentPercentage,
             date: new Date(), // Current date for the invoice
             items: {
-                create: [{
-                    area: "GENERAL",
-                    description: `As per quotation ${quote.quoteNumber}`,
-                    quantity: 1,
-                    unit: "UNIT",
-                    unitPrice: quote.subtotal,
-                    total: quote.subtotal,
-                    notes: null
-                }]
+                create: quote.items.map((item, idx) => ({
+                    description: item.description,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    area: item.area || "",
+                    unit: item.unit || "ea",
+                    reason: item.reason || null,
+                    code: item.code || null,
+                    isLocked: Boolean(item.isLocked),
+                    rateYear: item.rateYear || quote.rateYear || 1,
+                    total: item.total || (item.quantity * item.unitPrice),
+                    position: idx
+                }))
             }
         }
     })

@@ -39,3 +39,10 @@ export const LINE_ITEM_REASONS = [
 
 export type LineItemReason = typeof LINE_ITEM_REASONS[number];
 
+export function compareItemCodes(a?: string | null, b?: string | null): number {
+    if (!a && !b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    return a.trim().localeCompare(b.trim(), undefined, { numeric: true, sensitivity: 'base' });
+}
+
