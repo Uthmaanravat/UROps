@@ -7,12 +7,12 @@ import { formatCurrency } from "@/lib/utils"
 import { Plus, LayoutGrid, List, Calendar as CalendarIcon, Briefcase, Clock, CheckCircle2, AlertCircle, MoreHorizontal, DollarSign, Printer, Zap, ShieldAlert, Clock3, Eye } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { updateProjectStatus, updateProjectCommercialStatus } from "@/app/(dashboard)/projects/actions"
+import { updateProjectStatus, updateProjectCommercialStatus, updateProjectSchedule } from "@/app/(dashboard)/projects/actions"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { ProjectSchedulePrintModal, isTenderProject, isReactiveProject } from "./ProjectSchedulePrintModal"
+import { ProjectSchedulePrintModal, isTenderProject, isReactiveProject, getScheduleWeeks, getProjectScheduleBucket } from "./ProjectSchedulePrintModal"
 
 const ALL_COLUMNS = [
     { id: 'APPROVAL', title: 'Waiting Approval', statuses: ['SOW', 'SOW_SUBMITTED', 'LEAD'], color: 'border-blue-500/30 bg-blue-500/5', icon: Clock3 },
@@ -37,6 +37,8 @@ export function ProjectDashboardClient({
     const [visibleColumns, setVisibleColumns] = useState<string[]>(ALL_COLUMNS.map(c => c.id).filter(id => id !== 'PAID'))
     const [topFocus, setTopFocus] = useState<'REACTIVE' | 'WAITING_PO' | 'ACTIVE' | 'NONE'>('NONE')
     const [showScheduleModal, setShowScheduleModal] = useState(false)
+    const [showPaidWork, setShowPaidWork] = useState(false)
+    const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'BUSY_NOW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'WEEK_3' | 'MONTH_LATER' | 'UNSCHEDULED'>('ALL')
     const [isPending, startTransition] = useTransition()
     const router = useRouter()
 
@@ -96,170 +98,241 @@ export function ProjectDashboardClient({
         })
     }
 
-    // Work type counts
-    const tenderCount = projects.filter(isTenderProject).length;
-    const generalCount = projects.filter(p => !isTenderProject(p)).length;
+    const handleScheduleChange = async (projectId: string, bucketId: string) => {
+        const weeks = getScheduleWeeks()
+        let targetStartDate: Date | null = null
+        let targetEndDate: Date | null = null
+        let targetStatus = 'SCHEDULED'
 
-    // Filter projects by Work Type (All / General / Tender 152G)
+        if (bucketId === 'BUSY_NOW') {
+            targetStatus = 'IN_PROGRESS'
+            targetStartDate = new Date()
+        } else if (bucketId === 'THIS_WEEK') {
+            targetStartDate = weeks[0].startDate
+            targetEndDate = weeks[0].endDate
+        } else if (bucketId === 'NEXT_WEEK') {
+            targetStartDate = weeks[1].startDate
+            targetEndDate = weeks[1].endDate
+        } else if (bucketId === 'WEEK_3') {
+            targetStartDate = weeks[2].startDate
+            targetEndDate = weeks[2].endDate
+        } else if (bucketId === 'MONTH_LATER') {
+            targetStartDate = weeks[3].startDate
+            targetEndDate = weeks[3].endDate
+        } else if (bucketId === 'UNSCHEDULED') {
+            targetStartDate = null
+            targetEndDate = null
+            targetStatus = 'PLANNING'
+        }
+
+        setProjects(prev => prev.map(p => {
+            if (p.id === projectId) {
+                return {
+                    ...p,
+                    startDate: targetStartDate?.toISOString() || null,
+                    endDate: targetEndDate?.toISOString() || null,
+                    status: targetStatus
+                }
+            }
+            return p
+        }))
+
+        startTransition(async () => {
+            await updateProjectSchedule(projectId, {
+                startDate: targetStartDate,
+                endDate: targetEndDate,
+                status: targetStatus
+            })
+            router.refresh()
+        })
+    }
+
+    // Work type counts (active jobs vs paid jobs)
+    const activeProjects = projects.filter(p => p.status !== 'PAID' && p.status !== 'CANCELLED')
+    const paidProjectsCount = projects.filter(p => p.status === 'PAID' || p.status === 'CANCELLED').length
+
+    const activeTenderCount = activeProjects.filter(isTenderProject).length
+    const activeGeneralCount = activeProjects.filter(p => !isTenderProject(p)).length
+
+    // Filter projects by Work Type & Paid Work visibility
+    // By default, PAID and CANCELLED work is hidden from active project operations
     const displayedProjects = projects.filter(p => {
-        const isTender = isTenderProject(p);
-        if (workTypeFilter === "GENERAL") return !isTender;
-        if (workTypeFilter === "TENDER") return isTender;
-        return true;
-    });
+        if (!showPaidWork && (p.status === 'PAID' || p.status === 'CANCELLED')) {
+            return false
+        }
+        const isTender = isTenderProject(p)
+        if (workTypeFilter === "GENERAL") return !isTender
+        if (workTypeFilter === "TENDER") return isTender
+        return true
+    })
 
     // 1. WORK TO DO (NOT DONE):
     // Work that is there and NOT done (Scheduled, In Progress, Planning, Quoted, SOW)
     // Strictly excludes already completed, invoiced (awaiting payment), paid, and cancelled
-    const workToDoProjects = displayedProjects.filter(p => !['COMPLETED', 'INVOICED', 'PAID', 'CANCELLED'].includes(p.status));
+    const workToDoProjects = displayedProjects.filter(p => !['COMPLETED', 'INVOICED', 'PAID', 'CANCELLED'].includes(p.status))
     const workAmountNotDone = workToDoProjects.reduce((acc, p) => {
-        const latestInvoice = p.invoices?.[0];
-        const latestWbp = p.workBreakdowns?.[0];
+        const latestInvoice = p.invoices?.[0]
+        const latestWbp = p.workBreakdowns?.[0]
         const totalWorth = latestInvoice
             ? latestInvoice.total
-            : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0);
-        return acc + (Number(totalWorth) || 0);
-    }, 0);
+            : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0)
+        return acc + (Number(totalWorth) || 0)
+    }, 0)
 
     // 2. REACTIVE WORK (replaces Emergency Jobs: counts reactive projects and quotes)
-    const reactiveProjects = displayedProjects.filter(isReactiveProject);
+    const reactiveProjects = displayedProjects.filter(isReactiveProject)
     const reactiveQuotesCount = displayedProjects.reduce((acc, p) => {
-        const rQuotes = p.invoices?.filter((inv: any) => inv.type === 'QUOTE' && (/reactive/i.test(inv.reference || '') || /reactive/i.test(inv.notes || '') || isReactiveProject(p))) || [];
-        return acc + rQuotes.length;
-    }, 0);
+        const rQuotes = p.invoices?.filter((inv: any) => inv.type === 'QUOTE' && (/reactive/i.test(inv.reference || '') || /reactive/i.test(inv.notes || '') || isReactiveProject(p))) || []
+        return acc + rQuotes.length
+    }, 0)
 
-    const awaitingPoProjects = displayedProjects.filter(p => p.commercialStatus === 'AWAITING_PO');
+    const awaitingPoProjects = displayedProjects.filter(p => p.commercialStatus === 'AWAITING_PO')
 
     return (
         <div className="space-y-6 pb-20 max-w-[1600px] mx-auto">
-            {/* Header & Controls */}
+            {/* Header: Title & Main Action Buttons */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
                         Project Operations
                     </h1>
                     <p className="text-muted-foreground text-sm font-medium tracking-wide">
-                        Manage workflows, scheduling, and project health
+                        Manage active workflows, site scheduling, and project health
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                    {/* View Switcher: Board | Timeline Graph (Gantt) | List */}
-                    <div className="bg-[#14141E]/90 backdrop-blur-md p-1 rounded-xl flex gap-1 border border-white/10 shadow-xl">
-                        <button
-                            type="button"
-                            onClick={() => setView('KANBAN')}
-                            className={`px-2.5 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
-                                view === 'KANBAN' ? 'bg-primary text-black shadow-md' : 'text-gray-400 hover:text-white'
-                            }`}
-                            title="Kanban Board View"
-                        >
-                            <LayoutGrid className="h-3.5 w-3.5" /> Board
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setView('GANTT')}
-                            className={`px-2.5 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
-                                view === 'GANTT' ? 'bg-primary text-black shadow-md' : 'text-gray-400 hover:text-white'
-                            }`}
-                            title="Timeline Schedule Graph (Gantt)"
-                        >
-                            <CalendarIcon className="h-3.5 w-3.5" /> Timeline Graph
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setView('LIST')}
-                            className={`px-2.5 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
-                                view === 'LIST' ? 'bg-primary text-black shadow-md' : 'text-gray-400 hover:text-white'
-                            }`}
-                            title="List View"
-                        >
-                            <List className="h-3.5 w-3.5" /> List
-                        </button>
-                    </div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={() => setShowScheduleModal(true)}
+                        className="bg-[#14141E] text-white border border-[#A3E635]/40 hover:border-[#A3E635] hover:bg-[#1A1A28] font-black shadow-[0_0_15px_rgba(163,230,53,0.15)] text-xs flex items-center gap-2 h-9 px-4 transition-all"
+                    >
+                        <Printer className="h-4 w-4 text-[#A3E635]" />
+                        <span>Print / Schedule Doc</span>
+                    </Button>
 
-                    {/* Work Type Filter Tabs: All | General Work | Tender 152G */}
-                    <div className="bg-[#14141E]/90 backdrop-blur-md p-1 rounded-xl flex gap-1 border border-white/10 shadow-xl">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setWorkTypeFilter("ALL")
-                            }}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                                workTypeFilter === "ALL"
-                                    ? "bg-white text-black shadow-md"
-                                    : "text-gray-400 hover:text-white"
-                            }`}
-                        >
-                            All Work ({projects.length})
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setWorkTypeFilter("GENERAL")
-                            }}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                                workTypeFilter === "GENERAL"
-                                    ? "bg-blue-600 text-white shadow-md"
-                                    : "text-gray-400 hover:text-white"
-                            }`}
-                        >
-                            General ({generalCount})
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setWorkTypeFilter("TENDER")
-                                if (topFocus === 'REACTIVE') setTopFocus('NONE')
-                            }}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                                workTypeFilter === "TENDER"
-                                    ? "bg-amber-500 text-black shadow-md"
-                                    : "text-gray-400 hover:text-white"
-                            }`}
-                        >
-                            Tender 152G ({tenderCount})
-                        </button>
-                    </div>
-
-                    {/* Action Buttons: Schedule Document, Columns, New Project */}
-                    <div className="bg-[#14141E]/80 backdrop-blur-md p-1 rounded-xl flex items-center gap-1 border border-white/10 shadow-xl">
-                        <Button
-                            onClick={() => setShowScheduleModal(true)}
-                            className="bg-primary text-black font-black hover:bg-primary/90 shadow-[0_0_15px_rgba(163,230,53,0.3)] text-xs flex items-center gap-1.5 h-9"
-                        >
-                            <Printer className="h-4 w-4" /> Print / Schedule Doc
+                    <Link href="/projects/new">
+                        <Button className="bg-[#A3E635] text-black font-black hover:bg-[#A3E635]/90 shadow-[0_0_20px_rgba(163,230,53,0.3)] text-xs h-9 px-4">
+                            <Plus className="mr-1.5 h-4 w-4" /> New Project
                         </Button>
+                    </Link>
+                </div>
+            </div>
 
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" size="sm" className="bg-[#14141E]/80 border-white/10 text-white hover:bg-white/5 font-bold h-9">
-                                    <Eye className="h-4 w-4 mr-1.5" /> Columns
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-56 bg-[#0F0F1A] border-white/10 p-2 shadow-2xl">
-                                <div className="space-y-2">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1">Toggle Columns</p>
-                                    {ALL_COLUMNS.map(col => (
-                                        <div key={col.id} className="flex items-center space-x-2 px-2 py-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer" onClick={() => handleColumnToggle(col.id)}>
-                                            <Checkbox
-                                                id={`col-${col.id}`}
-                                                checked={visibleColumns.includes(col.id)}
-                                                className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:text-black"
-                                            />
-                                            <Label htmlFor={`col-${col.id}`} className="text-xs font-bold text-white cursor-pointer flex-1">{col.title}</Label>
-                                        </div>
-                                    ))}
-                                </div>
-                            </PopoverContent>
-                        </Popover>
+            {/* Row 2: Clean Glassmorphic Toolbar (View Switcher, Work Type, Paid Filter, Columns) */}
+            <div className="bg-[#14141E]/90 backdrop-blur-md p-1.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 border border-white/10 shadow-xl">
+                {/* Left: View Switcher (Board | Timeline Graph | List) */}
+                <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                    <button
+                        type="button"
+                        onClick={() => setView('KANBAN')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
+                            view === 'KANBAN' ? 'bg-[#A3E635] text-black shadow-md' : 'text-gray-400 hover:text-white'
+                        }`}
+                        title="Kanban Board View"
+                    >
+                        <LayoutGrid className="h-3.5 w-3.5" /> Board
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setView('GANTT')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
+                            view === 'GANTT' ? 'bg-[#A3E635] text-black shadow-md' : 'text-gray-400 hover:text-white'
+                        }`}
+                        title="Timeline Schedule Graph (Gantt)"
+                    >
+                        <CalendarIcon className="h-3.5 w-3.5" /> Timeline Graph
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setView('LIST')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
+                            view === 'LIST' ? 'bg-[#A3E635] text-black shadow-md' : 'text-gray-400 hover:text-white'
+                        }`}
+                        title="List View"
+                    >
+                        <List className="h-3.5 w-3.5" /> List
+                    </button>
+                </div>
 
-                        <Link href="/projects/new">
-                            <Button className="bg-white text-black font-black hover:bg-gray-200 shadow-[0_0_20px_rgba(255,255,255,0.2)] text-xs h-9">
-                                <Plus className="mr-1.5 h-4 w-4" /> New Project
+                {/* Center: Work Classification Tabs (All Work | General | Tender 152G) */}
+                <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                    <button
+                        type="button"
+                        onClick={() => setWorkTypeFilter("ALL")}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all ${
+                            workTypeFilter === "ALL"
+                                ? "bg-white text-black shadow-md"
+                                : "text-gray-400 hover:text-white"
+                        }`}
+                    >
+                        All Work ({showPaidWork ? projects.length : activeProjects.length})
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setWorkTypeFilter("GENERAL")}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all ${
+                            workTypeFilter === "GENERAL"
+                                ? "bg-blue-600 text-white shadow-md"
+                                : "text-gray-400 hover:text-white"
+                        }`}
+                    >
+                        General ({showPaidWork ? projects.filter(p => !isTenderProject(p)).length : activeGeneralCount})
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setWorkTypeFilter("TENDER")
+                            if (topFocus === 'REACTIVE') setTopFocus('NONE')
+                        }}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all ${
+                            workTypeFilter === "TENDER"
+                                ? "bg-amber-500 text-black shadow-md"
+                                : "text-gray-400 hover:text-white"
+                        }`}
+                    >
+                        Tender 152G ({showPaidWork ? projects.filter(isTenderProject).length : activeTenderCount})
+                    </button>
+                </div>
+
+                {/* Right: Paid Work Filter Toggle & Columns Dropdown */}
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowPaidWork(!showPaidWork)}
+                        className={`font-bold h-9 text-xs transition-all ${
+                            showPaidWork
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                                : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                        title="Toggle displaying paid & archived projects"
+                    >
+                        <Briefcase className="h-3.5 w-3.5 mr-1.5" />
+                        {showPaidWork ? `Paid Included (${paidProjectsCount})` : `Show Paid (${paidProjectsCount})`}
+                    </Button>
+
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="bg-black/30 border-white/10 text-white hover:bg-white/5 font-bold h-9 text-xs">
+                                <Eye className="h-4 w-4 mr-1.5" /> Columns
                             </Button>
-                        </Link>
-                    </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 bg-[#0F0F1A] border-white/10 p-2 shadow-2xl">
+                            <div className="space-y-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1">Toggle Board Columns</p>
+                                {ALL_COLUMNS.map(col => (
+                                    <div key={col.id} className="flex items-center space-x-2 px-2 py-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer" onClick={() => handleColumnToggle(col.id)}>
+                                        <Checkbox
+                                            id={`col-${col.id}`}
+                                            checked={visibleColumns.includes(col.id)}
+                                            className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:text-black"
+                                        />
+                                        <Label htmlFor={`col-${col.id}`} className="text-xs font-bold text-white cursor-pointer flex-1">{col.title}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                 </div>
             </div>
 
@@ -519,48 +592,286 @@ export function ProjectDashboardClient({
                 </div>
             )}
 
-            {/* GANTT VIEW */}
-            {view === 'GANTT' && (
-                <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl p-6 overflow-x-auto">
-                    <div className="min-w-[800px]">
-                        <div className="grid grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-white/10 pb-4 mb-4">
-                            <div className="col-span-3">Project</div>
-                            {['Week 1', 'Week 2', 'Week 3', 'Week 4'].map((w, i) => (
-                                <div key={i} className="col-span-2 text-center border-l border-white/5">{w}</div>
-                            ))}
-                            <div className="col-span-1 text-right">Status</div>
+            {/* TIMELINE SCHEDULE GRAPH (GANTT) */}
+            {view === 'GANTT' && (() => {
+                const scheduleWeeks = getScheduleWeeks()
+
+                // Active projects to display on timeline
+                const activeTimelineProjects = displayedProjects.filter(p => !['COMPLETED', 'PAID', 'CANCELLED'].includes(p.status))
+
+                // Counts by bucket
+                const busyCount = activeTimelineProjects.filter(p => p.status === 'IN_PROGRESS').length
+                const thisWeekCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'THIS_WEEK').length
+                const nextWeekCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'NEXT_WEEK').length
+                const week3Count = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'WEEK_3').length
+                const monthLaterCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'MONTH_LATER').length
+                const unscheduledCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'UNSCHEDULED').length
+
+                // Filtered by selected timeline pill
+                const filteredTimelineProjects = activeTimelineProjects.filter(p => {
+                    if (timelineFilter === 'ALL') return true
+                    const bucket = getProjectScheduleBucket(p)
+                    return bucket === timelineFilter
+                })
+
+                return (
+                    <Card className="bg-[#14141E]/90 backdrop-blur-md border-white/10 shadow-2xl p-4 md:p-6 overflow-hidden">
+                        {/* 1. Header Filter Bar: "what all will be this week" */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 mb-4 border-b border-white/10">
+                            <div>
+                                <h3 className="text-base font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                    <span className="h-2 w-2 rounded-full bg-[#A3E635] shadow-[0_0_10px_#A3E635]" />
+                                    Weekly Operations Schedule
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                    Assign and view work scheduled for this week, next week, or active on site
+                                </p>
+                            </div>
+
+                            {/* Schedule Filter Pills */}
+                            <div className="flex flex-wrap items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/5">
+                                <button
+                                    type="button"
+                                    onClick={() => setTimelineFilter('ALL')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                        timelineFilter === 'ALL' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'
+                                    }`}
+                                >
+                                    All ({activeTimelineProjects.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTimelineFilter('BUSY_NOW')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                        timelineFilter === 'BUSY_NOW' ? 'bg-[#A3E635] text-black shadow-md' : 'text-emerald-400 hover:text-white'
+                                    }`}
+                                >
+                                    🟢 Busy Now ({busyCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTimelineFilter('THIS_WEEK')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                        timelineFilter === 'THIS_WEEK' ? 'bg-purple-600 text-white shadow-md' : 'text-purple-300 hover:text-white'
+                                    }`}
+                                >
+                                    🟣 This Week ({thisWeekCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTimelineFilter('NEXT_WEEK')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                        timelineFilter === 'NEXT_WEEK' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-300 hover:text-white'
+                                    }`}
+                                >
+                                    🔵 Next Week ({nextWeekCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTimelineFilter('WEEK_3')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                        timelineFilter === 'WEEK_3' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-300 hover:text-white'
+                                    }`}
+                                >
+                                    Week 3 ({week3Count})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTimelineFilter('MONTH_LATER')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                        timelineFilter === 'MONTH_LATER' ? 'bg-amber-600 text-white shadow-md' : 'text-amber-300 hover:text-white'
+                                    }`}
+                                >
+                                    Later Month ({monthLaterCount})
+                                </button>
+                                {unscheduledCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setTimelineFilter('UNSCHEDULED')}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                            timelineFilter === 'UNSCHEDULED' ? 'bg-orange-600 text-white shadow-md' : 'text-orange-400 hover:text-white'
+                                        }`}
+                                    >
+                                        ⚠️ Unscheduled ({unscheduledCount})
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                        <div className="space-y-4">
-                            {workToDoProjects.map((p, idx) => {
-                                const startCol = (idx % 3) * 2 + 4;
-                                const spanCol = (idx % 2) + 2;
-                                const isReactive = isReactiveProject(p);
-                                return (
-                                    <div key={p.id} className="grid grid-cols-12 gap-2 items-center group">
-                                        <div className="col-span-3">
-                                            <Link href={`/projects/${p.id}`} className="font-bold text-white text-sm hover:text-primary transition-colors line-clamp-1">{p.name}</Link>
-                                            <p className="text-[10px] text-muted-foreground">{p.client?.name}</p>
-                                        </div>
-                                        <div className="col-span-8 relative h-8 rounded-lg bg-white/5">
-                                            <div
-                                                className={`absolute inset-y-1 rounded-md shadow-lg flex items-center px-3 text-[10px] font-black cursor-grab ${
-                                                    isReactive ? 'bg-amber-500 text-black' : 'bg-primary/80 text-black hover:bg-primary'
-                                                }`}
-                                                style={{ left: `${(startCol - 4) * 12.5}%`, width: `${spanCol * 12.5}%` }}
-                                            >
-                                                <span className="truncate">{p.status.replace(/_/g, ' ')}</span>
-                                            </div>
-                                        </div>
-                                        <div className="col-span-1 text-right">
-                                            <Badge variant="outline" className="text-[9px] border-white/10">{p.status}</Badge>
-                                        </div>
+
+                        {/* 2. Interactive Real-Date Gantt Grid */}
+                        <div className="overflow-x-auto">
+                            <div className="min-w-[1100px]">
+                                {/* Columns Header with REAL DATES */}
+                                <div className="grid grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground border-b border-white/10 pb-3 mb-3 bg-black/20 p-2 rounded-xl">
+                                    <div className="col-span-4 pl-2">Project &amp; Client Details</div>
+                                    <div className="col-span-2 text-center border-l border-white/10 text-emerald-400">
+                                        🟢 Busy Now (On Site)
                                     </div>
-                                )
-                            })}
+                                    <div className="col-span-2 text-center border-l border-white/10 text-purple-300">
+                                        🟣 This Week
+                                        <div className="text-[9px] font-bold text-gray-400 lowercase">{scheduleWeeks[0].dateLabel}</div>
+                                    </div>
+                                    <div className="col-span-2 text-center border-l border-white/10 text-blue-300">
+                                        🔵 Next Week
+                                        <div className="text-[9px] font-bold text-gray-400 lowercase">{scheduleWeeks[1].dateLabel}</div>
+                                    </div>
+                                    <div className="col-span-1 text-center border-l border-white/10 text-indigo-300">
+                                        Week 3
+                                        <div className="text-[9px] font-bold text-gray-400 lowercase">{scheduleWeeks[2].dateLabel}</div>
+                                    </div>
+                                    <div className="col-span-1 text-center border-l border-white/10 text-amber-300">
+                                        Later
+                                        <div className="text-[9px] font-bold text-gray-400 lowercase">Month</div>
+                                    </div>
+                                </div>
+
+                                {/* Project Rows */}
+                                <div className="space-y-2.5">
+                                    {filteredTimelineProjects.map((p) => {
+                                        const bucket = getProjectScheduleBucket(p)
+                                        const isTender = isTenderProject(p)
+                                        const latestInvoice = p.invoices?.[0]
+                                        const latestWbp = p.workBreakdowns?.[0]
+                                        const totalWorth = latestInvoice ? latestInvoice.total : (latestWbp ? latestWbp.items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0) * 1.15 : 0)
+
+                                        return (
+                                            <div
+                                                key={p.id}
+                                                className="grid grid-cols-12 gap-2 items-center p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/20 hover:bg-white/[0.04] transition-all group"
+                                            >
+                                                {/* Left: Project Info & Schedule Assigner */}
+                                                <div className="col-span-4 pr-2 flex items-center justify-between gap-2">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <Link
+                                                                href={`/projects/${p.id}`}
+                                                                className="font-black text-white text-xs hover:text-[#A3E635] transition-colors truncate"
+                                                            >
+                                                                {p.name}
+                                                            </Link>
+                                                            {isTender ? (
+                                                                <span className="text-[8px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                                                    TENDER
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[8px] font-black px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                                                                    GENERAL
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                                                            <span className="truncate">{p.client?.name || 'General Client'}</span>
+                                                            <span>•</span>
+                                                            <span className="text-emerald-400 font-bold">{formatCurrency(Number(totalWorth) || 0)}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Quick Schedule Assigner Dropdown */}
+                                                    <div className="shrink-0">
+                                                        <select
+                                                            value={bucket}
+                                                            onChange={(e) => handleScheduleChange(p.id, e.target.value)}
+                                                            className="bg-black/50 text-white border border-white/10 text-[9px] font-black rounded-lg px-2 py-1 outline-none cursor-pointer focus:border-[#A3E635]"
+                                                            title="Assign weekly schedule"
+                                                        >
+                                                            <option value="BUSY_NOW">🟢 Busy Now (On Site)</option>
+                                                            <option value="THIS_WEEK">🟣 This Week ({scheduleWeeks[0].dateLabel})</option>
+                                                            <option value="NEXT_WEEK">🔵 Next Week ({scheduleWeeks[1].dateLabel})</option>
+                                                            <option value="WEEK_3">🗓️ Week 3 ({scheduleWeeks[2].dateLabel})</option>
+                                                            <option value="MONTH_LATER">🟠 Later This Month</option>
+                                                            <option value="UNSCHEDULED">⚠️ Needs Scheduling</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {/* Gantt Bar Columns */}
+                                                {/* Column: Busy Now (2 cols) */}
+                                                <div className="col-span-2 px-1 relative h-9 flex items-center justify-center">
+                                                    {bucket === 'BUSY_NOW' ? (
+                                                        <div className="w-full h-7 rounded-lg bg-[#A3E635] text-black font-black text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(163,230,53,0.4)] animate-pulse">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-black animate-ping" />
+                                                            Active Now
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-0.5 w-8 bg-white/5 rounded-full" />
+                                                    )}
+                                                </div>
+
+                                                {/* Column: This Week (2 cols) */}
+                                                <div className="col-span-2 px-1 relative h-9 flex items-center justify-center border-l border-white/5">
+                                                    {bucket === 'THIS_WEEK' ? (
+                                                        <div className="w-full h-7 rounded-lg bg-purple-600/90 hover:bg-purple-600 text-white font-black text-[9px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-md border border-purple-400/30">
+                                                            <span>🟣 This Week</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-0.5 w-8 bg-white/5 rounded-full" />
+                                                    )}
+                                                </div>
+
+                                                {/* Column: Next Week (2 cols) */}
+                                                <div className="col-span-2 px-1 relative h-9 flex items-center justify-center border-l border-white/5">
+                                                    {bucket === 'NEXT_WEEK' ? (
+                                                        <div className="w-full h-7 rounded-lg bg-blue-600/90 hover:bg-blue-600 text-white font-black text-[9px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-md border border-blue-400/30">
+                                                            <span>🔵 Next Week</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-0.5 w-8 bg-white/5 rounded-full" />
+                                                    )}
+                                                </div>
+
+                                                {/* Column: Week 3 (1 col) */}
+                                                <div className="col-span-1 px-1 relative h-9 flex items-center justify-center border-l border-white/5">
+                                                    {bucket === 'WEEK_3' ? (
+                                                        <div className="w-full h-7 rounded-lg bg-indigo-600/90 text-white font-black text-[8px] uppercase tracking-wider flex items-center justify-center shadow-md">
+                                                            Wk 3
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-0.5 w-4 bg-white/5 rounded-full" />
+                                                    )}
+                                                </div>
+
+                                                {/* Column: Later Month (1 col) */}
+                                                <div className="col-span-1 px-1 relative h-9 flex items-center justify-center border-l border-white/10">
+                                                    {bucket === 'MONTH_LATER' ? (
+                                                        <div className="w-full h-7 rounded-lg bg-amber-600/90 text-white font-black text-[8px] uppercase tracking-wider flex items-center justify-center shadow-md">
+                                                            Later
+                                                        </div>
+                                                    ) : bucket === 'UNSCHEDULED' ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleScheduleChange(p.id, 'THIS_WEEK')}
+                                                            className="w-full h-6 rounded border border-dashed border-orange-500/40 text-orange-400 hover:bg-orange-500/10 text-[8px] font-bold"
+                                                            title="Click to schedule for this week"
+                                                        >
+                                                            + Schedule
+                                                        </button>
+                                                    ) : (
+                                                        <div className="h-0.5 w-4 bg-white/5 rounded-full" />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+
+                                    {filteredTimelineProjects.length === 0 && (
+                                        <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-2xl">
+                                            <p className="text-sm font-bold text-gray-400">No projects found in this schedule view.</p>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setTimelineFilter('ALL')}
+                                                className="mt-2 text-xs text-[#A3E635] hover:underline"
+                                            >
+                                                Show All Projects
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </Card>
-            )}
+                    </Card>
+                )
+            })()}
 
             {/* LIST VIEW */}
             {view === 'LIST' && (

@@ -42,6 +42,88 @@ export function isReactiveProject(p: any): boolean {
     return false
 }
 
+export function getScheduleWeeks(referenceDate: Date = new Date()) {
+    const now = new Date(referenceDate)
+    
+    // Find Monday of the current week
+    const currentDay = now.getDay() // 0 is Sun, 1 is Mon...
+    const diffToMonday = (currentDay === 0 ? -6 : 1) - currentDay
+    const mondayThisWeek = new Date(now)
+    mondayThisWeek.setDate(now.getDate() + diffToMonday)
+    mondayThisWeek.setHours(0, 0, 0, 0)
+    
+    const sundayThisWeek = new Date(mondayThisWeek)
+    sundayThisWeek.setDate(mondayThisWeek.getDate() + 6)
+    sundayThisWeek.setHours(23, 59, 59, 999)
+
+    // Next Week
+    const mondayNextWeek = new Date(mondayThisWeek)
+    mondayNextWeek.setDate(mondayThisWeek.getDate() + 7)
+    const sundayNextWeek = new Date(mondayNextWeek)
+    sundayNextWeek.setDate(mondayNextWeek.getDate() + 6)
+    sundayNextWeek.setHours(23, 59, 59, 999)
+
+    // Week 3
+    const mondayWeek3 = new Date(mondayThisWeek)
+    mondayWeek3.setDate(mondayThisWeek.getDate() + 14)
+    const sundayWeek3 = new Date(mondayWeek3)
+    sundayWeek3.setDate(mondayWeek3.getDate() + 6)
+    sundayWeek3.setHours(23, 59, 59, 999)
+
+    // Week 4 / Later this month
+    const mondayWeek4 = new Date(mondayThisWeek)
+    mondayWeek4.setDate(mondayThisWeek.getDate() + 21)
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+
+    const formatShort = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    const formatRange = (start: Date, end: Date) => `${formatShort(start)} – ${formatShort(end)}`
+
+    return [
+        {
+            id: 'THIS_WEEK' as const,
+            title: 'This Week',
+            dateLabel: formatRange(mondayThisWeek, sundayThisWeek),
+            startDate: mondayThisWeek,
+            endDate: sundayThisWeek
+        },
+        {
+            id: 'NEXT_WEEK' as const,
+            title: 'Next Week',
+            dateLabel: formatRange(mondayNextWeek, sundayNextWeek),
+            startDate: mondayNextWeek,
+            endDate: sundayNextWeek
+        },
+        {
+            id: 'WEEK_3' as const,
+            title: 'Week 3',
+            dateLabel: formatRange(mondayWeek3, sundayWeek3),
+            startDate: mondayWeek3,
+            endDate: sundayWeek3
+        },
+        {
+            id: 'MONTH_LATER' as const,
+            title: 'Later This Month',
+            dateLabel: `${formatShort(mondayWeek4)} – ${formatShort(endOfMonth)}`,
+            startDate: mondayWeek4,
+            endDate: endOfMonth
+        }
+    ]
+}
+
+export function getProjectScheduleBucket(p: any): 'BUSY_NOW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'WEEK_3' | 'MONTH_LATER' | 'UNSCHEDULED' {
+    if (p.status === 'IN_PROGRESS') return 'BUSY_NOW'
+    if (!p.startDate) {
+        if (p.status === 'SCHEDULED') return 'THIS_WEEK'
+        return 'UNSCHEDULED'
+    }
+    const start = new Date(p.startDate).getTime()
+    const weeks = getScheduleWeeks()
+    if (start <= weeks[0].endDate.getTime()) return 'THIS_WEEK'
+    if (start <= weeks[1].endDate.getTime()) return 'NEXT_WEEK'
+    if (start <= weeks[2].endDate.getTime()) return 'WEEK_3'
+    return 'MONTH_LATER'
+}
+
 export function ProjectSchedulePrintModal({
     isOpen,
     onClose,
@@ -51,8 +133,8 @@ export function ProjectSchedulePrintModal({
 }: ProjectSchedulePrintModalProps) {
     const [workTypeFilter, setWorkTypeFilter] = useState<"ALL" | "GENERAL" | "TENDER">(initialWorkType)
     
-    // Graph / Document Style Selector (Gantt timeline, weekly planner, table, or combined)
-    const [graphType, setGraphType] = useState<"COMBINED" | "GANTT" | "PLANNER" | "TABLE">("COMBINED")
+    // Graph / Document Style Selector (Gantt timeline, weekly planner, or table)
+    const [graphType, setGraphType] = useState<"GANTT" | "PLANNER" | "TABLE">("GANTT")
 
     // Status filters - Default to Scheduled & In Progress
     const [includeScheduled, setIncludeScheduled] = useState(true)
@@ -60,7 +142,6 @@ export function ProjectSchedulePrintModal({
     const [includeApproval, setIncludeApproval] = useState(false)
     const [includeHold, setIncludeHold] = useState(false)
     const [includeCompleted, setIncludeCompleted] = useState(false)
-    const [includeAwaitingPayment, setIncludeAwaitingPayment] = useState(false)
 
     // Visibility toggles ("Tick what they can view")
     // Financial amounts default to FALSE so workers/employers do not see money unless PM checks it
@@ -68,7 +149,6 @@ export function ProjectSchedulePrintModal({
     const [showScope, setShowScope] = useState(true)
     const [showSite, setShowSite] = useState(true)
     const [showClient, setShowClient] = useState(true)
-    const [showCommercialStatus, setShowCommercialStatus] = useState(true)
 
     // Custom document notes
     const [customNotes, setCustomNotes] = useState("")
@@ -86,11 +166,10 @@ export function ProjectSchedulePrintModal({
             if (['SOW', 'SOW_SUBMITTED', 'LEAD'].includes(s) && includeApproval) return true
             if (['ON_HOLD'].includes(s) && includeHold) return true
             if (['COMPLETED'].includes(s) && includeCompleted) return true
-            if (['INVOICED'].includes(s) && includeAwaitingPayment) return true
 
             return false
         })
-    }, [projects, workTypeFilter, includeScheduled, includeInProgress, includeApproval, includeHold, includeCompleted, includeAwaitingPayment])
+    }, [projects, workTypeFilter, includeScheduled, includeInProgress, includeApproval, includeHold, includeCompleted])
 
     // Selected project IDs for individual ticking
     const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
@@ -129,10 +208,10 @@ export function ProjectSchedulePrintModal({
         }, 0)
     }, [finalProjects])
 
-    // Grouping by schedule bucket for the Planner Grid
+    // Grouping by schedule bucket using REAL dates
     const busyProjects = useMemo(() => finalProjects.filter(p => p.status === 'IN_PROGRESS'), [finalProjects])
-    const thisWeekProjects = useMemo(() => finalProjects.filter((p, i) => p.status === 'SCHEDULED' && i % 2 === 0), [finalProjects])
-    const upcomingMonthProjects = useMemo(() => finalProjects.filter((p, i) => !['IN_PROGRESS'].includes(p.status) && (p.status !== 'SCHEDULED' || i % 2 !== 0)), [finalProjects])
+    const thisWeekProjects = useMemo(() => finalProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'THIS_WEEK'), [finalProjects])
+    const upcomingMonthProjects = useMemo(() => finalProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) !== 'THIS_WEEK'), [finalProjects])
 
     // Print Handler
     const handlePrint = () => {
@@ -203,16 +282,18 @@ export function ProjectSchedulePrintModal({
 
         let currentY = 48
 
-        // 4. Render Gantt Timeline Graph in PDF (if GANTT or COMBINED)
-        if (graphType === "GANTT" || graphType === "COMBINED") {
-            const ganttHead = ['#', 'PROJECT / JOB', 'SITE', 'BUSY NOW', 'THIS WEEK', 'NEXT WEEK', 'THIS MONTH']
+        // 4. Render Gantt Timeline Graph in PDF (if GANTT)
+        if (graphType === "GANTT") {
+            const weeks = getScheduleWeeks()
+            const ganttHead = ['#', 'PROJECT / JOB', 'SITE', 'BUSY NOW', `THIS WK (${weeks[0].dateLabel})`, `NEXT WK (${weeks[1].dateLabel})`, 'THIS MONTH']
             if (showFinancials) ganttHead.push('EST. WORTH')
 
             const ganttRows = finalProjects.map((p, idx) => {
-                const isBusy = p.status === 'IN_PROGRESS'
-                const isThisWeek = p.status === 'SCHEDULED' && idx % 2 === 0
-                const isNextWeek = p.status === 'SCHEDULED' && idx % 2 !== 0
-                const isLater = !['IN_PROGRESS', 'SCHEDULED'].includes(p.status)
+                const bucket = getProjectScheduleBucket(p)
+                const isBusy = bucket === 'BUSY_NOW'
+                const isThisWeek = bucket === 'THIS_WEEK'
+                const isNextWeek = bucket === 'NEXT_WEEK'
+                const isLater = bucket === 'WEEK_3' || bucket === 'MONTH_LATER' || (!isBusy && !isThisWeek && !isNextWeek)
                 const site = p.invoices?.[0]?.site || p.scopes?.[0]?.site || "Site Specified"
 
                 const row = [
@@ -281,8 +362,8 @@ export function ProjectSchedulePrintModal({
             currentY = (doc as any).lastAutoTable?.finalY + 8
         }
 
-        // 5. Render Detailed Task Table (if TABLE or COMBINED)
-        if ((graphType === "TABLE" || graphType === "COMBINED") && currentY < 240) {
+        // 5. Render Detailed Task Table (if TABLE)
+        if (graphType === "TABLE" && currentY < 240) {
             const tableHead = ['#', 'PROJECT & SCOPE OF WORK', 'SITE', 'STATUS']
             if (showFinancials) tableHead.push('EST. WORTH')
 
@@ -408,6 +489,7 @@ export function ProjectSchedulePrintModal({
                     {/* LEFT CONTROLS (5 cols) */}
                     <div className="lg:col-span-5 border-r border-white/10 p-4 md:p-6 overflow-y-auto space-y-5 bg-[#0E0E18]">
                         {/* 1. Schedule Graph / Layout Selector */}
+                        {/* 1. Layout Style Selection (Gantt, Planner Matrix, Table) */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
@@ -415,20 +497,7 @@ export function ProjectSchedulePrintModal({
                                 </Label>
                                 <span className="text-[9px] font-bold text-gray-400">Print Style</span>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setGraphType("COMBINED")}
-                                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                                        graphType === "COMBINED" ? "bg-primary/10 border-primary text-white shadow-lg" : "bg-white/5 border-white/5 text-gray-400 hover:text-white"
-                                    }`}
-                                >
-                                    <div className="text-xs font-black flex items-center gap-1.5">
-                                        <span>🌟 Combined (Graph + Table)</span>
-                                    </div>
-                                    <p className="text-[10px] text-muted-foreground mt-0.5">Timeline graph on top + full task details below</p>
-                                </button>
-
+                            <div className="grid grid-cols-3 gap-2">
                                 <button
                                     type="button"
                                     onClick={() => setGraphType("GANTT")}
@@ -437,9 +506,9 @@ export function ProjectSchedulePrintModal({
                                     }`}
                                 >
                                     <div className="text-xs font-black flex items-center gap-1.5">
-                                        <span>📊 Timeline Schedule (Gantt)</span>
+                                        <span>📊 Timeline Schedule</span>
                                     </div>
-                                    <p className="text-[10px] text-muted-foreground mt-0.5">Visual bars: Busy Now, This Week, Next Week</p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">Visual weekly bars: Busy &amp; Scheduled</p>
                                 </button>
 
                                 <button
@@ -450,9 +519,9 @@ export function ProjectSchedulePrintModal({
                                     }`}
                                 >
                                     <div className="text-xs font-black flex items-center gap-1.5">
-                                        <span>📅 Weekly Planner Matrix</span>
+                                        <span>📅 Weekly Planner</span>
                                     </div>
-                                    <p className="text-[10px] text-muted-foreground mt-0.5">3 Columns: Busy, This Week, This Month</p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">3 Columns: Busy, This Week, Month</p>
                                 </button>
 
                                 <button
@@ -463,9 +532,9 @@ export function ProjectSchedulePrintModal({
                                     }`}
                                 >
                                     <div className="text-xs font-black flex items-center gap-1.5">
-                                        <span>📋 Detailed Scope Table</span>
+                                        <span>📋 Scope Table</span>
                                     </div>
-                                    <p className="text-[10px] text-muted-foreground mt-0.5">Line items, quantities, and site locations</p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">Task details, sites, quantities</p>
                                 </button>
                             </div>
                         </div>
@@ -511,7 +580,7 @@ export function ProjectSchedulePrintModal({
                             <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                                 3. Stages to Include
                             </Label>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-3 gap-2">
                                 <div className="flex items-center space-x-2 bg-white/5 p-2 rounded-lg border border-white/5 cursor-pointer" onClick={() => setIncludeScheduled(!includeScheduled)}>
                                     <Checkbox checked={includeScheduled} onCheckedChange={() => setIncludeScheduled(!includeScheduled)} />
                                     <Label className="text-xs font-bold text-white cursor-pointer">Scheduled / Quoted</Label>
@@ -523,10 +592,6 @@ export function ProjectSchedulePrintModal({
                                 <div className="flex items-center space-x-2 bg-white/5 p-2 rounded-lg border border-white/5 cursor-pointer" onClick={() => setIncludeApproval(!includeApproval)}>
                                     <Checkbox checked={includeApproval} onCheckedChange={() => setIncludeApproval(!includeApproval)} />
                                     <Label className="text-xs font-bold text-gray-300 cursor-pointer">Waiting Approval</Label>
-                                </div>
-                                <div className="flex items-center space-x-2 bg-white/5 p-2 rounded-lg border border-white/5 cursor-pointer" onClick={() => setIncludeAwaitingPayment(!includeAwaitingPayment)}>
-                                    <Checkbox checked={includeAwaitingPayment} onCheckedChange={() => setIncludeAwaitingPayment(!includeAwaitingPayment)} />
-                                    <Label className="text-xs font-bold text-gray-300 cursor-pointer">Awaiting Payment</Label>
                                 </div>
                             </div>
                         </div>
@@ -564,7 +629,7 @@ export function ProjectSchedulePrintModal({
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 pt-1">
+                            <div className="grid grid-cols-3 gap-2 pt-1">
                                 <div className="flex items-center space-x-2 bg-black/20 p-2 rounded-lg border border-white/5 cursor-pointer" onClick={() => setShowScope(!showScope)}>
                                     <Checkbox checked={showScope} onCheckedChange={() => setShowScope(!showScope)} />
                                     <Label className="text-xs font-bold text-white cursor-pointer">Show Scope / Tasks</Label>
@@ -577,13 +642,6 @@ export function ProjectSchedulePrintModal({
                                     <Checkbox checked={showClient} onCheckedChange={() => setShowClient(!showClient)} />
                                     <Label className="text-xs font-bold text-white cursor-pointer">Show Client Name</Label>
                                 </div>
-                                {/* HIDE reactive work option on Tender */}
-                                {workTypeFilter !== 'TENDER' && (
-                                    <div className="flex items-center space-x-2 bg-black/20 p-2 rounded-lg border border-white/5 cursor-pointer" onClick={() => setShowCommercialStatus(!showCommercialStatus)}>
-                                        <Checkbox checked={showCommercialStatus} onCheckedChange={() => setShowCommercialStatus(!showCommercialStatus)} />
-                                        <Label className="text-xs font-bold text-white cursor-pointer">Show Reactive Flag</Label>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
@@ -707,7 +765,7 @@ export function ProjectSchedulePrintModal({
                                 </div>
 
                                 {/* OPTION A: TIMELINE SCHEDULE GRAPH (GANTT CHART) */}
-                                {(graphType === "GANTT" || graphType === "COMBINED") && (
+                                {graphType === "GANTT" && (
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-xs font-black uppercase tracking-wider text-[#14141E] flex items-center gap-1.5">
@@ -739,17 +797,18 @@ export function ProjectSchedulePrintModal({
                                                             🔵 Next Week
                                                         </th>
                                                         <th className="py-2.5 px-1.5 text-center w-28 border-l border-white/10 text-amber-300">
-                                                            🟠 This Month
+                                                            🟠 Later Month
                                                         </th>
                                                         {showFinancials && <th className="py-2.5 px-2 text-right w-24 border-l border-white/10">Amount</th>}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-200 bg-white">
                                                     {finalProjects.map((p, idx) => {
-                                                        const isBusy = p.status === 'IN_PROGRESS'
-                                                        const isThisWeek = p.status === 'SCHEDULED' && idx % 2 === 0
-                                                        const isNextWeek = p.status === 'SCHEDULED' && idx % 2 !== 0
-                                                        const isLater = !['IN_PROGRESS', 'SCHEDULED'].includes(p.status)
+                                                        const bucket = getProjectScheduleBucket(p)
+                                                        const isBusy = bucket === 'BUSY_NOW'
+                                                        const isThisWeek = bucket === 'THIS_WEEK'
+                                                        const isNextWeek = bucket === 'NEXT_WEEK'
+                                                        const isLater = bucket === 'WEEK_3' || bucket === 'MONTH_LATER' || (!isBusy && !isThisWeek && !isNextWeek)
                                                         const site = p.invoices?.[0]?.site || p.scopes?.[0]?.site || "Site Specified"
                                                         const inv = p.invoices?.[0]
                                                         const wbp = p.workBreakdowns?.[0]
@@ -790,7 +849,7 @@ export function ProjectSchedulePrintModal({
                                                                         </div>
                                                                     ) : <div className="h-0.5 w-6 bg-slate-200 mx-auto" />}
                                                                 </td>
-                                                                {/* This Month */}
+                                                                {/* This Month / Later */}
                                                                 <td className="py-2 px-1 text-center bg-amber-50/20 border-l border-slate-200">
                                                                     {isLater ? (
                                                                         <div className="py-1 px-1.5 rounded bg-amber-500 text-black font-black text-[8px] uppercase tracking-wider shadow-sm">
@@ -887,7 +946,7 @@ export function ProjectSchedulePrintModal({
                                 )}
 
                                 {/* OPTION C: DETAILED SCOPE OF WORK & TASKS TABLE */}
-                                {(graphType === "TABLE" || graphType === "COMBINED") && (
+                                {graphType === "TABLE" && (
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-xs font-black uppercase tracking-wider text-[#14141E] flex items-center gap-1.5">
@@ -928,19 +987,13 @@ export function ProjectSchedulePrintModal({
                                                                             Client: {p.client.name}
                                                                         </div>
                                                                     )}
-                                                                    <div className="flex items-center gap-1.5 mt-1">
-                                                                        {isTender && (
+                                                                    {isTender && (
+                                                                        <div className="mt-1">
                                                                             <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
                                                                                 TENDER 152G
                                                                             </span>
-                                                                        )}
-                                                                        {/* Only show reactive if NOT tender */}
-                                                                        {!isTender && isReactive && showCommercialStatus && (
-                                                                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-300">
-                                                                                REACTIVE WORK
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
+                                                                        </div>
+                                                                    )}
                                                                     {/* Scope Tasks */}
                                                                     {showScope && scopeItems.length > 0 && (
                                                                         <div className="mt-1.5 pl-2 border-l-2 border-slate-300 space-y-0.5 text-[10px] text-slate-600">

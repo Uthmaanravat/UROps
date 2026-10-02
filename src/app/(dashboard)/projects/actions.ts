@@ -101,3 +101,39 @@ export async function updateProjectCommercialStatus(id: string, commercialStatus
         return { success: false, error: "Failed to update commercial status" }
     }
 }
+
+export async function updateProjectSchedule(
+    id: string,
+    data: {
+        startDate?: Date | string | null
+        endDate?: Date | string | null
+        status?: string
+    }
+) {
+    const companyId = await ensureAuth()
+    try {
+        const updateData: any = {}
+        if (data.startDate !== undefined) {
+            updateData.startDate = data.startDate ? new Date(data.startDate) : null
+        }
+        if (data.endDate !== undefined) {
+            updateData.endDate = data.endDate ? new Date(data.endDate) : null
+        }
+        if (data.status) {
+            updateData.status = data.status
+        }
+
+        const project = await prisma.project.update({
+            where: { id, companyId },
+            data: updateData
+        })
+
+        revalidatePath("/projects")
+        revalidatePath(`/projects/${id}`)
+        return { success: true, data: project }
+    } catch (error) {
+        console.error("Error updating project schedule:", error)
+        return { success: false, error: "Failed to update project schedule" }
+    }
+}
+
