@@ -31,6 +31,7 @@ import { InfoTooltip } from "@/components/ui/InfoTooltip"
 import { saveDraft, getDraft, clearDraft } from "@/lib/drafts"
 import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
 import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
+import { CreateCreditNoteModal } from "@/components/credit-notes/CreateCreditNoteModal"
 
 
 export function InvoiceViewer({ 
@@ -91,21 +92,40 @@ export function InvoiceViewer({
     const [selectedTenderId, setSelectedTenderId] = useState<string>(
         invoice.tenderId || (tenders.length > 0 ? tenders[0].id : "")
     );
-    const [manualRateYear, setManualRateYear] = useState<number | null>(invoice.rateYear || null);
+    const [rateYear, setRateYear] = useState<1 | 2 | 3>((invoice.rateYear as 1 | 2 | 3) || 1);
     const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
     const [showCatalogPanel, setShowCatalogPanel] = useState(false);
     const [rawCatalog, setRawCatalog] = useState<any[]>([]);
+    const [isCreditNoteModalOpen, setIsCreditNoteModalOpen] = useState(false);
 
     const activeTender = useMemo(() => {
         return tenders.find((t: any) => t.id === selectedTenderId) || invoice.tender || tenders[0];
     }, [tenders, selectedTenderId, invoice.tender]);
 
-    const autoRateYear = useMemo(() => {
-        if (!activeTender || !activeTender.startDate) return 1;
-        return calculateTenderRateYear(activeTender.startDate, new Date(date));
-    }, [activeTender, date]);
+    const effectiveRateYear = rateYear;
 
-    const effectiveRateYear = manualRateYear ?? autoRateYear;
+    const handleRateYearChange = (newYear: 1 | 2 | 3) => {
+        setRateYear(newYear);
+        const currentItems = itemsRef.current || items;
+        const updated = currentItems.map((item: any) => {
+            if (!item.code || !item.isLocked) return item;
+            const catItem = rawCatalog.find((c: any) => c.code?.trim().toUpperCase() === item.code?.trim().toUpperCase());
+            if (!catItem) return item;
+            let price = catItem.unitPrice || 0;
+            if (newYear === 1) price = catItem.year1Price ?? catItem.unitPrice ?? 0;
+            else if (newYear === 2) price = catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0;
+            else if (newYear === 3) price = catItem.year3Price ?? catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0;
+            const qty = item.quantity || 1;
+            return {
+                ...item,
+                unitPrice: price,
+                total: qty * price,
+                rateYear: newYear
+            };
+        });
+        itemsRef.current = updated;
+        setItems(updated);
+    };
 
     useEffect(() => {
         const loadCatalog = async () => {
@@ -746,9 +766,9 @@ export function InvoiceViewer({
         if (!confirm("Approve this Quote? This will lock it and generate a Draft Invoice.")) return;
         setLoading(true);
         await saveChanges();
-        await convertToInvoiceAction(invoice.id);
+        const newInvoiceId = await convertToInvoiceAction(invoice.id);
         setLoading(false);
-        router.refresh(); // Refresh to show new status
+        router.push(`/invoices/${newInvoiceId}`);
     }
 
     // Default company details if not set
@@ -1552,13 +1572,14 @@ export function InvoiceViewer({
         }
 
         try {
-            await convertToInvoiceAction(invoice.id, convertPoNumber || undefined, finalPct);
+            const newInvoiceId = await convertToInvoiceAction(invoice.id, convertPoNumber || undefined, finalPct);
+            setIsConvertDialogOpen(false);
+            setLoading(false);
+            router.push(`/invoices/${newInvoiceId}`);
         } catch (error) {
             console.error(error);
-            alert("Failed to convert quotation.");
-        } finally {
+            alert("Failed to convert quotation: " + (error instanceof Error ? error.message : String(error)));
             setLoading(false);
-            router.refresh();
         }
     }
 
@@ -1636,6 +1657,35 @@ export function InvoiceViewer({
                             </Button>
                         </Link>
                     )}
+                </div>
+            )}
+
+            {invoice.type === 'INVOICE' && invoice.creditNotes && invoice.creditNotes.length > 0 && (
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-rose-300 shadow-lg backdrop-blur-sm">
+                    <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-rose-500/20 flex items-center justify-center shrink-0 text-rose-400">
+                            <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <div className="font-bold text-sm text-white flex items-center gap-2">
+                                Tax Credit Note Issued
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">SARS Credit</span>
+                            </div>
+                            <p className="text-xs text-rose-300/80">
+                                This invoice has {invoice.creditNotes.length} associated Tax Credit Note(s).
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {invoice.creditNotes.map((cn: any) => (
+                            <Link key={cn.id} href={`/credit-notes/${cn.id}`} className="shrink-0">
+                                <Button size="sm" className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5">
+                                    View Credit Note ({cn.creditNoteNumber || `CN-${String(cn.number).padStart(3, '0')}`})
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                </Button>
+                            </Link>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -1833,6 +1883,17 @@ export function InvoiceViewer({
                                     <Lock className="mr-2 h-4 w-4" /> Mark as Paid (Lock)
                                 </Button>
                             )
+                        )}
+
+                        {invoice.type === 'INVOICE' && (
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsCreditNoteModalOpen(true)}
+                                className="border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-black uppercase tracking-widest text-[10px] h-12 px-5 rounded-xl flex items-center gap-1.5"
+                                title="Issue a SARS-compliant Tax Credit Note against this invoice"
+                            >
+                                <FileText className="h-4 w-4 text-rose-400" /> Credit Note
+                            </Button>
                         )}
 
                         {invoice.status !== 'PAID' && (
@@ -2045,7 +2106,7 @@ export function InvoiceViewer({
                                         <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Rate Year</span>
                                         <select
                                             value={effectiveRateYear}
-                                            onChange={(e) => setManualRateYear(Number(e.target.value))}
+                                            onChange={(e) => handleRateYearChange(Number(e.target.value) as 1 | 2 | 3)}
                                             onBlur={saveChanges}
                                             className="bg-transparent border-none text-right font-bold text-amber-300 outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
                                             disabled={isLocked}
@@ -2656,6 +2717,17 @@ export function InvoiceViewer({
                     onOpenChange={setIsBulkImportOpen}
                     onImport={handleBulkImport}
                     currentCount={items.length}
+                />
+
+                {/* Create Credit Note Modal */}
+                <CreateCreditNoteModal
+                    isOpen={isCreditNoteModalOpen}
+                    onClose={() => setIsCreditNoteModalOpen(false)}
+                    clients={[invoice.client]}
+                    invoices={[invoice]}
+                    tenders={tenders}
+                    initialInvoiceId={invoice.id}
+                    initialClientId={invoice.clientId}
                 />
             </div>
         </div>

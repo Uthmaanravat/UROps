@@ -46,7 +46,7 @@ export default async function InvoicesPage({
             if (statusFilter) {
                 return { status: statusFilter as any };
             }
-            return { status: { notIn: ['PAID', 'CANCELLED'] as const } };
+            return { status: { not: 'CANCELLED' as const } };
         };
 
         const workTypePrismaCondition = () => {
@@ -81,6 +81,9 @@ export default async function InvoicesPage({
                 client: true, 
                 payments: true, 
                 tender: true,
+                creditNotes: {
+                    select: { id: true, creditNoteNumber: true, total: true, status: true }
+                },
                 project: {
                     include: {
                         invoices: {
@@ -462,15 +465,26 @@ export default async function InvoicesPage({
                                                     </span>
                                                 )
                                             ) : (
-                                                <span className={cn(
-                                                    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                                                    isPaid ? "bg-green-500/10 text-green-400 border border-green-500/20" :
-                                                    invoice.status === 'CHECKED' ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" :
-                                                    invoice.status === 'DRAFT' ? "bg-gray-500/10 text-gray-400 border border-gray-500/20" :
-                                                    "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
-                                                )}>
-                                                    {isPaid ? "PAID" : (invoice.status === 'CHECKED' ? "VERIFIED" : invoice.status)}
-                                                </span>
+                                                <div className="flex flex-col gap-1 items-start">
+                                                    <span className={cn(
+                                                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                                                        isPaid ? "bg-green-500/10 text-green-400 border border-green-500/20" :
+                                                        invoice.status === 'CHECKED' ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" :
+                                                        invoice.status === 'DRAFT' ? "bg-gray-500/10 text-gray-400 border border-gray-500/20" :
+                                                        "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
+                                                    )}>
+                                                        {isPaid ? "PAID" : (invoice.status === 'CHECKED' ? "VERIFIED" : invoice.status)}
+                                                    </span>
+                                                    {invoice.creditNotes && invoice.creditNotes.length > 0 && (
+                                                        <Link
+                                                            href={`/credit-notes/${invoice.creditNotes[0].id}`}
+                                                            className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-rose-400 hover:text-rose-300 hover:underline pl-0.5"
+                                                            title="View Tax Credit Note"
+                                                        >
+                                                            <span>CN: {invoice.creditNotes[0].creditNoteNumber}</span>
+                                                        </Link>
+                                                    )}
+                                                </div>
                                             )}
                                         </td>
                                         <td className="p-4 align-middle">{new Date(invoice.date).toLocaleDateString()}</td>

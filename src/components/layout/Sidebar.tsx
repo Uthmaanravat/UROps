@@ -32,7 +32,7 @@ const navigation = [
         title: "Projects",
         icon: Briefcase,
         items: [
-            { title: "Operations Board", href: "/projects" },
+            { title: "All Projects / Jobs", href: "/projects" },
             { title: "Scope of Work", href: "/work-breakdown-pricing" },
         ]
     },
@@ -42,6 +42,7 @@ const navigation = [
         items: [
             { title: "Quotations", href: "/invoices?type=QUOTE" },
             { title: "Invoices", href: "/invoices?type=INVOICE" },
+            { title: "Credit Notes", href: "/credit-notes" },
             { title: "Tender 152G", href: "/tenders" },
             { title: "Payments", href: "/payments" },
         ]

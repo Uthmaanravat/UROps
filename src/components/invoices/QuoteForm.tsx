@@ -90,14 +90,49 @@ export function QuoteForm({
     // Date state
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
 
-    // Rate Year (calculated automatically, with manual override)
-    const [manualRateYear, setManualRateYear] = useState<number | null>(null)
-    const autoRateYear = useMemo(() => {
-        if (!activeTender?.startDate) return 1
-        return calculateTenderRateYear(activeTender.startDate, date)
-    }, [activeTender?.startDate, date])
+    // Rate Year: Default to Year 1 (persists user choice so it stays on Year 1 until changed)
+    const [rateYear, setRateYear] = useState<1 | 2 | 3>(1)
 
-    const effectiveRateYear = manualRateYear ?? autoRateYear
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem("tender_preferred_rate_year")
+            if (saved === "1" || saved === "2" || saved === "3") {
+                setRateYear(Number(saved) as 1 | 2 | 3)
+            }
+        } catch {}
+    }, [])
+
+    const effectiveRateYear = rateYear
+
+    const handleRateYearChange = (newYear: 1 | 2 | 3) => {
+        setRateYear(newYear)
+        try {
+            localStorage.setItem("tender_preferred_rate_year", String(newYear))
+        } catch {}
+
+        // Immediately update any tender line items already on the quote to the selected year's rate
+        setItems((prevItems) =>
+            prevItems.map((item) => {
+                if (!item.code || !item.isLocked) return item
+                const catItem = rawCatalog.find(
+                    (c: any) => c.code?.trim().toUpperCase() === item.code?.trim().toUpperCase()
+                )
+                if (!catItem) return item
+                let newPrice = catItem.unitPrice || 0
+                if (newYear === 1) newPrice = catItem.year1Price ?? catItem.unitPrice ?? 0
+                else if (newYear === 2) newPrice = catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0
+                else if (newYear === 3) newPrice = catItem.year3Price ?? catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0
+
+                const qty = item.quantity || 1
+                return {
+                    ...item,
+                    unitPrice: newPrice,
+                    total: qty * newPrice,
+                    rateYear: newYear
+                }
+            })
+        )
+    }
 
     // Client & Project selection
     const [clientId, setClientId] = useState(
@@ -185,7 +220,7 @@ export function QuoteForm({
                 }
                 if (d.workType) setWorkType(d.workType)
                 if (d.selectedTenderId) setSelectedTenderId(d.selectedTenderId)
-                if (d.manualRateYear) setManualRateYear(d.manualRateYear)
+                if (d.rateYear || d.manualRateYear) setRateYear(Number(d.rateYear || d.manualRateYear) as 1 | 2 | 3)
                 if (d.paymentNotes) setPaymentNotes(d.paymentNotes)
                 if (d.firstPaymentOption) setFirstPaymentOption(d.firstPaymentOption)
                 if (d.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(d.customFirstPaymentPercentage)
@@ -248,7 +283,7 @@ export function QuoteForm({
                     date,
                     workType,
                     selectedTenderId,
-                    manualRateYear,
+                    rateYear,
                     items,
                     site,
                     quoteNumber,
@@ -268,7 +303,7 @@ export function QuoteForm({
 
         return () => clearTimeout(timer)
     }, [
-        clientId, projectId, date, workType, selectedTenderId, manualRateYear, items,
+        clientId, projectId, date, workType, selectedTenderId, rateYear, items,
         site, quoteNumber, reference, projectName, paymentNotes, firstPaymentOption,
         customFirstPaymentPercentage, showPaymentNotes, contactId, attentionTo,
         submitted, STORAGE_KEY, clients, docType
@@ -512,30 +547,20 @@ export function QuoteForm({
                                         </select>
                                     )}
 
-                                    {/* 3-Year Rate Label & Manual Override */}
+                                    {/* 3-Year Rate Label & Selector */}
                                     <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl">
                                         <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
                                             Rate Period:
                                         </span>
                                         <select
-                                            value={effectiveRateYear}
-                                            onChange={(e) => setManualRateYear(Number(e.target.value) as 1 | 2 | 3)}
+                                            value={rateYear}
+                                            onChange={(e) => handleRateYearChange(Number(e.target.value) as 1 | 2 | 3)}
                                             className="bg-transparent text-amber-400 font-black text-xs border-none focus:outline-none cursor-pointer"
                                         >
                                             <option value={1} className="bg-[#14141E] text-white">Year 1 Rate (2025/26)</option>
                                             <option value={2} className="bg-[#14141E] text-white">Year 2 Rate (2026/27)</option>
                                             <option value={3} className="bg-[#14141E] text-white">Year 3 Rate (2027/28)</option>
                                         </select>
-                                        {manualRateYear !== null && manualRateYear !== autoRateYear && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setManualRateYear(null)}
-                                                className="text-[9px] text-amber-400/80 hover:text-white underline ml-1"
-                                                title="Reset to auto-calculated rate based on document date"
-                                            >
-                                                (reset to auto: Y{autoRateYear})
-                                            </button>
-                                        )}
                                     </div>
 
                                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30">

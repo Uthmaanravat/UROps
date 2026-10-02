@@ -27,6 +27,9 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                 },
                 payments: true,
                 tender: true,
+                creditNotes: {
+                    orderBy: { createdAt: 'desc' }
+                },
                 unlockLogs: {
                     orderBy: { createdAt: 'desc' }
                 },

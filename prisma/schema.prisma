@@ -35,6 +35,7 @@ model Company {
   prospects      Prospect[]
   tenders        Tender[]
   unlockLogs     UnlockLog[]
+  creditNotes    CreditNote[]
 }
 
 model User {
@@ -51,85 +52,89 @@ model User {
 }
 
 model CompanySettings {
-  id                String   @id @default(uuid())
-  name              String   @default("My Company")
-  address           String?
-  phone             String?
-  email             String?
-  website           String?
-  slogan            String?
-  logoUrl           String?
-  taxId             String?
-  bankDetails       String?
-  paymentTerms      String?
-  currency          String   @default("R")
-  theme             String   @default("dark")
-  layoutPreferences Json?
-  updatedAt         DateTime @updatedAt
-  aiEnabled         Boolean  @default(true)
-  companyId         String   @unique
-  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  lastQuoteNumber   Int      @default(0)
-  lastInvoiceNumber Int      @default(0)
-  lastStatementNumber Int    @default(0)
+  id                   String   @id @default(uuid())
+  name                 String   @default("My Company")
+  address              String?
+  phone                String?
+  email                String?
+  website              String?
+  slogan               String?
+  logoUrl              String?
+  taxId                String?
+  bankDetails          String?
+  paymentTerms         String?
+  currency             String   @default("R")
+  theme                String   @default("dark")
+  layoutPreferences    Json?
+  updatedAt            DateTime @updatedAt
+  aiEnabled            Boolean  @default(true)
+  companyId            String   @unique
+  company              Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lastQuoteNumber      Int      @default(0)
+  lastInvoiceNumber    Int      @default(0)
+  lastStatementNumber  Int      @default(0)
+  lastCreditNoteNumber Int      @default(0)
 }
 
 model Client {
-  id                 String          @id @default(uuid())
-  name               String
-  companyName        String?
-  attentionTo        String?
-  email              String?
-  phone              String?
-  address            String?
-  vatNumber          String?
-  registrationNumber String?
-  vendorNumber       String?
-  notes              String?
-  tags               String[]        @default([])
-  customFields       Json?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  companyId          String
-  codePrefix         String?
-  lastQuoteNumber    Int             @default(0)
-  lastInvoiceNumber  Int             @default(0)
-  lastStatementNumber Int            @default(0)
-  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  interactions       Interaction[]
-  invoices           Invoice[]
-  meetings           Meeting[]
-  projects           Project[]
-  submissionLogs     SubmissionLog[]
-  reports            Report[]
-  statements         Statement[]
-  fixedItems         FixedPriceItem[]
-  contacts           ClientContact[]
-  tenders            Tender[]
+  id                   String           @id @default(uuid())
+  name                 String
+  companyName          String?
+  attentionTo          String?
+  email                String?
+  phone                String?
+  address              String?
+  vatNumber            String?
+  registrationNumber   String?
+  vendorNumber         String?
+  notes                String?
+  tags                 String[]         @default([])
+  customFields         Json?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  companyId            String
+  codePrefix           String?
+  lastQuoteNumber      Int              @default(0)
+  lastInvoiceNumber    Int              @default(0)
+  lastStatementNumber  Int              @default(0)
+  lastCreditNoteNumber Int              @default(0)
+  company              Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  interactions         Interaction[]
+  invoices             Invoice[]
+  meetings             Meeting[]
+  projects             Project[]
+  submissionLogs       SubmissionLog[]
+  reports              Report[]
+  statements           Statement[]
+  fixedItems           FixedPriceItem[]
+  contacts             ClientContact[]
+  tenders              Tender[]
+  creditNotes          CreditNote[]
 }
 
 model Project {
-  id               String           @id @default(uuid())
+  id               String                 @id @default(uuid())
   name             String
   description      String?
-  status           ProjectStatus    @default(PLANNING)
-  workflowStage    WorkflowStage    @default(SOW)
-  commercialStatus CommercialStatus @default(AWAITING_PO)
+  status           ProjectStatus          @default(PLANNING)
+  workflowStage    WorkflowStage          @default(SOW)
+  commercialStatus CommercialStatus       @default(AWAITING_PO)
   startDate        DateTime?
   endDate          DateTime?
   clientId         String
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
   companyId        String
   invoices         Invoice[]
   meetings         Meeting[]
-  client           Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client           Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company          Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   scopes           ScopeOfWork[]
   submissionLogs   SubmissionLog[]
   workBreakdowns   WorkBreakdownPricing[]
   reports          Report[]
   lead             Lead?
+  creditNotes      CreditNote[]
 }
 
 model ScopeOfWork {
@@ -224,57 +229,58 @@ model Meeting {
 }
 
 model Invoice {
-  id             String                @id @default(uuid())
-  number         Int                   @default(autoincrement())
-  type           InvoiceType           @default(QUOTE)
-  status         InvoiceStatus         @default(DRAFT)
-  date           DateTime              @default(now())
-  dueDate        DateTime?
-  clientId       String
-  projectId      String?
-  wbpId          String?
-  contactId      String?
-  attentionTo    String?
-  subtotal       Float                 @default(0)
-  taxRate        Float                 @default(0.15)
-  taxAmount      Float                 @default(0)
-  total          Float                 @default(0)
-  notes          String?
-  site           String?
-  quoteNumber    String?
-  reference      String?
-  clientPoNumber String?
-  paymentNotes   String?
+  id                     String                @id @default(uuid())
+  number                 Int                   @default(autoincrement())
+  type                   InvoiceType           @default(QUOTE)
+  status                 InvoiceStatus         @default(DRAFT)
+  date                   DateTime              @default(now())
+  dueDate                DateTime?
+  clientId               String
+  projectId              String?
+  wbpId                  String?
+  contactId              String?
+  attentionTo            String?
+  subtotal               Float                 @default(0)
+  taxRate                Float                 @default(0.15)
+  taxAmount              Float                 @default(0)
+  total                  Float                 @default(0)
+  notes                  String?
+  site                   String?
+  quoteNumber            String?
+  reference              String?
+  clientPoNumber         String?
+  paymentNotes           String?
   firstPaymentPercentage Float?
-  workType       String                @default("GENERAL")
-  rateYear       Int                   @default(1)
-  tenderId       String?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  companyId      String
-  client         Client                @relation(fields: [clientId], references: [id])
-  company        Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project        Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tender         Tender?               @relation(fields: [tenderId], references: [id], onDelete: SetNull)
-  wbp            WorkBreakdownPricing? @relation(fields: [wbpId], references: [id])
-  contact        ClientContact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  items          InvoiceItem[]
-  payments       Payment[]
-  unlockLogs     UnlockLog[]
+  workType               String                @default("GENERAL")
+  rateYear               Int                   @default(1)
+  tenderId               String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  companyId              String
+  client                 Client                @relation(fields: [clientId], references: [id])
+  company                Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project                Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tender                 Tender?               @relation(fields: [tenderId], references: [id], onDelete: SetNull)
+  wbp                    WorkBreakdownPricing? @relation(fields: [wbpId], references: [id])
+  contact                ClientContact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  items                  InvoiceItem[]
+  payments               Payment[]
+  unlockLogs             UnlockLog[]
+  creditNotes            CreditNote[]
 }
 
 model Statement {
-  id             String   @id @default(uuid())
-  number         Int      @default(autoincrement())
+  id              String   @id @default(uuid())
+  number          Int      @default(autoincrement())
   statementNumber String?
-  date           DateTime @default(now())
-  clientId       String
-  totalDue       Float    @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  companyId      String
-  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  date            DateTime @default(now())
+  clientId        String
+  totalDue        Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  companyId       String
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model InvoiceItem {
@@ -361,41 +367,41 @@ model SubmissionLog {
 }
 
 model Report {
-  id          String       @id @default(uuid())
-  number      Int          @default(autoincrement())
-  title       String
-  description String?
-  conclusion  String?
-  date        DateTime     @default(now())
-  clientId    String?
-  projectId   String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  companyId   String
-  client      Client?      @relation(fields: [clientId], references: [id])
-  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  type        String       @default("BASIC")
-  metadata    Json?
-  coverImage  String?      // Optional hero/cover image (URL or base64)
-  selectedSections Json?   // Array of section identifiers (e.g., ["overview","progress","safety"])
-  sectionOrder Json?       // Ordered list of sections for PDF generation
-  items       ReportItem[]
+  id               String       @id @default(uuid())
+  number           Int          @default(autoincrement())
+  title            String
+  description      String?
+  conclusion       String?
+  date             DateTime     @default(now())
+  clientId         String?
+  projectId        String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  companyId        String
+  client           Client?      @relation(fields: [clientId], references: [id])
+  project          Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company          Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type             String       @default("BASIC")
+  metadata         Json?
+  coverImage       String? // Optional hero/cover image (URL or base64)
+  selectedSections Json? // Array of section identifiers (e.g., ["overview","progress","safety"])
+  sectionOrder     Json? // Ordered list of sections for PDF generation
+  items            ReportItem[]
 }
 
 model ReportItem {
-  id          String   @id @default(uuid())
-  reportId    String
-  title       String?
+  id             String   @id @default(uuid())
+  reportId       String
+  title          String?
   description    String
-  imageUrl       String? 
+  imageUrl       String?
   imageUrls      String[] @default([])
   location       String?
   severity       String?
   recommendation String?
   order          Int      @default(0)
   createdAt      DateTime @default(now())
-  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report         Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 }
 
 enum Role {
@@ -470,10 +476,10 @@ model Transaction {
   companyId   String
   date        DateTime
   description String
-  amount      Float           // Absolute value
+  amount      Float // Absolute value
   type        TransactionType // INCOME, EXPENSE
   category    String?
-  source      String?         // E.g., 'Bank Upload', 'Manual'
+  source      String? // E.g., 'Bank Upload', 'Manual'
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -499,52 +505,52 @@ model ClientContact {
 }
 
 model Lead {
-  id                     String    @id @default(uuid())
-  latitude               Float
-  longitude              Float
-  address                String?
-  companyName            String?
-  contactName            String?
-  contactEmail           String?
-  biologicalGrowthScore  Float     @default(0)
-  surfaceStainingScore   Float     @default(0)
-  maxConfidenceScore     Float     @default(0)
-  satelliteImageUrl      String?
-  processedImageUrl      String?
-  pdfReportUrl           String?
-  status                 String    @default("discovered")
-  outreachAttempts       Int       @default(0)
-  lastOutreachAt         DateTime?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
-  companyId              String
-  company                Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
+  id                    String    @id @default(uuid())
+  latitude              Float
+  longitude             Float
+  address               String?
+  companyName           String?
+  contactName           String?
+  contactEmail          String?
+  biologicalGrowthScore Float     @default(0)
+  surfaceStainingScore  Float     @default(0)
+  maxConfidenceScore    Float     @default(0)
+  satelliteImageUrl     String?
+  processedImageUrl     String?
+  pdfReportUrl          String?
+  status                String    @default("discovered")
+  outreachAttempts      Int       @default(0)
+  lastOutreachAt        DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  companyId             String
+  company               Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   // Job links & timeline
-  projectId              String?   @unique
-  project                Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  history                Json?
-  
+  projectId String?  @unique
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  history   Json?
+
   // Pricing & Quote settings
-  estimatedArea          Float     @default(500)
-  roofPitch              String    @default("medium") // flat, medium, steep
-  serviceType            String    @default("standard") // standard, chemical, solar
-  highDust               Boolean   @default(false)
-  streetViewImageUrl     String?
+  estimatedArea      Float   @default(500)
+  roofPitch          String  @default("medium") // flat, medium, steep
+  serviceType        String  @default("standard") // standard, chemical, solar
+  highDust           Boolean @default(false)
+  streetViewImageUrl String?
 
   // Window Cleaning & Drone Window washing metrics
-  windowHaziness       Float     @default(0.0) // haziness_% (0 to 100)
-  visibleStreaks       Int       @default(0) // visible_streak_count (int)
-  spotCoverage         Float     @default(0.0) // spot_coverage_% (0 to 100)
-  frameDirtScore       Float     @default(0.0) // frame_darkness_score (0 to 100)
-  groundFloorPriority  String    @default("LOW") // HIGH, MEDIUM, LOW
-  windowNeedsCleaning  Boolean   @default(false)
-  detectionReason      String?   // Reasons: e.g. "Haziness detected", "Water spots/streaks visible", etc.
-  priorityLevel        String    @default("low") // same-day, high, medium, low
-  buildingType         String?   // retail, restaurant, office, hotel, industrial, apartment, etc.
-  yearBuilt            Int?      // year built (to compute building age)
-  storeys              Int?      // number of storeys/height (3+ storeys only)
-  coastalBonus         Boolean   @default(false)
+  windowHaziness      Float   @default(0.0) // haziness_% (0 to 100)
+  visibleStreaks      Int     @default(0) // visible_streak_count (int)
+  spotCoverage        Float   @default(0.0) // spot_coverage_% (0 to 100)
+  frameDirtScore      Float   @default(0.0) // frame_darkness_score (0 to 100)
+  groundFloorPriority String  @default("LOW") // HIGH, MEDIUM, LOW
+  windowNeedsCleaning Boolean @default(false)
+  detectionReason     String? // Reasons: e.g. "Haziness detected", "Water spots/streaks visible", etc.
+  priorityLevel       String  @default("low") // same-day, high, medium, low
+  buildingType        String? // retail, restaurant, office, hotel, industrial, apartment, etc.
+  yearBuilt           Int? // year built (to compute building age)
+  storeys             Int? // number of storeys/height (3+ storeys only)
+  coastalBonus        Boolean @default(false)
 }
 
 model OptOut {
@@ -558,11 +564,11 @@ model OptOut {
 }
 
 model Prospect {
-  id                   String    @id @default(uuid())
-  seedId               String? // stable id from the fable_37 seed file; null for discoveries
-  name                 String
-  location             String?
-  ownersEntity         String?
+  id           String  @id @default(uuid())
+  seedId       String? // stable id from the fable_37 seed file; null for discoveries
+  name         String
+  location     String?
+  ownersEntity String?
 
   // Contact cascade (property manager -> receptionist -> switchboard)
   propertyManagerName  String?
@@ -572,25 +578,25 @@ model Prospect {
   companyMainPhone     String?
 
   // Building details
-  category             String    @default("Niche") // Water Facing / No Gondola / Heritage / Rooftop Solar / Multiplier / Niche
-  accessMoat           String?
-  whyDronesMatter      String?
-  estimatedValue       String    @default("medium") // low / medium / high / strategic_multiplier
+  category        String  @default("Niche") // Water Facing / No Gondola / Heritage / Rooftop Solar / Multiplier / Niche
+  accessMoat      String?
+  whyDronesMatter String?
+  estimatedValue  String  @default("medium") // low / medium / high / strategic_multiplier
 
   // Tracking
-  status               String    @default("new") // new / contacted / interested / not_interested / follow_up_pending / won / passed
-  firstContactDate     DateTime?
-  lastContactDate      DateTime?
-  nextFollowupDate     DateTime?
-  notes                String    @default("")
-  contactLog           Json? // array of {date, method, outcome, draft_sent}
+  status           String    @default("new") // new / contacted / interested / not_interested / follow_up_pending / won / passed
+  firstContactDate DateTime?
+  lastContactDate  DateTime?
+  nextFollowupDate DateTime?
+  notes            String    @default("")
+  contactLog       Json? // array of {date, method, outcome, draft_sent}
 
-  source               String    @default("user_discovery") // fable_37 / user_discovery / web_research / referral
+  source String @default("user_discovery") // fable_37 / user_discovery / web_research / referral
 
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  companyId            String
-  company              Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, seedId])
 }
@@ -627,22 +633,24 @@ model OutreachTracking {
 }
 
 model Tender {
-  id            String           @id @default(uuid())
-  name          String
-  tenderNumber  String
-  clientId      String
-  startDate     DateTime
-  endDate       DateTime
-  status        String           @default("ACTIVE")
-  quotePrefix   String           @default("CCT-T")
-  invoicePrefix String           @default("CCT-TI")
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  companyId     String
-  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  client        Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  fixedItems    FixedPriceItem[]
-  invoices      Invoice[]
+  id               String           @id @default(uuid())
+  name             String
+  tenderNumber     String
+  clientId         String
+  startDate        DateTime
+  endDate          DateTime
+  status           String           @default("ACTIVE")
+  quotePrefix      String           @default("CCT-T")
+  invoicePrefix    String           @default("CCT-TI")
+  creditNotePrefix String?          @default("CCT-CN")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  companyId        String
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client           Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fixedItems       FixedPriceItem[]
+  invoices         Invoice[]
+  creditNotes      CreditNote[]
 }
 
 model UnlockLog {
@@ -658,4 +666,44 @@ model UnlockLog {
   invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
+model CreditNote {
+  id               String   @id @default(uuid())
+  number           Int      @default(autoincrement())
+  creditNoteNumber String?
+  status           String   @default("ISSUED")
+  date             DateTime @default(now())
+  clientId         String
+  invoiceId        String?
+  projectId        String?
+  tenderId         String?
+  workType         String   @default("GENERAL")
+  reason           String?
+  notes            String?
+  subtotal         Float    @default(0)
+  taxRate          Float    @default(0.15)
+  taxAmount        Float    @default(0)
+  total            Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  companyId        String
 
+  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client  Client           @relation(fields: [clientId], references: [id])
+  invoice Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  project Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tender  Tender?          @relation(fields: [tenderId], references: [id], onDelete: SetNull)
+  items   CreditNoteItem[]
+}
+
+model CreditNoteItem {
+  id           String     @id @default(uuid())
+  creditNoteId String
+  code         String?
+  description  String
+  quantity     Float      @default(1)
+  unit         String?
+  unitPrice    Float      @default(0)
+  total        Float      @default(0)
+  position     Int        @default(0)
+  creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+}
