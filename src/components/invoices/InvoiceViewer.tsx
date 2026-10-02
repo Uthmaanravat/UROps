@@ -103,6 +103,8 @@ export function InvoiceViewer({
     }, [tenders, selectedTenderId, invoice.tender]);
 
     const effectiveRateYear = rateYear;
+    const isTender = workType === "TENDER" || Boolean(invoice.tenderId) || Boolean(invoice.tender);
+    const isCityTender = isTender || Boolean(invoice.client?.name?.toLowerCase().includes("cape town"));
 
     const handleRateYearChange = (newYear: 1 | 2 | 3) => {
         setRateYear(newYear);
@@ -147,9 +149,9 @@ export function InvoiceViewer({
     }, [rawCatalog, workType, selectedTenderId, invoice.clientId]);
 
     const handleAddFromCatalog = (catItem: any) => {
-        const isTender = workType === "TENDER" || Boolean(catItem.tenderId);
+        const isItemTender = isTender || Boolean(catItem.tenderId);
         let price = catItem.unitPrice || 0;
-        if (isTender) {
+        if (isItemTender) {
             if (effectiveRateYear === 1) price = catItem.year1Price ?? catItem.unitPrice ?? 0;
             else if (effectiveRateYear === 2) price = catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0;
             else if (effectiveRateYear === 3) price = catItem.year3Price ?? catItem.year2Price ?? catItem.year1Price ?? catItem.unitPrice ?? 0;
@@ -165,8 +167,8 @@ export function InvoiceViewer({
             total: price,
             area: "",
             reason: "",
-            isLocked: isTender,
-            rateYear: isTender ? effectiveRateYear : undefined
+            isLocked: isItemTender,
+            rateYear: isItemTender ? effectiveRateYear : undefined
         };
 
         const currentList = itemsRef.current || items;
@@ -924,7 +926,7 @@ export function InvoiceViewer({
             doc.text(`REG: ${invoice.client.registrationNumber}`, 85, clientLegalY);
             clientLegalY += 4.5;
         }
-        if (invoice.client.vendorNumber) {
+        if (invoice.client.vendorNumber && !isCityTender) {
             doc.text(`VENDOR: ${invoice.client.vendorNumber}`, 85, clientLegalY);
             clientLegalY += 4.5;
         }
@@ -947,6 +949,15 @@ export function InvoiceViewer({
 
         if (company.vatNumber) {
             doc.text(`VAT: ${company.vatNumber}`, 196, fromY, { align: 'right' });
+            fromY += 4.5;
+        }
+
+        if (isCityTender && invoice.client.vendorNumber) {
+            doc.setTextColor(30, 41, 59);
+            doc.setFont("helvetica", "bold");
+            doc.text(`VENDOR: ${invoice.client.vendorNumber}`, 196, fromY, { align: 'right' });
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(100, 116, 139);
             fromY += 4.5;
         }
 
@@ -987,7 +998,7 @@ export function InvoiceViewer({
             }
 
             if (group.area) {
-                tableBody.push([{ content: group.area.toUpperCase(), colSpan: 6, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 7.5, halign: 'left', cellPadding: 1.5 } }]);
+                tableBody.push([{ content: group.area.toUpperCase(), colSpan: isTender ? 7 : 6, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 7.5, halign: 'left', cellPadding: 1.5 } }]);
             }
             group.items.forEach((item: any, iIdx: number) => {
                 let desc = item.description;
@@ -1003,7 +1014,15 @@ export function InvoiceViewer({
                         desc = `${item.description}\n(Notes: ${item.notes})`;
                     }
                 }
-                tableBody.push([
+                tableBody.push(isTender ? [
+                    globalStartIndex + iIdx + 1,
+                    item.code || '-',
+                    desc,
+                    item.quantity,
+                    item.unit || '',
+                    formatCurrency(item.unitPrice, currencySymbol),
+                    formatCurrency(item.quantity * item.unitPrice, currencySymbol)
+                ] : [
                     globalStartIndex + iIdx + 1,
                     desc,
                     item.quantity,
@@ -1016,7 +1035,15 @@ export function InvoiceViewer({
 
         autoTable(doc, {
             margin: { left: 14, right: 14 },
-            head: [[
+            head: isTender ? [[
+                { content: '#', styles: { halign: 'center' } },
+                { content: 'CODE', styles: { halign: 'center' } },
+                { content: 'DESCRIPTION', styles: { halign: 'left' } },
+                { content: 'QTY', styles: { halign: 'center' } },
+                { content: 'UNIT', styles: { halign: 'center' } },
+                { content: 'PRICE', styles: { halign: 'right' } },
+                { content: 'TOTAL', styles: { halign: 'right' } }
+            ]] : [[
                 { content: '#', styles: { halign: 'center' } },
                 { content: 'DESCRIPTION', styles: { halign: 'left' } },
                 { content: 'QTY', styles: { halign: 'center' } },
@@ -1039,7 +1066,15 @@ export function InvoiceViewer({
                 textColor: [20, 20, 30],
                 cellPadding: 2
             },
-            columnStyles: {
+            columnStyles: isTender ? {
+                0: { cellWidth: 8, halign: 'center' },
+                1: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+                2: { cellWidth: 74, halign: 'left' },
+                3: { cellWidth: 14, halign: 'center' },
+                4: { cellWidth: 14, halign: 'center' },
+                5: { cellWidth: 26, halign: 'right' },
+                6: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
+            } : {
                 0: { cellWidth: 10, halign: 'center' },
                 1: { cellWidth: 85, halign: 'left' },
                 2: { cellWidth: 15, halign: 'center' },
@@ -1057,18 +1092,36 @@ export function InvoiceViewer({
                     return;
                 }
                 // Enforce column alignments unconditionally across head and body
-                if (data.column.index === 0) {
-                    data.cell.styles.halign = 'center';
-                } else if (data.column.index === 1) {
-                    data.cell.styles.halign = 'left';
-                } else if (data.column.index === 2) {
-                    data.cell.styles.halign = 'center';
-                } else if (data.column.index === 3) {
-                    data.cell.styles.halign = 'center';
-                } else if (data.column.index === 4) {
-                    data.cell.styles.halign = 'right';
-                } else if (data.column.index === 5) {
-                    data.cell.styles.halign = 'right';
+                if (isTender) {
+                    if (data.column.index === 0) {
+                        data.cell.styles.halign = 'center';
+                    } else if (data.column.index === 1) {
+                        data.cell.styles.halign = 'center';
+                    } else if (data.column.index === 2) {
+                        data.cell.styles.halign = 'left';
+                    } else if (data.column.index === 3) {
+                        data.cell.styles.halign = 'center';
+                    } else if (data.column.index === 4) {
+                        data.cell.styles.halign = 'center';
+                    } else if (data.column.index === 5) {
+                        data.cell.styles.halign = 'right';
+                    } else if (data.column.index === 6) {
+                        data.cell.styles.halign = 'right';
+                    }
+                } else {
+                    if (data.column.index === 0) {
+                        data.cell.styles.halign = 'center';
+                    } else if (data.column.index === 1) {
+                        data.cell.styles.halign = 'left';
+                    } else if (data.column.index === 2) {
+                        data.cell.styles.halign = 'center';
+                    } else if (data.column.index === 3) {
+                        data.cell.styles.halign = 'center';
+                    } else if (data.column.index === 4) {
+                        data.cell.styles.halign = 'right';
+                    } else if (data.column.index === 5) {
+                        data.cell.styles.halign = 'right';
+                    }
                 }
             }
         });
@@ -1330,7 +1383,7 @@ export function InvoiceViewer({
                 worksheet.getCell(`A${currentRow}`).font = { size: 10 };
                 currentRow++;
             }
-            if (invoice.client.vendorNumber) {
+            if (invoice.client.vendorNumber && !isCityTender) {
                 worksheet.getCell(`A${currentRow}`).value = `VENDOR: ${invoice.client.vendorNumber}`;
                 worksheet.getCell(`A${currentRow}`).font = { size: 10 };
                 currentRow++;
@@ -1339,14 +1392,16 @@ export function InvoiceViewer({
             // 5. Table Head
             currentRow += 2;
             const tableHead = worksheet.getRow(currentRow);
-            tableHead.values = ['#', 'AREA/HEADING', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL'];
+            tableHead.values = isTender 
+                ? ['#', 'CODE', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL']
+                : ['#', 'AREA/HEADING', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL'];
             tableHead.font = { bold: true, size: 9, color: { argb: 'FFA3E635' } };
             tableHead.height = 20;
             tableHead.eachCell((cell, colNumber) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } };
                 cell.alignment = { 
                     vertical: 'middle', 
-                    horizontal: colNumber === 1 || colNumber === 4 || colNumber === 5 ? 'center' : (colNumber >= 6 ? 'right' : 'left')
+                    horizontal: colNumber === 1 || colNumber === 2 || colNumber === 4 || colNumber === 5 ? 'center' : (colNumber >= 6 ? 'right' : 'left')
                 };
                 cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
             });
@@ -1399,7 +1454,7 @@ export function InvoiceViewer({
                     }
                     row.values = [
                         globalStartIndex + iIdx + 1,
-                        '',
+                        isTender ? (item.code || '-') : '',
                         desc,
                         item.quantity,
                         item.unit || '',
@@ -2348,7 +2403,7 @@ export function InvoiceViewer({
                                         <span className="text-[10px] font-bold text-gray-300">{invoice.client.registrationNumber}</span>
                                     </div>
                                 )}
-                                {invoice.client.vendorNumber && (
+                                {!isCityTender && invoice.client.vendorNumber && (
                                     <div className="bg-white/5 px-2 py-0.5 rounded-md border border-white/5 flex items-center gap-2">
                                         <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">VENDOR</span>
                                         <span className="text-[10px] font-bold text-gray-300">{invoice.client.vendorNumber}</span>
@@ -2365,6 +2420,12 @@ export function InvoiceViewer({
                             <div className="text-lg md:text-xl font-black text-white">{company.name}</div>
                             {company.vatNumber && (
                                 <div className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">VAT: {company.vatNumber}</div>
+                            )}
+                            {isCityTender && invoice.client.vendorNumber && (
+                                <div className="text-[11px] font-bold text-amber-300 uppercase tracking-tighter flex items-center justify-center md:justify-end gap-1.5 pt-0.5">
+                                    <span className="text-[8px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30">City Vendor No</span>
+                                    <span className="font-mono">{invoice.client.vendorNumber}</span>
+                                </div>
                             )}
                             <div className="text-gray-400 text-[10px] md:text-[13px] font-medium leading-normal whitespace-pre-wrap pt-2">
                                 {company.address}

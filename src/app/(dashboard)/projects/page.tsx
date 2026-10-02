@@ -7,8 +7,13 @@ export const dynamic = 'force-dynamic'
 export default async function ProjectsPage() {
     const companyId = await ensureAuth()
     let projects: any[] = []
+    let company: any = null
 
     try {
+        company = await prisma.company.findUnique({
+            where: { id: companyId }
+        })
+
         projects = await prisma.project.findMany({
             where: { companyId },
             orderBy: { updatedAt: 'desc' },
@@ -34,22 +39,36 @@ export default async function ProjectsPage() {
                 },
                 invoices: {
                     select: {
+                        id: true,
                         total: true,
                         type: true,
                         status: true,
                         site: true,
                         reference: true,
-                        quoteNumber: true
+                        quoteNumber: true,
+                        workType: true,
+                        tenderId: true,
+                        notes: true,
+                        items: {
+                            select: {
+                                description: true,
+                                quantity: true,
+                                unit: true,
+                                unitPrice: true,
+                                code: true,
+                                area: true
+                            }
+                        }
                     },
                     orderBy: { createdAt: 'desc' }
                 }
             },
-            take: 50
+            take: 100
         }) || []
     } catch (error) {
         console.error("Error fetching projects:", error)
         projects = []
     }
 
-    return <ProjectDashboardClient projects={projects} />
+    return <ProjectDashboardClient projects={projects} company={company} />
 }
