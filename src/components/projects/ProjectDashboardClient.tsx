@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { ProjectSchedulePrintModal, isTenderProject, isReactiveProject, getScheduleWeeks, getProjectScheduleBucket } from "./ProjectSchedulePrintModal"
+import { ProjectSchedulePrintModal, isTenderProject, isReactiveProject, getScheduleWeeks, getProjectScheduleBucket, isProjectWorkDone, BUCKET_ORDER } from "./ProjectSchedulePrintModal"
 
 const ALL_COLUMNS = [
     { id: 'APPROVAL', title: 'Waiting Approval', statuses: ['SOW', 'SOW_SUBMITTED', 'LEAD'], color: 'border-blue-500/30 bg-blue-500/5', icon: Clock3 },
@@ -20,7 +20,7 @@ const ALL_COLUMNS = [
     { id: 'IN_PROGRESS', title: 'In Progress', statuses: ['IN_PROGRESS'], color: 'border-emerald-500/30 bg-emerald-500/5', icon: Zap },
     { id: 'HOLD', title: 'On Hold', statuses: ['ON_HOLD'], color: 'border-orange-500/30 bg-orange-500/5', icon: AlertCircle },
     { id: 'COMPLETED', title: 'Completed', statuses: ['COMPLETED'], color: 'border-teal-500/30 bg-teal-500/5', icon: CheckCircle2 },
-    { id: 'AWAITING_PAYMENT', title: 'Awaiting Payment', statuses: ['INVOICED'], color: 'border-red-500/30 bg-red-500/5', icon: DollarSign },
+    { id: 'AWAITING_PAYMENT', title: 'Invoiced (Work Done)', statuses: ['INVOICED'], color: 'border-blue-500/30 bg-blue-500/5', icon: DollarSign },
     { id: 'PAID', title: 'Paid & Archived', statuses: ['PAID', 'CANCELLED'], color: 'border-white/10 bg-white/5', icon: Briefcase },
 ];
 
@@ -38,7 +38,7 @@ export function ProjectDashboardClient({
     const [topFocus, setTopFocus] = useState<'REACTIVE' | 'WAITING_PO' | 'ACTIVE' | 'NONE'>('NONE')
     const [showScheduleModal, setShowScheduleModal] = useState(false)
     const [showPaidWork, setShowPaidWork] = useState(false)
-    const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'BUSY_NOW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'WEEK_3' | 'MONTH_LATER' | 'UNSCHEDULED'>('ALL')
+    const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'BUSY_NOW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'WEEK_3' | 'WEEK_4' | 'NEXT_MONTH' | 'UNSCHEDULED'>('ALL')
     const [isPending, startTransition] = useTransition()
     const router = useRouter()
 
@@ -116,9 +116,12 @@ export function ProjectDashboardClient({
         } else if (bucketId === 'WEEK_3') {
             targetStartDate = weeks[2].startDate
             targetEndDate = weeks[2].endDate
-        } else if (bucketId === 'MONTH_LATER') {
+        } else if (bucketId === 'WEEK_4') {
             targetStartDate = weeks[3].startDate
             targetEndDate = weeks[3].endDate
+        } else if (bucketId === 'NEXT_MONTH') {
+            targetStartDate = weeks[4].startDate
+            targetEndDate = weeks[4].endDate
         } else if (bucketId === 'UNSCHEDULED') {
             targetStartDate = null
             targetEndDate = null
@@ -168,8 +171,8 @@ export function ProjectDashboardClient({
 
     // 1. WORK TO DO (NOT DONE):
     // Work that is there and NOT done (Scheduled, In Progress, Planning, Quoted, SOW)
-    // Strictly excludes already completed, invoiced (awaiting payment), paid, and cancelled
-    const workToDoProjects = displayedProjects.filter(p => !['COMPLETED', 'INVOICED', 'PAID', 'CANCELLED'].includes(p.status))
+    // Strictly excludes already completed, invoiced (work is done), paid, and cancelled
+    const workToDoProjects = displayedProjects.filter(p => !isProjectWorkDone(p))
     const workAmountNotDone = workToDoProjects.reduce((acc, p) => {
         const latestInvoice = p.invoices?.[0]
         const latestWbp = p.workBreakdowns?.[0]
@@ -596,23 +599,41 @@ export function ProjectDashboardClient({
             {view === 'GANTT' && (() => {
                 const scheduleWeeks = getScheduleWeeks()
 
-                // Active projects to display on timeline
-                const activeTimelineProjects = displayedProjects.filter(p => !['COMPLETED', 'PAID', 'CANCELLED'].includes(p.status))
+                // Active projects to display on timeline: physical work not yet finished
+                // Strictly excludes invoiced, completed, paid, and cancelled projects
+                const activeTimelineProjects = displayedProjects.filter(p => !isProjectWorkDone(p))
 
                 // Counts by bucket
                 const busyCount = activeTimelineProjects.filter(p => p.status === 'IN_PROGRESS').length
                 const thisWeekCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'THIS_WEEK').length
                 const nextWeekCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'NEXT_WEEK').length
                 const week3Count = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'WEEK_3').length
-                const monthLaterCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'MONTH_LATER').length
+                const week4Count = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'WEEK_4').length
+                const nextMonthCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'NEXT_MONTH').length
                 const unscheduledCount = activeTimelineProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'UNSCHEDULED').length
 
-                // Filtered by selected timeline pill
-                const filteredTimelineProjects = activeTimelineProjects.filter(p => {
-                    if (timelineFilter === 'ALL') return true
-                    const bucket = getProjectScheduleBucket(p)
-                    return bucket === timelineFilter
-                })
+                // Filtered by selected timeline pill and automatically arranged chronologically by what's being done 1st
+                const filteredTimelineProjects = activeTimelineProjects
+                    .filter(p => {
+                        if (timelineFilter === 'ALL') return true
+                        const bucket = getProjectScheduleBucket(p)
+                        return bucket === timelineFilter
+                    })
+                    .sort((a, b) => {
+                        const bucketA = getProjectScheduleBucket(a)
+                        const bucketB = getProjectScheduleBucket(b)
+                        const orderA = BUCKET_ORDER[bucketA] ?? 99
+                        const orderB = BUCKET_ORDER[bucketB] ?? 99
+                        if (orderA !== orderB) return orderA - orderB
+
+                        // If both have startDate, sort earlier startDate first
+                        if (a.startDate && b.startDate) {
+                            return new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+                        }
+                        if (a.startDate) return -1
+                        if (b.startDate) return 1
+                        return (a.name || '').localeCompare(b.name || '')
+                    })
 
                 return (
                     <Card className="bg-[#14141E]/90 backdrop-blur-md border-white/10 shadow-2xl p-4 md:p-6 overflow-hidden">
@@ -677,12 +698,21 @@ export function ProjectDashboardClient({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setTimelineFilter('MONTH_LATER')}
+                                    onClick={() => setTimelineFilter('WEEK_4')}
                                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                        timelineFilter === 'MONTH_LATER' ? 'bg-amber-600 text-white shadow-md' : 'text-amber-300 hover:text-white'
+                                        timelineFilter === 'WEEK_4' ? 'bg-amber-600 text-white shadow-md' : 'text-amber-300 hover:text-white'
                                     }`}
                                 >
-                                    Later Month ({monthLaterCount})
+                                    Week 4 ({week4Count})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTimelineFilter('NEXT_MONTH')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                        timelineFilter === 'NEXT_MONTH' ? 'bg-teal-600 text-white shadow-md' : 'text-teal-300 hover:text-white'
+                                    }`}
+                                >
+                                    Next Month ({nextMonthCount})
                                 </button>
                                 {unscheduledCount > 0 && (
                                     <button
@@ -700,28 +730,35 @@ export function ProjectDashboardClient({
 
                         {/* 2. Interactive Real-Date Gantt Grid */}
                         <div className="overflow-x-auto">
-                            <div className="min-w-[1100px]">
+                            <div className="min-w-[1150px]">
                                 {/* Columns Header with REAL DATES */}
-                                <div className="grid grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground border-b border-white/10 pb-3 mb-3 bg-black/20 p-2 rounded-xl">
-                                    <div className="col-span-4 pl-2">Project &amp; Client Details</div>
-                                    <div className="col-span-2 text-center border-l border-white/10 text-emerald-400">
+                                <div
+                                    className="gap-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground border-b border-white/10 pb-3 mb-3 bg-black/20 p-2 rounded-xl"
+                                    style={{ display: 'grid', gridTemplateColumns: '320px 1.1fr 1.1fr 1.1fr 1fr 1fr 1fr' }}
+                                >
+                                    <div className="pl-2">Project &amp; Client Details</div>
+                                    <div className="text-center border-l border-white/10 text-emerald-400">
                                         🟢 Busy Now (On Site)
                                     </div>
-                                    <div className="col-span-2 text-center border-l border-white/10 text-purple-300">
+                                    <div className="text-center border-l border-white/10 text-purple-300">
                                         🟣 This Week
                                         <div className="text-[9px] font-bold text-gray-400 lowercase">{scheduleWeeks[0].dateLabel}</div>
                                     </div>
-                                    <div className="col-span-2 text-center border-l border-white/10 text-blue-300">
+                                    <div className="text-center border-l border-white/10 text-blue-300">
                                         🔵 Next Week
                                         <div className="text-[9px] font-bold text-gray-400 lowercase">{scheduleWeeks[1].dateLabel}</div>
                                     </div>
-                                    <div className="col-span-1 text-center border-l border-white/10 text-indigo-300">
+                                    <div className="text-center border-l border-white/10 text-indigo-300">
                                         Week 3
                                         <div className="text-[9px] font-bold text-gray-400 lowercase">{scheduleWeeks[2].dateLabel}</div>
                                     </div>
-                                    <div className="col-span-1 text-center border-l border-white/10 text-amber-300">
-                                        Later
-                                        <div className="text-[9px] font-bold text-gray-400 lowercase">Month</div>
+                                    <div className="text-center border-l border-white/10 text-amber-300">
+                                        Week 4
+                                        <div className="text-[9px] font-bold text-gray-400 lowercase">{scheduleWeeks[3].dateLabel}</div>
+                                    </div>
+                                    <div className="text-center border-l border-white/10 text-teal-300">
+                                        Next Month
+                                        <div className="text-[9px] font-bold text-gray-400 lowercase">{scheduleWeeks[4].dateLabel}</div>
                                     </div>
                                 </div>
 
@@ -737,10 +774,11 @@ export function ProjectDashboardClient({
                                         return (
                                             <div
                                                 key={p.id}
-                                                className="grid grid-cols-12 gap-2 items-center p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/20 hover:bg-white/[0.04] transition-all group"
+                                                className="gap-2 items-center p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/20 hover:bg-white/[0.04] transition-all group"
+                                                style={{ display: 'grid', gridTemplateColumns: '320px 1.1fr 1.1fr 1.1fr 1fr 1fr 1fr' }}
                                             >
                                                 {/* Left: Project Info & Schedule Assigner */}
-                                                <div className="col-span-4 pr-2 flex items-center justify-between gap-2">
+                                                <div className="pr-2 flex items-center justify-between gap-2">
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-1.5 flex-wrap">
                                                             <Link
@@ -778,15 +816,16 @@ export function ProjectDashboardClient({
                                                             <option value="THIS_WEEK">🟣 This Week ({scheduleWeeks[0].dateLabel})</option>
                                                             <option value="NEXT_WEEK">🔵 Next Week ({scheduleWeeks[1].dateLabel})</option>
                                                             <option value="WEEK_3">🗓️ Week 3 ({scheduleWeeks[2].dateLabel})</option>
-                                                            <option value="MONTH_LATER">🟠 Later This Month</option>
+                                                            <option value="WEEK_4">📅 Week 4 ({scheduleWeeks[3].dateLabel})</option>
+                                                            <option value="NEXT_MONTH">🗓️ Next Month ({scheduleWeeks[4].dateLabel})</option>
                                                             <option value="UNSCHEDULED">⚠️ Needs Scheduling</option>
                                                         </select>
                                                     </div>
                                                 </div>
 
                                                 {/* Gantt Bar Columns */}
-                                                {/* Column: Busy Now (2 cols) */}
-                                                <div className="col-span-2 px-1 relative h-9 flex items-center justify-center">
+                                                {/* Column: Busy Now */}
+                                                <div className="px-1 relative h-9 flex items-center justify-center border-l border-white/5">
                                                     {bucket === 'BUSY_NOW' ? (
                                                         <div className="w-full h-7 rounded-lg bg-[#A3E635] text-black font-black text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(163,230,53,0.4)] animate-pulse">
                                                             <span className="h-1.5 w-1.5 rounded-full bg-black animate-ping" />
@@ -797,8 +836,8 @@ export function ProjectDashboardClient({
                                                     )}
                                                 </div>
 
-                                                {/* Column: This Week (2 cols) */}
-                                                <div className="col-span-2 px-1 relative h-9 flex items-center justify-center border-l border-white/5">
+                                                {/* Column: This Week */}
+                                                <div className="px-1 relative h-9 flex items-center justify-center border-l border-white/5">
                                                     {bucket === 'THIS_WEEK' ? (
                                                         <div className="w-full h-7 rounded-lg bg-purple-600/90 hover:bg-purple-600 text-white font-black text-[9px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-md border border-purple-400/30">
                                                             <span>🟣 This Week</span>
@@ -808,8 +847,8 @@ export function ProjectDashboardClient({
                                                     )}
                                                 </div>
 
-                                                {/* Column: Next Week (2 cols) */}
-                                                <div className="col-span-2 px-1 relative h-9 flex items-center justify-center border-l border-white/5">
+                                                {/* Column: Next Week */}
+                                                <div className="px-1 relative h-9 flex items-center justify-center border-l border-white/5">
                                                     {bucket === 'NEXT_WEEK' ? (
                                                         <div className="w-full h-7 rounded-lg bg-blue-600/90 hover:bg-blue-600 text-white font-black text-[9px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-md border border-blue-400/30">
                                                             <span>🔵 Next Week</span>
@@ -819,8 +858,8 @@ export function ProjectDashboardClient({
                                                     )}
                                                 </div>
 
-                                                {/* Column: Week 3 (1 col) */}
-                                                <div className="col-span-1 px-1 relative h-9 flex items-center justify-center border-l border-white/5">
+                                                {/* Column: Week 3 */}
+                                                <div className="px-1 relative h-9 flex items-center justify-center border-l border-white/5">
                                                     {bucket === 'WEEK_3' ? (
                                                         <div className="w-full h-7 rounded-lg bg-indigo-600/90 text-white font-black text-[8px] uppercase tracking-wider flex items-center justify-center shadow-md">
                                                             Wk 3
@@ -830,11 +869,22 @@ export function ProjectDashboardClient({
                                                     )}
                                                 </div>
 
-                                                {/* Column: Later Month (1 col) */}
-                                                <div className="col-span-1 px-1 relative h-9 flex items-center justify-center border-l border-white/10">
-                                                    {bucket === 'MONTH_LATER' ? (
+                                                {/* Column: Week 4 */}
+                                                <div className="px-1 relative h-9 flex items-center justify-center border-l border-white/5">
+                                                    {bucket === 'WEEK_4' ? (
                                                         <div className="w-full h-7 rounded-lg bg-amber-600/90 text-white font-black text-[8px] uppercase tracking-wider flex items-center justify-center shadow-md">
-                                                            Later
+                                                            Wk 4
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-0.5 w-4 bg-white/5 rounded-full" />
+                                                    )}
+                                                </div>
+
+                                                {/* Column: Next Month */}
+                                                <div className="px-1 relative h-9 flex items-center justify-center border-l border-white/10">
+                                                    {bucket === 'NEXT_MONTH' ? (
+                                                        <div className="w-full h-7 rounded-lg bg-teal-600/90 text-white font-black text-[8px] uppercase tracking-wider flex items-center justify-center shadow-md">
+                                                            Next Mo
                                                         </div>
                                                     ) : bucket === 'UNSCHEDULED' ? (
                                                         <button

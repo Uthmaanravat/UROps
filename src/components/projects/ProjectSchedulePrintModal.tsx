@@ -70,13 +70,20 @@ export function getScheduleWeeks(referenceDate: Date = new Date()) {
     sundayWeek3.setDate(mondayWeek3.getDate() + 6)
     sundayWeek3.setHours(23, 59, 59, 999)
 
-    // Week 4 / Later this month
+    // Week 4
     const mondayWeek4 = new Date(mondayThisWeek)
     mondayWeek4.setDate(mondayThisWeek.getDate() + 21)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+    const sundayWeek4 = new Date(mondayWeek4)
+    sundayWeek4.setDate(mondayWeek4.getDate() + 6)
+    sundayWeek4.setHours(23, 59, 59, 999)
+
+    // Next Month
+    const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0)
+    const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999)
 
     const formatShort = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
     const formatRange = (start: Date, end: Date) => `${formatShort(start)} – ${formatShort(end)}`
+    const formatMonthYear = (d: Date) => d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
 
     return [
         {
@@ -101,16 +108,44 @@ export function getScheduleWeeks(referenceDate: Date = new Date()) {
             endDate: sundayWeek3
         },
         {
-            id: 'MONTH_LATER' as const,
-            title: 'Later This Month',
-            dateLabel: `${formatShort(mondayWeek4)} – ${formatShort(endOfMonth)}`,
+            id: 'WEEK_4' as const,
+            title: 'Week 4',
+            dateLabel: formatRange(mondayWeek4, sundayWeek4),
             startDate: mondayWeek4,
-            endDate: endOfMonth
+            endDate: sundayWeek4
+        },
+        {
+            id: 'NEXT_MONTH' as const,
+            title: 'Next Month',
+            dateLabel: formatMonthYear(firstOfNextMonth),
+            startDate: firstOfNextMonth,
+            endDate: endOfNextMonth
         }
     ]
 }
 
-export function getProjectScheduleBucket(p: any): 'BUSY_NOW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'WEEK_3' | 'MONTH_LATER' | 'UNSCHEDULED' {
+export function isProjectWorkDone(p: any): boolean {
+    if (['COMPLETED', 'INVOICED', 'PAID', 'CANCELLED'].includes(p.status)) return true
+    if (p.commercialStatus === 'INVOICED' || p.commercialStatus === 'PAID_COMMERCIAL') return true
+    if (p.invoices?.some((i: any) => i.type === 'INVOICE' && i.status !== 'CANCELLED')) return true
+    return false
+}
+
+export type ScheduleBucket = 'BUSY_NOW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'WEEK_3' | 'WEEK_4' | 'NEXT_MONTH' | 'UNSCHEDULED' | 'DONE'
+
+export const BUCKET_ORDER: Record<string, number> = {
+    'BUSY_NOW': 1,      // Active on site right now (e.g. Conductor Room) -> 1st priority
+    'THIS_WEEK': 2,     // Scheduled this week
+    'NEXT_WEEK': 3,     // Scheduled next week
+    'WEEK_3': 4,        // Scheduled week 3
+    'WEEK_4': 5,        // Scheduled week 4
+    'NEXT_MONTH': 6,    // Scheduled next month
+    'UNSCHEDULED': 7,   // Needs scheduling
+    'DONE': 8           // Work done
+}
+
+export function getProjectScheduleBucket(p: any): ScheduleBucket {
+    if (isProjectWorkDone(p)) return 'DONE'
     if (p.status === 'IN_PROGRESS') return 'BUSY_NOW'
     if (!p.startDate) {
         if (p.status === 'SCHEDULED') return 'THIS_WEEK'
@@ -121,7 +156,8 @@ export function getProjectScheduleBucket(p: any): 'BUSY_NOW' | 'THIS_WEEK' | 'NE
     if (start <= weeks[0].endDate.getTime()) return 'THIS_WEEK'
     if (start <= weeks[1].endDate.getTime()) return 'NEXT_WEEK'
     if (start <= weeks[2].endDate.getTime()) return 'WEEK_3'
-    return 'MONTH_LATER'
+    if (start <= weeks[3].endDate.getTime()) return 'WEEK_4'
+    return 'NEXT_MONTH'
 }
 
 export function ProjectSchedulePrintModal({
@@ -160,12 +196,15 @@ export function ProjectSchedulePrintModal({
             if (workTypeFilter === "GENERAL" && isTender) return false
             if (workTypeFilter === "TENDER" && !isTender) return false
 
+            // Work already invoiced/completed is finished on site - exclude unless includeCompleted is checked
+            if (isProjectWorkDone(p) && !includeCompleted) return false
+
             const s = p.status
             if (['SCHEDULED', 'PLANNING', 'QUOTED'].includes(s) && includeScheduled) return true
             if (['IN_PROGRESS'].includes(s) && includeInProgress) return true
             if (['SOW', 'SOW_SUBMITTED', 'LEAD'].includes(s) && includeApproval) return true
             if (['ON_HOLD'].includes(s) && includeHold) return true
-            if (['COMPLETED'].includes(s) && includeCompleted) return true
+            if (['COMPLETED', 'INVOICED', 'PAID'].includes(s) && includeCompleted) return true
 
             return false
         })
@@ -196,7 +235,21 @@ export function ProjectSchedulePrintModal({
     }
 
     const finalProjects = useMemo(() => {
-        return candidateProjects.filter(p => selectedProjectIds.has(p.id))
+        return candidateProjects
+            .filter(p => selectedProjectIds.has(p.id))
+            .sort((a, b) => {
+                const bucketA = getProjectScheduleBucket(a)
+                const bucketB = getProjectScheduleBucket(b)
+                const orderA = BUCKET_ORDER[bucketA] ?? 99
+                const orderB = BUCKET_ORDER[bucketB] ?? 99
+                if (orderA !== orderB) return orderA - orderB
+                if (a.startDate && b.startDate) {
+                    return new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+                }
+                if (a.startDate) return -1
+                if (b.startDate) return 1
+                return (a.name || '').localeCompare(b.name || '')
+            })
     }, [candidateProjects, selectedProjectIds])
 
     const totalSelectedValue = useMemo(() => {
@@ -209,9 +262,12 @@ export function ProjectSchedulePrintModal({
     }, [finalProjects])
 
     // Grouping by schedule bucket using REAL dates
-    const busyProjects = useMemo(() => finalProjects.filter(p => p.status === 'IN_PROGRESS'), [finalProjects])
-    const thisWeekProjects = useMemo(() => finalProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) === 'THIS_WEEK'), [finalProjects])
-    const upcomingMonthProjects = useMemo(() => finalProjects.filter(p => p.status !== 'IN_PROGRESS' && getProjectScheduleBucket(p) !== 'THIS_WEEK'), [finalProjects])
+    const busyProjects = useMemo(() => finalProjects.filter(p => getProjectScheduleBucket(p) === 'BUSY_NOW'), [finalProjects])
+    const thisWeekProjects = useMemo(() => finalProjects.filter(p => getProjectScheduleBucket(p) === 'THIS_WEEK'), [finalProjects])
+    const nextWeekProjects = useMemo(() => finalProjects.filter(p => getProjectScheduleBucket(p) === 'NEXT_WEEK'), [finalProjects])
+    const week3Projects = useMemo(() => finalProjects.filter(p => getProjectScheduleBucket(p) === 'WEEK_3'), [finalProjects])
+    const week4Projects = useMemo(() => finalProjects.filter(p => getProjectScheduleBucket(p) === 'WEEK_4'), [finalProjects])
+    const nextMonthProjects = useMemo(() => finalProjects.filter(p => getProjectScheduleBucket(p) === 'NEXT_MONTH'), [finalProjects])
 
     // Print Handler
     const handlePrint = () => {
@@ -285,7 +341,17 @@ export function ProjectSchedulePrintModal({
         // 4. Render Gantt Timeline Graph in PDF (if GANTT)
         if (graphType === "GANTT") {
             const weeks = getScheduleWeeks()
-            const ganttHead = ['#', 'PROJECT / JOB', 'SITE', 'BUSY NOW', `THIS WK (${weeks[0].dateLabel})`, `NEXT WK (${weeks[1].dateLabel})`, 'THIS MONTH']
+            const ganttHead = [
+                '#',
+                'PROJECT / JOB',
+                'SITE',
+                'BUSY NOW',
+                `THIS WK (${weeks[0].dateLabel})`,
+                `NEXT WK (${weeks[1].dateLabel})`,
+                `WK 3 (${weeks[2].dateLabel})`,
+                `WK 4 (${weeks[3].dateLabel})`,
+                `NEXT MO (${weeks[4].dateLabel})`
+            ]
             if (showFinancials) ganttHead.push('EST. WORTH')
 
             const ganttRows = finalProjects.map((p, idx) => {
@@ -293,7 +359,9 @@ export function ProjectSchedulePrintModal({
                 const isBusy = bucket === 'BUSY_NOW'
                 const isThisWeek = bucket === 'THIS_WEEK'
                 const isNextWeek = bucket === 'NEXT_WEEK'
-                const isLater = bucket === 'WEEK_3' || bucket === 'MONTH_LATER' || (!isBusy && !isThisWeek && !isNextWeek)
+                const isWeek3 = bucket === 'WEEK_3'
+                const isWeek4 = bucket === 'WEEK_4'
+                const isNextMonth = bucket === 'NEXT_MONTH'
                 const site = p.invoices?.[0]?.site || p.scopes?.[0]?.site || "Site Specified"
 
                 const row = [
@@ -303,7 +371,9 @@ export function ProjectSchedulePrintModal({
                     isBusy ? "ACTIVE" : "-",
                     isThisWeek ? "SCHEDULED" : (isBusy ? "BUSY" : "-"),
                     isNextWeek ? "SCHEDULED" : "-",
-                    isLater ? p.status.replace(/_/g, ' ') : "-"
+                    isWeek3 ? "SCHEDULED" : "-",
+                    isWeek4 ? "SCHEDULED" : "-",
+                    isNextMonth ? "SCHEDULED" : "-"
                 ]
 
                 if (showFinancials) {
@@ -324,13 +394,13 @@ export function ProjectSchedulePrintModal({
                 headStyles: {
                     fillColor: [20, 20, 30], // Navy #14141E
                     textColor: [163, 230, 53], // Lime #A3E635
-                    fontSize: 8,
+                    fontSize: 7.5,
                     fontStyle: 'bold',
                     halign: 'center'
                 },
                 styles: {
-                    fontSize: 7.5,
-                    cellPadding: 2.5,
+                    fontSize: 7,
+                    cellPadding: 2,
                     textColor: [20, 20, 30],
                     lineColor: [226, 232, 240],
                     lineWidth: 0.1
@@ -350,9 +420,17 @@ export function ProjectSchedulePrintModal({
                             data.cell.styles.fillColor = [239, 246, 255] // light blue
                             data.cell.styles.textColor = [29, 78, 216]
                             data.cell.styles.fontStyle = 'bold'
-                        } else if (data.column.index === 6 && data.cell.raw !== "-") {
+                        } else if (data.column.index === 6 && data.cell.raw === "SCHEDULED") {
+                            data.cell.styles.fillColor = [238, 242, 255] // light indigo
+                            data.cell.styles.textColor = [67, 56, 202]
+                            data.cell.styles.fontStyle = 'bold'
+                        } else if (data.column.index === 7 && data.cell.raw === "SCHEDULED") {
                             data.cell.styles.fillColor = [254, 243, 199] // light amber
                             data.cell.styles.textColor = [180, 83, 9]
+                            data.cell.styles.fontStyle = 'bold'
+                        } else if (data.column.index === 8 && data.cell.raw === "SCHEDULED") {
+                            data.cell.styles.fillColor = [204, 251, 241] // light teal
+                            data.cell.styles.textColor = [15, 118, 110]
                             data.cell.styles.fontStyle = 'bold'
                         }
                     }
@@ -772,11 +850,13 @@ export function ProjectSchedulePrintModal({
                                                 <span className="h-2.5 w-2.5 rounded-full bg-[#A3E635] border border-[#14141E] inline-block" />
                                                 Work Schedule &amp; Execution Timeline (Gantt Graph)
                                             </h3>
-                                            <div className="flex items-center gap-2.5 text-[9px] font-bold text-slate-600">
-                                                <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-emerald-600 inline-block" /> Busy On Site</span>
-                                                <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-purple-600 inline-block" /> This Week</span>
-                                                <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-blue-600 inline-block" /> Next Week</span>
-                                                <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-amber-500 inline-block" /> This Month</span>
+                                            <div className="flex items-center gap-2 text-[8px] font-bold text-slate-600 flex-wrap">
+                                                <span className="flex items-center gap-1"><span className="h-2 w-2.5 rounded bg-emerald-600 inline-block" /> Busy On Site</span>
+                                                <span className="flex items-center gap-1"><span className="h-2 w-2.5 rounded bg-purple-600 inline-block" /> This Wk</span>
+                                                <span className="flex items-center gap-1"><span className="h-2 w-2.5 rounded bg-blue-600 inline-block" /> Next Wk</span>
+                                                <span className="flex items-center gap-1"><span className="h-2 w-2.5 rounded bg-indigo-600 inline-block" /> Wk 3</span>
+                                                <span className="flex items-center gap-1"><span className="h-2 w-2.5 rounded bg-amber-500 inline-block" /> Wk 4</span>
+                                                <span className="flex items-center gap-1"><span className="h-2 w-2.5 rounded bg-teal-600 inline-block" /> Next Mo</span>
                                             </div>
                                         </div>
 
@@ -785,21 +865,27 @@ export function ProjectSchedulePrintModal({
                                                 <thead>
                                                     {/* Table Header: Dark Navy #14141E with Lime #A3E635 Text */}
                                                     <tr className="bg-[#14141E] text-[#A3E635] text-[9px] font-black uppercase tracking-wider">
-                                                        <th className="py-2.5 px-2 w-8 text-center">#</th>
-                                                        <th className="py-2.5 px-3 w-52">Project &amp; Site</th>
-                                                        <th className="py-2.5 px-1.5 text-center w-28 border-l border-white/10 text-emerald-400">
-                                                            🟢 Busy Now
+                                                        <th className="py-2.5 px-2 w-7 text-center">#</th>
+                                                        <th className="py-2.5 px-3 min-w-[140px]">Project &amp; Site</th>
+                                                        <th className="py-2.5 px-1 text-center w-16 border-l border-white/10 text-emerald-400">
+                                                            🟢 Busy
                                                         </th>
-                                                        <th className="py-2.5 px-1.5 text-center w-28 border-l border-white/10 text-purple-300">
-                                                            🟣 This Week
+                                                        <th className="py-2.5 px-1 text-center w-16 border-l border-white/10 text-purple-300">
+                                                            🟣 This Wk
                                                         </th>
-                                                        <th className="py-2.5 px-1.5 text-center w-28 border-l border-white/10 text-blue-300">
-                                                            🔵 Next Week
+                                                        <th className="py-2.5 px-1 text-center w-16 border-l border-white/10 text-blue-300">
+                                                            🔵 Next Wk
                                                         </th>
-                                                        <th className="py-2.5 px-1.5 text-center w-28 border-l border-white/10 text-amber-300">
-                                                            🟠 Later Month
+                                                        <th className="py-2.5 px-1 text-center w-14 border-l border-white/10 text-indigo-300">
+                                                            Wk 3
                                                         </th>
-                                                        {showFinancials && <th className="py-2.5 px-2 text-right w-24 border-l border-white/10">Amount</th>}
+                                                        <th className="py-2.5 px-1 text-center w-14 border-l border-white/10 text-amber-300">
+                                                            Wk 4
+                                                        </th>
+                                                        <th className="py-2.5 px-1 text-center w-16 border-l border-white/10 text-teal-300">
+                                                            Next Mo
+                                                        </th>
+                                                        {showFinancials && <th className="py-2.5 px-2 text-right w-20 border-l border-white/10">Amount</th>}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-200 bg-white">
@@ -808,7 +894,9 @@ export function ProjectSchedulePrintModal({
                                                         const isBusy = bucket === 'BUSY_NOW'
                                                         const isThisWeek = bucket === 'THIS_WEEK'
                                                         const isNextWeek = bucket === 'NEXT_WEEK'
-                                                        const isLater = bucket === 'WEEK_3' || bucket === 'MONTH_LATER' || (!isBusy && !isThisWeek && !isNextWeek)
+                                                        const isWeek3 = bucket === 'WEEK_3'
+                                                        const isWeek4 = bucket === 'WEEK_4'
+                                                        const isNextMonth = bucket === 'NEXT_MONTH'
                                                         const site = p.invoices?.[0]?.site || p.scopes?.[0]?.site || "Site Specified"
                                                         const inv = p.invoices?.[0]
                                                         const wbp = p.workBreakdowns?.[0]
@@ -816,7 +904,7 @@ export function ProjectSchedulePrintModal({
 
                                                         return (
                                                             <tr key={p.id} className="hover:bg-slate-50">
-                                                                <td className="py-2 px-2 text-center font-bold text-slate-500">{idx + 1}</td>
+                                                                <td className="py-2 px-1 text-center font-bold text-slate-500">{idx + 1}</td>
                                                                 <td className="py-2 px-3">
                                                                     <div className="font-black text-[#14141E] text-xs leading-tight">{p.name}</div>
                                                                     <div className="text-[10px] text-slate-500 font-semibold">{site} • {p.client?.name}</div>
@@ -824,38 +912,54 @@ export function ProjectSchedulePrintModal({
                                                                 {/* Busy Now */}
                                                                 <td className="py-2 px-1 text-center bg-emerald-50/20 border-l border-slate-200">
                                                                     {isBusy ? (
-                                                                        <div className="py-1 px-1.5 rounded bg-emerald-600 text-white font-black text-[8px] uppercase tracking-wider shadow-sm">
+                                                                        <div className="py-1 px-1 rounded bg-emerald-600 text-white font-black text-[8px] uppercase tracking-wider shadow-sm">
                                                                             Active
                                                                         </div>
-                                                                    ) : <div className="h-0.5 w-6 bg-slate-200 mx-auto" />}
+                                                                    ) : <div className="h-0.5 w-4 bg-slate-200 mx-auto" />}
                                                                 </td>
                                                                 {/* This Week */}
                                                                 <td className="py-2 px-1 text-center bg-purple-50/20 border-l border-slate-200">
                                                                     {isBusy ? (
-                                                                        <div className="py-1 px-1.5 rounded bg-emerald-500/80 text-white font-bold text-[8px] uppercase">
+                                                                        <div className="py-1 px-1 rounded bg-emerald-500/80 text-white font-bold text-[8px] uppercase">
                                                                             In Work
                                                                         </div>
                                                                     ) : isThisWeek ? (
-                                                                        <div className="py-1 px-1.5 rounded bg-purple-600 text-white font-black text-[8px] uppercase tracking-wider shadow-sm">
+                                                                        <div className="py-1 px-1 rounded bg-purple-600 text-white font-black text-[8px] uppercase tracking-wider shadow-sm">
                                                                             Scheduled
                                                                         </div>
-                                                                    ) : <div className="h-0.5 w-6 bg-slate-200 mx-auto" />}
+                                                                    ) : <div className="h-0.5 w-4 bg-slate-200 mx-auto" />}
                                                                 </td>
                                                                 {/* Next Week */}
                                                                 <td className="py-2 px-1 text-center bg-blue-50/20 border-l border-slate-200">
                                                                     {isNextWeek ? (
-                                                                        <div className="py-1 px-1.5 rounded bg-blue-600 text-white font-black text-[8px] uppercase tracking-wider shadow-sm">
+                                                                        <div className="py-1 px-1 rounded bg-blue-600 text-white font-black text-[8px] uppercase tracking-wider shadow-sm">
                                                                             Next Wk
                                                                         </div>
-                                                                    ) : <div className="h-0.5 w-6 bg-slate-200 mx-auto" />}
+                                                                    ) : <div className="h-0.5 w-4 bg-slate-200 mx-auto" />}
                                                                 </td>
-                                                                {/* This Month / Later */}
-                                                                <td className="py-2 px-1 text-center bg-amber-50/20 border-l border-slate-200">
-                                                                    {isLater ? (
-                                                                        <div className="py-1 px-1.5 rounded bg-amber-500 text-black font-black text-[8px] uppercase tracking-wider shadow-sm">
-                                                                            {p.status.replace(/_/g, ' ')}
+                                                                {/* Week 3 */}
+                                                                <td className="py-2 px-1 text-center bg-indigo-50/20 border-l border-slate-200">
+                                                                    {isWeek3 ? (
+                                                                        <div className="py-1 px-1 rounded bg-indigo-600 text-white font-black text-[8px] uppercase tracking-wider shadow-sm">
+                                                                            Wk 3
                                                                         </div>
-                                                                    ) : <div className="h-0.5 w-6 bg-slate-200 mx-auto" />}
+                                                                    ) : <div className="h-0.5 w-4 bg-slate-200 mx-auto" />}
+                                                                </td>
+                                                                {/* Week 4 */}
+                                                                <td className="py-2 px-1 text-center bg-amber-50/20 border-l border-slate-200">
+                                                                    {isWeek4 ? (
+                                                                        <div className="py-1 px-1 rounded bg-amber-500 text-black font-black text-[8px] uppercase tracking-wider shadow-sm">
+                                                                            Wk 4
+                                                                        </div>
+                                                                    ) : <div className="h-0.5 w-4 bg-slate-200 mx-auto" />}
+                                                                </td>
+                                                                {/* Next Month */}
+                                                                <td className="py-2 px-1 text-center bg-teal-50/20 border-l border-slate-200">
+                                                                    {isNextMonth ? (
+                                                                        <div className="py-1 px-1 rounded bg-teal-600 text-white font-black text-[8px] uppercase tracking-wider shadow-sm">
+                                                                            Next Mo
+                                                                        </div>
+                                                                    ) : <div className="h-0.5 w-4 bg-slate-200 mx-auto" />}
                                                                 </td>
                                                                 {showFinancials && (
                                                                     <td className="py-2 px-2 text-right font-black text-emerald-800 text-xs border-l border-slate-200">
@@ -878,67 +982,130 @@ export function ProjectSchedulePrintModal({
                                             <span className="h-2.5 w-2.5 rounded-full bg-[#A3E635] inline-block" />
                                             Weekly &amp; Monthly Operations Planning Matrix
                                         </h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                                             {/* Column 1: Busy Now */}
-                                            <div className="border border-emerald-300 bg-emerald-50/30 rounded-lg p-3 space-y-2">
-                                                <div className="flex items-center justify-between pb-1.5 border-b border-emerald-200">
+                                            <div className="border border-emerald-300 bg-emerald-50/30 rounded-lg p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between pb-1 border-b border-emerald-200">
                                                     <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
-                                                        🟢 Currently Busy (Now)
+                                                        🟢 Busy Now (On Site)
                                                     </span>
-                                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-800">
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-800">
                                                         {busyProjects.length}
                                                     </span>
                                                 </div>
-                                                <div className="space-y-2">
+                                                <div className="space-y-1.5">
                                                     {busyProjects.map(p => (
-                                                        <div key={p.id} className="bg-white p-2.5 rounded border border-emerald-200 shadow-xs">
+                                                        <div key={p.id} className="bg-white p-2 rounded border border-emerald-200 shadow-xs">
                                                             <div className="font-black text-xs text-[#14141E]">{p.name}</div>
                                                             <div className="text-[10px] text-slate-500 font-semibold">{p.invoices?.[0]?.site || p.scopes?.[0]?.site || 'Site on Job'}</div>
                                                         </div>
                                                     ))}
-                                                    {busyProjects.length === 0 && <p className="text-[10px] text-slate-400 italic">No active jobs in this column</p>}
+                                                    {busyProjects.length === 0 && <p className="text-[9px] text-slate-400 italic">No active jobs</p>}
                                                 </div>
                                             </div>
 
                                             {/* Column 2: Scheduled This Week */}
-                                            <div className="border border-purple-300 bg-purple-50/30 rounded-lg p-3 space-y-2">
-                                                <div className="flex items-center justify-between pb-1.5 border-b border-purple-200">
+                                            <div className="border border-purple-300 bg-purple-50/30 rounded-lg p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between pb-1 border-b border-purple-200">
                                                     <span className="text-[10px] font-black uppercase tracking-wider text-purple-800">
                                                         🟣 Scheduled This Week
                                                     </span>
-                                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-200 text-purple-800">
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-200 text-purple-800">
                                                         {thisWeekProjects.length}
                                                     </span>
                                                 </div>
-                                                <div className="space-y-2">
+                                                <div className="space-y-1.5">
                                                     {thisWeekProjects.map(p => (
-                                                        <div key={p.id} className="bg-white p-2.5 rounded border border-purple-200 shadow-xs">
+                                                        <div key={p.id} className="bg-white p-2 rounded border border-purple-200 shadow-xs">
                                                             <div className="font-black text-xs text-[#14141E]">{p.name}</div>
                                                             <div className="text-[10px] text-slate-500 font-semibold">{p.invoices?.[0]?.site || p.scopes?.[0]?.site || 'Site on Job'}</div>
                                                         </div>
                                                     ))}
-                                                    {thisWeekProjects.length === 0 && <p className="text-[10px] text-slate-400 italic">No jobs scheduled this week</p>}
+                                                    {thisWeekProjects.length === 0 && <p className="text-[9px] text-slate-400 italic">No jobs this week</p>}
                                                 </div>
                                             </div>
 
-                                            {/* Column 3: Scheduled This Month / Upcoming */}
-                                            <div className="border border-blue-300 bg-blue-50/30 rounded-lg p-3 space-y-2">
-                                                <div className="flex items-center justify-between pb-1.5 border-b border-blue-200">
+                                            {/* Column 3: Scheduled Next Week */}
+                                            <div className="border border-blue-300 bg-blue-50/30 rounded-lg p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between pb-1 border-b border-blue-200">
                                                     <span className="text-[10px] font-black uppercase tracking-wider text-blue-800">
-                                                        🔵 This Month / Upcoming
+                                                        🔵 Next Week
                                                     </span>
-                                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-200 text-blue-800">
-                                                        {upcomingMonthProjects.length}
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-200 text-blue-800">
+                                                        {nextWeekProjects.length}
                                                     </span>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    {upcomingMonthProjects.map(p => (
-                                                        <div key={p.id} className="bg-white p-2.5 rounded border border-blue-200 shadow-xs">
+                                                <div className="space-y-1.5">
+                                                    {nextWeekProjects.map(p => (
+                                                        <div key={p.id} className="bg-white p-2 rounded border border-blue-200 shadow-xs">
                                                             <div className="font-black text-xs text-[#14141E]">{p.name}</div>
                                                             <div className="text-[10px] text-slate-500 font-semibold">{p.invoices?.[0]?.site || p.scopes?.[0]?.site || 'Site on Job'}</div>
                                                         </div>
                                                     ))}
-                                                    {upcomingMonthProjects.length === 0 && <p className="text-[10px] text-slate-400 italic">No upcoming jobs in this column</p>}
+                                                    {nextWeekProjects.length === 0 && <p className="text-[9px] text-slate-400 italic">No jobs next week</p>}
+                                                </div>
+                                            </div>
+
+                                            {/* Column 4: Week 3 */}
+                                            <div className="border border-indigo-300 bg-indigo-50/30 rounded-lg p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between pb-1 border-b border-indigo-200">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800">
+                                                        🗓️ Week 3
+                                                    </span>
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-200 text-indigo-800">
+                                                        {week3Projects.length}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    {week3Projects.map(p => (
+                                                        <div key={p.id} className="bg-white p-2 rounded border border-indigo-200 shadow-xs">
+                                                            <div className="font-black text-xs text-[#14141E]">{p.name}</div>
+                                                            <div className="text-[10px] text-slate-500 font-semibold">{p.invoices?.[0]?.site || p.scopes?.[0]?.site || 'Site on Job'}</div>
+                                                        </div>
+                                                    ))}
+                                                    {week3Projects.length === 0 && <p className="text-[9px] text-slate-400 italic">No jobs in week 3</p>}
+                                                </div>
+                                            </div>
+
+                                            {/* Column 5: Week 4 */}
+                                            <div className="border border-amber-300 bg-amber-50/30 rounded-lg p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between pb-1 border-b border-amber-200">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                                                        📅 Week 4
+                                                    </span>
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-200 text-amber-800">
+                                                        {week4Projects.length}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    {week4Projects.map(p => (
+                                                        <div key={p.id} className="bg-white p-2 rounded border border-amber-200 shadow-xs">
+                                                            <div className="font-black text-xs text-[#14141E]">{p.name}</div>
+                                                            <div className="text-[10px] text-slate-500 font-semibold">{p.invoices?.[0]?.site || p.scopes?.[0]?.site || 'Site on Job'}</div>
+                                                        </div>
+                                                    ))}
+                                                    {week4Projects.length === 0 && <p className="text-[9px] text-slate-400 italic">No jobs in week 4</p>}
+                                                </div>
+                                            </div>
+
+                                            {/* Column 6: Next Month */}
+                                            <div className="border border-teal-300 bg-teal-50/30 rounded-lg p-2.5 space-y-1.5">
+                                                <div className="flex items-center justify-between pb-1 border-b border-teal-200">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-teal-800">
+                                                        🗓️ Next Month
+                                                    </span>
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-teal-200 text-teal-800">
+                                                        {nextMonthProjects.length}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    {nextMonthProjects.map(p => (
+                                                        <div key={p.id} className="bg-white p-2 rounded border border-teal-200 shadow-xs">
+                                                            <div className="font-black text-xs text-[#14141E]">{p.name}</div>
+                                                            <div className="text-[10px] text-slate-500 font-semibold">{p.invoices?.[0]?.site || p.scopes?.[0]?.site || 'Site on Job'}</div>
+                                                        </div>
+                                                    ))}
+                                                    {nextMonthProjects.length === 0 && <p className="text-[9px] text-slate-400 italic">No jobs next month</p>}
                                                 </div>
                                             </div>
                                         </div>
