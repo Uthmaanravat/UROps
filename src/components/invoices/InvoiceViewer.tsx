@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import { LineItemEditor } from "@/components/invoices/LineItemEditor"
 import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
@@ -53,6 +53,8 @@ export function InvoiceViewer({
     const [items, setItems] = useState<any[]>(invoice.items);
     const itemsRef = useRef<any[]>(invoice.items);
     const draftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isSavingRef = useRef(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     useEffect(() => {
         itemsRef.current = items;
@@ -629,6 +631,10 @@ export function InvoiceViewer({
     }, [items, site, reference, quoteNumber, date, note, firstPaymentOption, customFirstPaymentPercentage, contactId, attentionTo, loading, pendingDraft]);
 
     const saveChanges = async () => {
+        // Prevent concurrent overlapping save invocations (e.g. onBlur + onClick)
+        if (isSavingRef.current) return;
+        isSavingRef.current = true;
+
         // Blur active element to force committing any pending browser inputs
         if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
@@ -641,6 +647,7 @@ export function InvoiceViewer({
         }
 
         setLoading(true);
+        setSaveError(null);
         try {
             const currentItems = itemsRef.current || items;
             // Map local items to the format expected by the server action
@@ -721,12 +728,20 @@ export function InvoiceViewer({
             clearDraft(DRAFT_KEY);
             setPendingDraft(null);
             setLastSavedTimestamp(null);
-        } catch (error) {
+            setSaveError(null);
+        } catch (error: any) {
             console.error("Error saving changes:", error);
-            alert("Failed to save changes. Please try again.");
+            const msg = error?.message || "Failed to save changes. Please try again.";
+            setSaveError(msg);
+            alert(`Failed to save changes: ${msg}`);
         } finally {
             setLoading(false);
-            router.refresh();
+            isSavingRef.current = false;
+            try {
+                router.refresh();
+            } catch (err) {
+                console.error("router.refresh error:", err);
+            }
         }
     }
 
@@ -2722,6 +2737,12 @@ export function InvoiceViewer({
                             )}
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
+                            {saveError && (
+                                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-bold animate-in fade-in">
+                                    <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                                    <span>Save Error: {saveError}</span>
+                                </div>
+                            )}
                             {invoice.type === 'QUOTE' && checkInvalidItems(items).length > 0 && (
                                 <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold">
                                     <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
@@ -2737,12 +2758,17 @@ export function InvoiceViewer({
                             />
                             <Button 
                                 size="lg" 
-                                variant={justSavedManually ? "default" : "outline"} 
+                                variant={justSavedManually ? "default" : saveError ? "destructive" : "outline"} 
                                 onClick={saveChanges} 
                                 disabled={loading} 
-                                className={`h-14 px-8 border-2 font-bold transition-all ${justSavedManually ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-lg shadow-emerald-950/40' : ''}`}
+                                className={`h-14 px-8 border-2 font-bold transition-all ${justSavedManually ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-lg shadow-emerald-950/40' : saveError ? 'border-red-500/60 bg-red-500/20 text-red-200 hover:bg-red-500/30' : ''}`}
                             >
-                                {loading ? "Saving..." : justSavedManually ? "✓ Saved to Database!" : "Save Changes"}
+                                {loading ? (
+                                    <span className="flex items-center gap-2">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </span>
+                                ) : justSavedManually ? "✓ Saved to Database!" : saveError ? "Retry Save" : "Save Changes"}
                             </Button>
                             {invoice.type === 'QUOTE' && (
                                 <Button 

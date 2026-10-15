@@ -44,18 +44,40 @@ export function parseBulkLineItems(text: string): ParsedBulkItem[] {
         return isNaN(num) ? 0 : num;
     };
 
+    const isHeaderRow = (parts: string[]): boolean => {
+        if (!parts || parts.length < 2) return false;
+        
+        const headerExactNames = new Set([
+            'item', 'item #', 'item no', 'item no.', 'item number', 'no', 'no.', '#',
+            'desc', 'description', 'item description', 'work description', 'details', 'scope', 'service', 'service description',
+            'qty', 'quantity', 'qnty', 'count',
+            'unit', 'uom', 'measure', 'unit of measure',
+            'rate', 'price', 'unit price', 'unit rate', 'cost', 'unit cost',
+            'total', 'amount', 'total amount', 'subtotal', 'line total',
+            'area', 'section', 'location',
+            'reason', 'justification', 'notes', 'comments', 'code'
+        ]);
+        
+        let matchCount = 0;
+        let numericCount = 0;
+        
+        for (const p of parts) {
+            const clean = p.trim().toLowerCase();
+            if (headerExactNames.has(clean)) {
+                matchCount++;
+            }
+            const numClean = clean.replace(/[^0-9.,-]/g, '');
+            if (numClean && !isNaN(parseFloat(numClean)) && parseFloat(numClean) > 0) {
+                numericCount++;
+            }
+        }
+        
+        // A genuine header row must have at least 2 column names AND no more than 1 numeric column (e.g. #1)
+        return matchCount >= 2 && numericCount <= 1;
+    };
+
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
         const line = lines[lineIndex];
-        
-        // Skip table header row if detected
-        const lower = line.toLowerCase();
-        if (
-            lineIndex === 0 && 
-            (lower.includes('desc') || lower.includes('item') || lower.includes('service')) && 
-            (lower.includes('qty') || lower.includes('quantity') || lower.includes('price') || lower.includes('rate') || lower.includes('unit') || lower.includes('amount'))
-        ) {
-            continue;
-        }
 
         // Section / Heading row prefix
         if (line.startsWith('#') || line.startsWith('SECTION:') || line.startsWith('AREA:')) {
@@ -78,6 +100,11 @@ export function parseBulkLineItems(text: string): ParsedBulkItem[] {
                 continue;
             }
             parts = [line];
+        }
+
+        // Only skip row 1 if it genuinely matches table header column names
+        if (lineIndex === 0 && isHeaderRow(parts)) {
+            continue;
         }
 
         if (parts.length === 1) {

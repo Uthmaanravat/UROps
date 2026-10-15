@@ -23,6 +23,13 @@ export function EditorDraftBanner({
     onDiscard,
     documentType
 }: EditorDraftBannerProps) {
+    const [mounted, setMounted] = React.useState(false);
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) return null;
+
     const timestamp = draftTimestamp || draft?.updatedAt || Date.now();
     const count = itemCount !== undefined ? itemCount : draft?.itemCount;
     const docType = documentType || (
@@ -98,6 +105,11 @@ export function AutoSaveIndicator({
     className?: string;
 }) {
     const [keyTimestamp, setKeyTimestamp] = React.useState<number | null>(null);
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
 
     React.useEffect(() => {
         if (!draftKey) return;
@@ -122,6 +134,7 @@ export function AutoSaveIndicator({
     const savingDraft = isSavingDraft || isSaving;
 
     const formatTime = (ts: number | string) => {
+        if (!mounted) return "";
         const d = new Date(ts);
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
@@ -129,7 +142,7 @@ export function AutoSaveIndicator({
     if (!effectiveDraft && !savingDraft && !dbSavedTimestamp && !isSavingDb && !justSavedDb) return null;
 
     return (
-        <div className={`inline-flex flex-wrap items-center gap-2 ${className}`}>
+        <div suppressHydrationWarning className={`inline-flex flex-wrap items-center gap-2 ${className}`}>
             {/* Database persistence status */}
             {isSavingDb ? (
                 <div className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
@@ -139,12 +152,16 @@ export function AutoSaveIndicator({
             ) : justSavedDb ? (
                 <div className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-950/30">
                     <Database className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>✓ Persisted to Database ({dbSavedTimestamp ? formatTime(dbSavedTimestamp) : 'just now'})</span>
+                    <span>✓ Persisted to Database ({mounted && dbSavedTimestamp ? formatTime(dbSavedTimestamp) : 'just now'})</span>
                 </div>
             ) : dbSavedTimestamp ? (
-                <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" title={`Last persisted to PostgreSQL at ${new Date(dbSavedTimestamp).toLocaleString()}`}>
+                <div 
+                    suppressHydrationWarning
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" 
+                    title={mounted ? `Last persisted to PostgreSQL at ${new Date(dbSavedTimestamp).toLocaleString()}` : undefined}
+                >
                     <Database className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Saved to Database <span className="text-emerald-400/80">({formatTime(dbSavedTimestamp)})</span></span>
+                    <span>Saved to Database {mounted && dbSavedTimestamp ? <span className="text-emerald-400/80">({formatTime(dbSavedTimestamp)})</span> : null}</span>
                 </div>
             ) : null}
 
@@ -155,9 +172,13 @@ export function AutoSaveIndicator({
                     <span>Auto-saving draft locally...</span>
                 </div>
             ) : effectiveDraft ? (
-                <div className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300/90" title={`Local browser backup saved at ${new Date(effectiveDraft).toLocaleTimeString()}`}>
+                <div 
+                    suppressHydrationWarning
+                    className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300/90" 
+                    title={mounted ? `Local browser backup saved at ${new Date(effectiveDraft).toLocaleTimeString()}` : undefined}
+                >
                     <Laptop className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Draft in browser <span className="text-amber-400/70">({formatRelativeTime(effectiveDraft)})</span></span>
+                    <span>Draft in browser {mounted ? <span className="text-amber-400/70">({formatRelativeTime(effectiveDraft)})</span> : null}</span>
                 </div>
             ) : null}
         </div>

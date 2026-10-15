@@ -6,6 +6,8 @@ import { updateProjectStatus } from "../projects/actions"
 import { ensureAuth } from "@/lib/auth-actions"
 import { convertToInvoiceAction } from "./actions"
 
+import { randomUUID } from "crypto"
+
 export async function updateInvoiceItemsAction(invoiceId: string, items: { id: string, unitPrice?: number, description?: string, unit?: string, quantity?: number, area?: string, reason?: string, code?: string, isLocked?: boolean, rateYear?: number }[]) {
     const companyId = await ensureAuth()
 
@@ -15,97 +17,71 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
     })
     if (!invoice) throw new Error("Invoice not found or unauthorized")
 
-    // 1. Fetch all existing items from the database for this invoice
-    const existingDbItems = await prisma.invoiceItem.findMany({
-        where: { invoiceId },
-        select: { id: true }
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    // 1. Format incoming items with valid UUIDs, positions, and totals
+    const formattedItems = items.map((item, idx) => {
+        const qty = Number(item.quantity) || 1;
+        const price = Number(item.unitPrice) || 0;
+        const validId = item.id && uuidRegex.test(item.id) ? item.id : randomUUID();
+
+        return {
+            id: validId,
+            invoiceId,
+            description: item.description ?? "",
+            area: item.area || "",
+            quantity: qty,
+            unit: item.unit || "ea",
+            unitPrice: price,
+            total: qty * price,
+            reason: item.reason || null,
+            code: item.code || null,
+            isLocked: Boolean(item.isLocked),
+            rateYear: item.rateYear || null,
+            position: idx
+        };
     });
-    const existingDbItemIds = new Set(existingDbItems.map(item => item.id));
 
-    // 2. Identify which incoming items actually exist in the DB
-    const retainedDbIds = items.filter(i => existingDbItemIds.has(i.id)).map(i => i.id);
+    // 2. Compute updated subtotal and tax amounts
+    const newSubtotal = formattedItems.reduce((acc, item) => acc + item.total, 0);
+    const tax = newSubtotal * 0.15;
+    const total = newSubtotal + tax;
 
-    // 3. Delete any DB items that were removed by the user, and update/create items atomically
-    const operations: any[] = [
+    // 3. Perform atomic batch replacement: clean removal, instant multi-row insert, and totals update
+    const txOperations: any[] = [
         prisma.invoiceItem.deleteMany({
-            where: {
-                invoiceId,
-                id: { notIn: retainedDbIds }
-            }
+            where: { invoiceId }
         })
     ];
 
-    // 4. Update existing items, and create new/cloned items
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (existingDbItemIds.has(item.id)) {
-            // Update existing item
-            operations.push(
-                prisma.invoiceItem.update({
-                    where: { id: item.id },
-                    data: {
-                        unitPrice: item.unitPrice,
-                        quantity: item.quantity,
-                        description: item.description ?? "",
-                        unit: item.unit,
-                        area: item.area,
-                        reason: item.reason,
-                        code: item.code !== undefined ? item.code : undefined,
-                        isLocked: item.isLocked !== undefined ? item.isLocked : undefined,
-                        rateYear: item.rateYear !== undefined ? item.rateYear : undefined,
-                        total: (item.quantity !== undefined && item.unitPrice !== undefined)
-                            ? item.quantity * item.unitPrice
-                            : undefined,
-                        position: i
-                    }
-                })
-            );
-        } else {
-            // Create new or cloned item
-            operations.push(
-                prisma.invoiceItem.create({
-                    data: {
-                        invoiceId,
-                        description: item.description || "",
-                        quantity: item.quantity || 1,
-                        unitPrice: item.unitPrice || 0,
-                        unit: item.unit || "ea",
-                        area: item.area || "",
-                        reason: item.reason || null,
-                        code: item.code || null,
-                        isLocked: Boolean(item.isLocked),
-                        rateYear: item.rateYear || null,
-                        total: (item.quantity || 1) * (item.unitPrice || 0),
-                        position: i
-                    }
-                })
-            );
-        }
+    if (formattedItems.length > 0) {
+        txOperations.push(
+            prisma.invoiceItem.createMany({
+                data: formattedItems
+            })
+        );
     }
 
-    if (operations.length > 0) {
-        await prisma.$transaction(operations);
-    }
+    txOperations.push(
+        prisma.invoice.update({
+            where: { id: invoiceId, companyId },
+            data: {
+                subtotal: newSubtotal,
+                taxAmount: tax,
+                total: total
+            }
+        })
+    );
 
-    // Now update invoice totals
+    await prisma.$transaction(txOperations);
+
+    // 4. Fetch and return persisted items ordered by position
     const finalItems = await prisma.invoiceItem.findMany({
         where: { invoiceId },
         orderBy: { position: 'asc' }
-    })
-    const newSubtotal = finalItems.reduce((acc, item) => acc + item.total, 0)
-    const tax = newSubtotal * 0.15
-    const total = newSubtotal + tax
+    });
 
-    await prisma.invoice.update({
-        where: { id: invoiceId, companyId },
-        data: {
-            subtotal: newSubtotal,
-            taxAmount: tax,
-            total: total
-        }
-    })
-
-    revalidatePath(`/invoices/${invoiceId}`)
+    revalidatePath(`/invoices/${invoiceId}`);
     return finalItems;
 }
 
