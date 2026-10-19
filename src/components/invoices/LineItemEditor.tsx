@@ -35,6 +35,7 @@ interface LineItemEditorProps {
     isAdmin?: boolean
     onLogUnlock?: (data: { itemId?: string; itemCode?: string; reason: string }) => Promise<void>
     highlightIndex?: number | null
+    isInvoice?: boolean
 }
 
 // Auto-resizing textarea component for line item descriptions
@@ -99,7 +100,8 @@ export function LineItemEditor({
     pricingSuggestions = {},
     isAdmin = true,
     onLogUnlock,
-    highlightIndex = null
+    highlightIndex = null,
+    isInvoice = false
 }: LineItemEditorProps) {
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -397,102 +399,104 @@ export function LineItemEditor({
     return (
         <div className="space-y-4">
             {/* Quick Catalog Search Bar (Requirement: Type code or words to find and add item) */}
-            <div className="relative">
-                <div className="relative flex items-center">
-                    <Search className="absolute left-3.5 h-4 w-4 text-primary shrink-0 pointer-events-none" />
-                    <Input
-                        ref={quickSearchInputRef}
-                        type="text"
-                        placeholder={
-                            workType === "TENDER"
-                                ? `Quick Add: Type tender code or item name (e.g. "17.30", "swing", "bench") to add to quote...`
-                                : `Quick Add: Type catalog code or service description to add item...`
-                        }
-                        value={quickSearchQuery}
-                        onChange={(e) => {
-                            setQuickSearchQuery(e.target.value)
-                            setIsQuickSearchOpen(true)
-                            setQuickSearchIndex(0)
-                        }}
-                        onFocus={() => {
-                            if (quickSearchQuery.trim()) setIsQuickSearchOpen(true)
-                        }}
-                        onKeyDown={handleQuickSearchKeyDown}
-                        className="pl-10 pr-20 h-11 bg-[#0F0F1A] border-white/15 focus:border-primary text-xs md:text-sm text-white placeholder:text-muted-foreground/60 rounded-xl shadow-inner font-medium"
-                    />
-                    {quickSearchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setQuickSearchQuery("")
-                                setIsQuickSearchOpen(false)
+            {!isInvoice && (
+                <div className="relative">
+                    <div className="relative flex items-center">
+                        <Search className="absolute left-3.5 h-4 w-4 text-primary shrink-0 pointer-events-none" />
+                        <Input
+                            ref={quickSearchInputRef}
+                            type="text"
+                            placeholder={
+                                workType === "TENDER"
+                                    ? `Quick Add: Type tender code or item name (e.g. "17.30", "swing", "bench") to add to quote...`
+                                    : `Quick Add: Type catalog code or service description to add item...`
+                            }
+                            value={quickSearchQuery}
+                            onChange={(e) => {
+                                setQuickSearchQuery(e.target.value)
+                                setIsQuickSearchOpen(true)
+                                setQuickSearchIndex(0)
                             }}
-                            className="absolute right-3 text-xs text-muted-foreground hover:text-white px-2 py-1 rounded bg-white/5"
+                            onFocus={() => {
+                                if (quickSearchQuery.trim()) setIsQuickSearchOpen(true)
+                            }}
+                            onKeyDown={handleQuickSearchKeyDown}
+                            className="pl-10 pr-20 h-11 bg-[#0F0F1A] border-white/15 focus:border-primary text-xs md:text-sm text-white placeholder:text-muted-foreground/60 rounded-xl shadow-inner font-medium"
+                        />
+                        {quickSearchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setQuickSearchQuery("")
+                                    setIsQuickSearchOpen(false)
+                                }}
+                                className="absolute right-3 text-xs text-muted-foreground hover:text-white px-2 py-1 rounded bg-white/5"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Dropdown with search results */}
+                    {isQuickSearchOpen && quickSearchMatches.length > 0 && (
+                        <div
+                            ref={quickSearchDropdownRef}
+                            className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[#14141E] border border-primary/30 shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-white/5 backdrop-blur-xl"
                         >
-                            Clear
-                        </button>
+                            <div className="px-3 py-1.5 bg-black/40 text-[10px] font-black uppercase tracking-wider text-muted-foreground flex justify-between">
+                                <span>Matching Catalog Items ({quickSearchMatches.length})</span>
+                                <span className="text-primary font-normal">Press Enter or click + Add</span>
+                            </div>
+                            {quickSearchMatches.map((catItem: any, idx: number) => {
+                                const price = getCatalogItemPrice(catItem)
+                                const isSelected = idx === quickSearchIndex
+                                return (
+                                    <div
+                                        key={catItem.id || `quick-${idx}`}
+                                        onMouseEnter={() => setQuickSearchIndex(idx)}
+                                        onClick={() => handleAddCatalogItem(catItem)}
+                                        className={cn(
+                                            "flex items-center justify-between gap-3 p-3 cursor-pointer transition-colors",
+                                            isSelected ? "bg-primary/20 text-white" : "hover:bg-white/5 text-gray-200"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            {catItem.code && (
+                                                <span className="font-mono text-xs font-black text-primary px-2 py-0.5 rounded bg-primary/10 border border-primary/20 shrink-0">
+                                                    {catItem.code}
+                                                </span>
+                                            )}
+                                            <span className="text-xs font-medium truncate">
+                                                {catItem.description}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            <span className="text-xs font-mono font-bold text-gray-300">
+                                                {formatCurrency(price, currencySymbol)} / {catItem.unit || "ea"}
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="h-7 px-3 bg-primary text-black font-black text-xs hover:bg-primary/90"
+                                            >
+                                                <Plus className="w-3 h-3 mr-1" /> Add
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                    {isQuickSearchOpen && quickSearchQuery.trim() && quickSearchMatches.length === 0 && (
+                        <div
+                            ref={quickSearchDropdownRef}
+                            className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[#14141E] border border-white/10 shadow-2xl p-4 text-center text-xs text-muted-foreground italic"
+                        >
+                            No catalog items found matching &quot;{quickSearchQuery}&quot;
+                        </div>
                     )}
                 </div>
-
-                {/* Dropdown with search results */}
-                {isQuickSearchOpen && quickSearchMatches.length > 0 && (
-                    <div
-                        ref={quickSearchDropdownRef}
-                        className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[#14141E] border border-primary/30 shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-white/5 backdrop-blur-xl"
-                    >
-                        <div className="px-3 py-1.5 bg-black/40 text-[10px] font-black uppercase tracking-wider text-muted-foreground flex justify-between">
-                            <span>Matching Catalog Items ({quickSearchMatches.length})</span>
-                            <span className="text-primary font-normal">Press Enter or click + Add</span>
-                        </div>
-                        {quickSearchMatches.map((catItem: any, idx: number) => {
-                            const price = getCatalogItemPrice(catItem)
-                            const isSelected = idx === quickSearchIndex
-                            return (
-                                <div
-                                    key={catItem.id || `quick-${idx}`}
-                                    onMouseEnter={() => setQuickSearchIndex(idx)}
-                                    onClick={() => handleAddCatalogItem(catItem)}
-                                    className={cn(
-                                        "flex items-center justify-between gap-3 p-3 cursor-pointer transition-colors",
-                                        isSelected ? "bg-primary/20 text-white" : "hover:bg-white/5 text-gray-200"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                                        {catItem.code && (
-                                            <span className="font-mono text-xs font-black text-primary px-2 py-0.5 rounded bg-primary/10 border border-primary/20 shrink-0">
-                                                {catItem.code}
-                                            </span>
-                                        )}
-                                        <span className="text-xs font-medium truncate">
-                                            {catItem.description}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3 shrink-0">
-                                        <span className="text-xs font-mono font-bold text-gray-300">
-                                            {formatCurrency(price, currencySymbol)} / {catItem.unit || "ea"}
-                                        </span>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            className="h-7 px-3 bg-primary text-black font-black text-xs hover:bg-primary/90"
-                                        >
-                                            <Plus className="w-3 h-3 mr-1" /> Add
-                                        </Button>
-                                    </div>
-                                </div>
-                            )
-                        })}
-                    </div>
-                )}
-                {isQuickSearchOpen && quickSearchQuery.trim() && quickSearchMatches.length === 0 && (
-                    <div
-                        ref={quickSearchDropdownRef}
-                        className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[#14141E] border border-white/10 shadow-2xl p-4 text-center text-xs text-muted-foreground italic"
-                    >
-                        No catalog items found matching &quot;{quickSearchQuery}&quot;
-                    </div>
-                )}
-            </div>
+            )}
 
             {/* Table Header Row (Hidden on mobile) */}
             <div className="hidden md:flex items-center gap-2.5 px-3 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
@@ -577,7 +581,7 @@ export function LineItemEditor({
                                             )}
                                         </div>
                                     ) : null
-                                ) : (
+                                ) : !isInvoice ? (
                                     <div className="flex items-center gap-2">
                                         <span className="text-[9px] uppercase font-black text-amber-400/80 tracking-widest">Justification:</span>
                                         <select
@@ -607,7 +611,7 @@ export function LineItemEditor({
                                             />
                                         )}
                                     </div>
-                                )}
+                                ) : null}
                             </div>
 
                             {/* Main Inputs Row */}

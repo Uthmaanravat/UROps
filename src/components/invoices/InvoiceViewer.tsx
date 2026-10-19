@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3 } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import { LineItemEditor } from "@/components/invoices/LineItemEditor"
 import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
@@ -391,7 +391,8 @@ export function InvoiceViewer({
     const isLocked = invoice.type === 'QUOTE'
         ? ['SENT', 'ACCEPTED', 'REJECTED', 'PAID', 'INVOICED'].includes(invoice.status) || isInvoiced
         : ['PAID', 'CHECKED'].includes(invoice.status);
-    const isPricingMode = !isLocked;
+    const [isEditingInvoiceItems, setIsEditingInvoiceItems] = useState(false);
+    const isPricingMode = invoice.type === 'QUOTE' ? !isLocked : (isEditingInvoiceItems && !isLocked);
 
     const handleItemUpdate = (id: string, field: string, value: any) => {
         const currentList = itemsRef.current || items;
@@ -1835,6 +1836,33 @@ export function InvoiceViewer({
                         <Button variant="ghost" size="sm" onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
                             <FileText className="mr-2 h-4 w-4 text-blue-400" /> {showDetailedBreakdown ? "Summarized" : "Detailed"}
                         </Button>
+
+                        {invoice.type === 'INVOICE' && !isLocked && (
+                            <>
+                                <div className="w-px h-6 bg-white/10 self-center mx-1" />
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setIsEditingInvoiceItems(!isEditingInvoiceItems)}
+                                    className={cn(
+                                        "h-10 px-4 rounded-lg font-bold text-xs transition-colors",
+                                        isEditingInvoiceItems
+                                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                            : "hover:bg-white/10 text-white"
+                                    )}
+                                >
+                                    {isEditingInvoiceItems ? (
+                                        <>
+                                            <FileText className="mr-2 h-4 w-4 text-primary" /> View Document
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Edit3 className="mr-2 h-4 w-4 text-amber-400" /> Edit Line Items
+                                        </>
+                                    )}
+                                </Button>
+                            </>
+                        )}
                     </div>
 
                     {/* Status & Management Actions */}
@@ -2464,19 +2492,32 @@ export function InvoiceViewer({
                                             {items.length} {items.length === 1 ? 'item' : 'items'}
                                         </span>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setShowCatalogPanel(!showCatalogPanel)}
-                                        className={cn(
-                                            "h-8 text-xs font-bold gap-2",
-                                            showCatalogPanel ? "bg-primary/10 text-primary border-primary/30" : "bg-white/5 text-gray-300 border-white/10"
-                                        )}
-                                    >
-                                        <Book className="h-3.5 w-3.5" />
-                                        {showCatalogPanel ? "Hide Catalog Panel" : "Browse Catalog"}
-                                    </Button>
+                                    {invoice.type === 'QUOTE' ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowCatalogPanel(!showCatalogPanel)}
+                                            className={cn(
+                                                "h-8 text-xs font-bold gap-2",
+                                                showCatalogPanel ? "bg-primary/10 text-primary border-primary/30" : "bg-white/5 text-gray-300 border-white/10"
+                                            )}
+                                        >
+                                            <Book className="h-3.5 w-3.5" />
+                                            {showCatalogPanel ? "Hide Catalog Panel" : "Browse Catalog"}
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setIsEditingInvoiceItems(false)}
+                                            className="h-8 text-xs font-bold gap-2 bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20"
+                                        >
+                                            <FileText className="h-3.5 w-3.5" />
+                                            View Document Table
+                                        </Button>
+                                    )}
                                 </div>
                                 <LineItemEditor
                                     items={items}
@@ -2499,6 +2540,7 @@ export function InvoiceViewer({
                                         });
                                     }}
                                     highlightIndex={highlightIndex}
+                                    isInvoice={invoice.type === 'INVOICE'}
                                 />
                             </div>
                             {showCatalogPanel && (
@@ -2517,6 +2559,26 @@ export function InvoiceViewer({
                     </div>
                 ) : (
                     <div className="mb-10 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                        {invoice.type === 'INVOICE' && !isLocked && (
+                            <div className="flex items-center justify-between mb-4 print:hidden">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Line Items</span>
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-gray-400">
+                                        {items.length} {items.length === 1 ? 'item' : 'items'}
+                                    </span>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsEditingInvoiceItems(true)}
+                                    className="h-8 text-xs font-bold gap-2 bg-white/5 text-amber-300 border border-amber-500/30 hover:bg-amber-500/10"
+                                >
+                                    <Edit3 className="h-3.5 w-3.5 text-amber-400" />
+                                    Edit Line Items
+                                </Button>
+                            </div>
+                        )}
                         <table className="w-full min-w-[600px] md:min-w-full">
                             <thead>
                                 <tr className="border-b border-white/10">
@@ -2608,7 +2670,7 @@ export function InvoiceViewer({
                             <h4 className="text-[9px] font-black uppercase tracking-[0.3em] text-primary mb-3 flex items-center gap-2">
                                 <FileText className="h-3.5 w-3.5" /> Professional Notes
                             </h4>
-                            {isPricingMode ? (
+                            {isPricingMode || !isLocked ? (
                                 <textarea
                                     value={note}
                                     onChange={(e) => setNote(e.target.value)}
@@ -2707,33 +2769,49 @@ export function InvoiceViewer({
                     </div>
                 </div>
 
-                {isPricingMode && (
+                {(isPricingMode || (invoice.type === 'INVOICE' && !isLocked)) && (
                     <div className="mt-12 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 print:hidden">
                         <div className="flex items-center gap-2">
-                            <Button variant="secondary" onClick={handleAddItem} disabled={loading} className="h-14 px-8 border-2 border-dashed border-white/20">
-                                + Add Line Item
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setIsBulkImportOpen(true)}
-                                disabled={loading}
-                                className="h-14 px-6 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/15 text-blue-400 font-bold text-xs"
-                            >
-                                <ClipboardPaste className="mr-2 h-4 w-4 text-blue-400" />
-                                Paste from Excel / CSV
-                            </Button>
-                            {invoice.type === 'QUOTE' && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={handleAutoSuggestAll}
-                                    disabled={loading || isLoadingSuggestions}
-                                    className="h-14 px-6 border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 font-bold text-xs"
-                                >
-                                    <Sparkles className="mr-2 h-4 w-4 text-emerald-400" />
-                                    {isLoadingSuggestions ? "Checking..." : "Auto-Price Unpriced Items"}
-                                </Button>
+                            {isPricingMode ? (
+                                <>
+                                    <Button variant="secondary" onClick={handleAddItem} disabled={loading} className="h-14 px-8 border-2 border-dashed border-white/20">
+                                        + Add Line Item
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setIsBulkImportOpen(true)}
+                                        disabled={loading}
+                                        className="h-14 px-6 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/15 text-blue-400 font-bold text-xs"
+                                    >
+                                        <ClipboardPaste className="mr-2 h-4 w-4 text-blue-400" />
+                                        Paste from Excel / CSV
+                                    </Button>
+                                    {invoice.type === 'QUOTE' && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={handleAutoSuggestAll}
+                                            disabled={loading || isLoadingSuggestions}
+                                            className="h-14 px-6 border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 font-bold text-xs"
+                                        >
+                                            <Sparkles className="mr-2 h-4 w-4 text-emerald-400" />
+                                            {isLoadingSuggestions ? "Checking..." : "Auto-Price Unpriced Items"}
+                                        </Button>
+                                    )}
+                                </>
+                            ) : (
+                                invoice.type === 'INVOICE' && !isLocked && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setIsEditingInvoiceItems(true)}
+                                        className="h-14 px-6 border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-amber-300 font-bold text-xs"
+                                    >
+                                        <Edit3 className="mr-2 h-4 w-4 text-amber-400" />
+                                        Edit Line Items
+                                    </Button>
+                                )
                             )}
                         </div>
                         <div className="flex flex-wrap items-center gap-3">

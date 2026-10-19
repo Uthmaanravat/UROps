@@ -47,19 +47,7 @@ export default async function InvoicesPage({
         });
 
         const statusPrismaCondition = () => {
-            if (typeFilter === 'QUOTE') {
-                // For quotes, handle status filtering in memory so linked invoices & project payment statuses are accurately evaluated
-                return { status: { not: 'CANCELLED' as const } };
-            }
-            if (statusFilter === 'UNINVOICED') {
-                return { status: { notIn: ['INVOICED', 'CANCELLED'] as const } };
-            }
-            if (statusFilter === 'INVOICED') {
-                return { status: 'INVOICED' as const };
-            }
-            if (statusFilter) {
-                return { status: statusFilter as any };
-            }
+            // Fetch all non-cancelled records so that in-memory payment evaluation and quick tab counters remain accurate
             return { status: { not: 'CANCELLED' as const } };
         };
 
@@ -161,12 +149,18 @@ export default async function InvoicesPage({
         return false;
     };
 
-    // Pre-calculate quote counts across all fetched records before applying active view filters
+    // Pre-calculate quote & invoice counts across all fetched records before applying active view filters
     let totalQuotesCount = 0;
     let paidQuotesCount = 0;
     let activeQuotesCount = 0;
     let uninvoicedQuotesCount = 0;
     let invoicedAwaitingCount = 0;
+
+    let totalInvoicesCount = 0;
+    let paidInvoicesCount = 0;
+    let unpaidInvoicesCount = 0;
+    let draftInvoicesCount = 0;
+    let awaitingPaymentInvoicesCount = 0;
 
     if (typeFilter === 'QUOTE') {
         totalQuotesCount = invoices.length;
@@ -181,6 +175,21 @@ export default async function InvoicesPage({
                     uninvoicedQuotesCount++;
                 } else {
                     invoicedAwaitingCount++;
+                }
+            }
+        });
+    } else {
+        totalInvoicesCount = invoices.length;
+        invoices.forEach(inv => {
+            const isPaid = getIsRecordPaid(inv);
+            if (isPaid) {
+                paidInvoicesCount++;
+            } else {
+                unpaidInvoicesCount++;
+                if (inv.status === 'DRAFT') {
+                    draftInvoicesCount++;
+                } else {
+                    awaitingPaymentInvoicesCount++;
                 }
             }
         });
@@ -204,10 +213,21 @@ export default async function InvoicesPage({
             }
         }
     } else {
-        if (statusFilter === 'UNINVOICED') {
+        if (statusFilter === 'PAID') {
+            invoices = invoices.filter(inv => getIsRecordPaid(inv));
+        } else if (statusFilter === 'DRAFT') {
+            invoices = invoices.filter(inv => inv.status === 'DRAFT' && (showPaid || !getIsRecordPaid(inv)));
+        } else if (statusFilter === 'AWAITING') {
+            invoices = invoices.filter(inv => inv.status !== 'DRAFT' && !getIsRecordPaid(inv));
+        } else if (statusFilter === 'UNINVOICED') {
             invoices = invoices.filter(inv => !getIsInvoiced(inv));
         } else if (statusFilter === 'INVOICED') {
             invoices = invoices.filter(inv => getIsInvoiced(inv));
+        } else {
+            // Default active invoices view: hide old paid invoices unless showPaid is toggled ("only what needs to be paid")
+            if (!showPaid) {
+                invoices = invoices.filter(inv => !getIsRecordPaid(inv));
+            }
         }
     }
 
@@ -488,6 +508,102 @@ export default async function InvoicesPage({
                 </div>
             )}
 
+            {/* Quick Filter Bar for Invoices */}
+            {typeFilter !== 'QUOTE' && (
+                <div className="flex items-center justify-between gap-3 border-b border-border/40 pb-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-muted-foreground mr-1 uppercase tracking-wider text-[10px]">Invoice View:</span>
+                        <Link
+                            href={getQuickFilterUrl("")}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                                !statusFilter
+                                    ? "bg-primary text-black shadow-sm font-black"
+                                    : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                            )}
+                        >
+                            ⚡ Unpaid Invoices
+                            <span className={cn(
+                                "px-1.5 py-0.5 rounded-full text-[10px] font-black leading-none",
+                                !statusFilter
+                                    ? "bg-black/20 text-black"
+                                    : "bg-muted text-muted-foreground"
+                            )}>
+                                {unpaidInvoicesCount}
+                            </span>
+                        </Link>
+                        <Link
+                            href={getQuickFilterUrl("DRAFT")}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                                statusFilter === 'DRAFT'
+                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm font-black"
+                                    : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                            )}
+                        >
+                            📝 Draft
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 font-black leading-none">
+                                {draftInvoicesCount}
+                            </span>
+                        </Link>
+                        <Link
+                            href={getQuickFilterUrl("AWAITING")}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                                statusFilter === 'AWAITING'
+                                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm font-black"
+                                    : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                            )}
+                        >
+                            📨 Awaiting Payment
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 font-black leading-none">
+                                {awaitingPaymentInvoicesCount}
+                            </span>
+                        </Link>
+                        <Link
+                            href={getQuickFilterUrl("PAID")}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                                statusFilter === 'PAID'
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm font-black"
+                                    : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                            )}
+                        >
+                            ✅ Paid & Settled
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-black leading-none">
+                                {paidInvoicesCount}
+                            </span>
+                        </Link>
+                    </div>
+
+                    {/* Toggle button to include/exclude paid invoices in the active view */}
+                    {statusFilter !== 'PAID' && (
+                        <Link
+                            href={getTogglePaidUrl(!showPaid)}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 ml-auto",
+                                showPaid
+                                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25"
+                                    : "bg-muted/30 text-muted-foreground border-border/40 hover:bg-muted/60 hover:text-foreground"
+                            )}
+                            title={showPaid ? "Click to hide paid and settled invoices" : "Click to include paid and settled invoices in the list"}
+                        >
+                            {showPaid ? (
+                                <>
+                                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                                    Paid Invoices Included ({paidInvoicesCount})
+                                </>
+                            ) : (
+                                <>
+                                    <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
+                                    Show Paid Invoices ({paidInvoicesCount})
+                                </>
+                            )}
+                        </Link>
+                    )}
+                </div>
+            )}
+
             <div className="flex items-center justify-between gap-4 flex-wrap">
                 <SearchInput placeholder="Search by number or client..." />
                 <InvoiceFilters clients={clients} />
@@ -535,6 +651,8 @@ export default async function InvoicesPage({
                                     <td colSpan={9} className="h-24 text-center text-muted-foreground">
                                         {typeFilter === 'QUOTE' && !showPaid && paidQuotesCount > 0
                                             ? `No active quotes matching this view. (${paidQuotesCount} paid & archived quotes are hidden — toggle 'Show Paid Quotes' to view them).`
+                                            : typeFilter !== 'QUOTE' && !showPaid && paidInvoicesCount > 0
+                                            ? `All invoices in this view are paid! (${paidInvoicesCount} paid invoices are hidden — toggle 'Show Paid Invoices' to view them).`
                                             : (query || statusFilter || typeFilter ? "No matching records found." : "No records yet.")}
                                     </td>
                                 </tr>
