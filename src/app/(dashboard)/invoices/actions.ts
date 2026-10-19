@@ -483,7 +483,7 @@ export async function getInvoiceSequenceAction(clientId?: string, workType: 'GEN
     return `INV-${year}-${nextNumber.toString().padStart(3, '0')}`;
 }
 
-export async function convertToInvoiceAction(id: string, clientPoNumber?: string, firstPaymentPercentage?: number) {
+export async function convertToInvoiceAction(id: string, clientPoNumber?: string, firstPaymentPercentage?: number, presentationStyle?: 'AS_PER_QUOTATION' | 'DETAILED') {
     const companyId = await ensureAuth()
 
     // 1. Get the original quote details
@@ -592,8 +592,9 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             total: quote.total,
             site: quote.site,
             quoteNumber: formattedInvoiceNumber, // This is the label for the NEW invoice
-            reference: quote.reference,
+            reference: quote.quoteNumber || quote.reference || null,
             clientPoNumber: clientPoNumber || null,
+            paymentNotes: presentationStyle || 'AS_PER_QUOTATION',
             firstPaymentPercentage: firstPaymentPercentage !== undefined ? firstPaymentPercentage : quote.firstPaymentPercentage,
             date: new Date(), // Current date for the invoice
             items: {

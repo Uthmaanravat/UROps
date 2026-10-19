@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3 } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3, ListFilter } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import { LineItemEditor } from "@/components/invoices/LineItemEditor"
 import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
@@ -60,7 +60,38 @@ export function InvoiceViewer({
         itemsRef.current = items;
     }, [items]);
     const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
-    const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(invoice.type === 'QUOTE');
+    const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<boolean>(() => {
+        if (invoice.type === 'QUOTE') return true;
+        if (invoice.paymentNotes === 'AS_PER_QUOTATION') return false;
+        if (invoice.paymentNotes === 'DETAILED') return true;
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem(`urops_invoice_breakdown_${invoice.id}`);
+            if (cached === 'AS_PER_QUOTATION') return false;
+            if (cached === 'DETAILED') return true;
+        }
+        const rawItems = invoice.items || [];
+        if (rawItems.length === 1 && /as per quotation/i.test(rawItems[0]?.description || '')) {
+            return false;
+        }
+        // Default for invoices is "As per quotation"
+        return false;
+    });
+
+    const handleToggleBreakdown = async (detailed: boolean) => {
+        setShowDetailedBreakdown(detailed);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(`urops_invoice_breakdown_${invoice.id}`, detailed ? 'DETAILED' : 'AS_PER_QUOTATION');
+        }
+        if (invoice.type === 'INVOICE') {
+            try {
+                await updateInvoiceDetailsAction(invoice.id, {
+                    paymentNotes: detailed ? 'DETAILED' : 'AS_PER_QUOTATION'
+                });
+            } catch (err) {
+                console.error("Failed to persist invoice presentation format to database:", err);
+            }
+        }
+    };
     const [logoAspectRatio, setLogoAspectRatio] = useState(1);
 
     useEffect(() => {
@@ -190,7 +221,30 @@ export function InvoiceViewer({
     const linkedInvoice = invoice.type === 'QUOTE'
         ? (invoice.project?.invoices?.find((i: any) => i.type === 'INVOICE' && i.id !== invoice.id) || null)
         : null;
+    const linkedQuote = invoice.type === 'INVOICE'
+        ? (invoice.project?.invoices?.find((i: any) => i.type === 'QUOTE') || null)
+        : null;
     const isInvoiced = invoice.status === 'INVOICED' || (invoice.type === 'QUOTE' && !!linkedInvoice);
+
+    const quoteRefNumber = useMemo(() => {
+        if (invoice.reference && /Q-\d{4}-\d+/i.test(invoice.reference)) {
+            return invoice.reference.replace(/^as per quotation\s*/i, '').trim();
+        }
+        if (linkedQuote?.quoteNumber) {
+            return linkedQuote.quoteNumber.replace(/^as per quotation\s*/i, '').trim();
+        }
+        if (linkedQuote?.number) {
+            return `Q-${new Date(linkedQuote.date || invoice.date).getFullYear()}-${String(linkedQuote.number).padStart(3, '0')}`;
+        }
+        for (const item of (itemsRef.current || items)) {
+            const match = item.description?.match(/as per quotation\s+([^\n\r,]+)/i);
+            if (match) return match[1].trim();
+        }
+        if (invoice.reference) {
+            return invoice.reference.replace(/^as per quotation\s*/i, '').trim();
+        }
+        return invoice.quoteNumber ? invoice.quoteNumber.replace(/INV/i, 'Q') : "quotation";
+    }, [invoice.reference, linkedQuote, invoice.quoteNumber, invoice.date, items]);
 
     const parseAttentionToNames = (attn: string | null | undefined): string[] => {
         if (!attn) return [];
@@ -257,6 +311,7 @@ export function InvoiceViewer({
 
     const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
     const [convertPoNumber, setConvertPoNumber] = useState("");
+    const [convertPresentationStyle, setConvertPresentationStyle] = useState<'AS_PER_QUOTATION' | 'DETAILED'>('AS_PER_QUOTATION');
     const [convertFirstPaymentOption, setConvertFirstPaymentOption] = useState<string>(
         invoice.firstPaymentPercentage ? invoice.firstPaymentPercentage.toString() : "none"
     );
@@ -695,7 +750,10 @@ export function InvoiceViewer({
             const tenderIdChanged = (workType === 'TENDER' ? selectedTenderId : null) !== invoice.tenderId;
             const rateYearChanged = effectiveRateYear !== invoice.rateYear;
 
-            if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed || workTypeChanged || tenderIdChanged || rateYearChanged) {
+            const currentPresentation = invoice.type === 'INVOICE' ? (showDetailedBreakdown ? 'DETAILED' : 'AS_PER_QUOTATION') : undefined;
+            const presentationChanged = invoice.type === 'INVOICE' && invoice.paymentNotes !== currentPresentation;
+
+            if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed || workTypeChanged || tenderIdChanged || rateYearChanged || presentationChanged) {
                 promises.push(updateInvoiceDetailsAction(invoice.id, { 
                     site, 
                     reference, 
@@ -707,7 +765,8 @@ export function InvoiceViewer({
                     projectName: projectName.trim() || undefined,
                     workType,
                     tenderId: workType === 'TENDER' ? selectedTenderId : null,
-                    rateYear: effectiveRateYear
+                    rateYear: effectiveRateYear,
+                    paymentNotes: currentPresentation
                 }));
             }
 
@@ -993,61 +1052,86 @@ export function InvoiceViewer({
         // Calculate dynamic table start Y
         const startTableY = Math.max(detailY, clientLegalY, fromY) + 10;
 
-        // 3. Table with Sequential Grouping
+        // 3. Table with Sequential Grouping or Summarized "As per quotation"
         const tableBody: any[] = [];
-        const sequentialGroups: { area: string, items: any[] }[] = [];
-        items.forEach((item: any) => {
-            const area = item.area?.trim() || "";
-            const lastGroup = sequentialGroups[sequentialGroups.length - 1];
-            if (lastGroup && lastGroup.area === area) {
-                lastGroup.items.push(item);
-            } else {
-                sequentialGroups.push({ area, items: [item] });
-            }
-        });
+        const isSummarized = invoice.type === 'INVOICE' && !showDetailedBreakdown;
 
-        sequentialGroups.forEach((group: any, gIdx: number) => {
-            // Calculate global start index for this group
-            let globalStartIndex = 0;
-            for (let i = 0; i < gIdx; i++) {
-                globalStartIndex += sequentialGroups[i].items.length;
+        if (isSummarized) {
+            let summaryDesc = `As per quotation ${quoteRefNumber}`;
+            if (invoice.clientPoNumber) {
+                summaryDesc += `\n(PO: ${invoice.clientPoNumber})`;
             }
-
-            if (group.area) {
-                tableBody.push([{ content: group.area.toUpperCase(), colSpan: isTender ? 7 : 6, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 7.5, halign: 'left', cellPadding: 1.5 } }]);
-            }
-            group.items.forEach((item: any, iIdx: number) => {
-                let desc = item.description;
-                if (item.reason) {
-                    desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
+            tableBody.push(isTender ? [
+                1,
+                '-',
+                summaryDesc,
+                1,
+                'LOT',
+                formatCurrency(subtotal, currencySymbol),
+                formatCurrency(subtotal, currencySymbol)
+            ] : [
+                1,
+                summaryDesc,
+                1,
+                'LOT',
+                formatCurrency(subtotal, currencySymbol),
+                formatCurrency(subtotal, currencySymbol)
+            ]);
+        } else {
+            const sequentialGroups: { area: string, items: any[] }[] = [];
+            items.forEach((item: any) => {
+                const area = item.area?.trim() || "";
+                const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+                if (lastGroup && lastGroup.area === area) {
+                    lastGroup.items.push(item);
+                } else {
+                    sequentialGroups.push({ area, items: [item] });
                 }
-                if (item.notes) {
-                    const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
-                    const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
-                    if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
-                        // Omit redundant notes
-                    } else {
-                        desc = `${item.description}\n(Notes: ${item.notes})`;
-                    }
-                }
-                tableBody.push(isTender ? [
-                    globalStartIndex + iIdx + 1,
-                    item.code || '-',
-                    desc,
-                    item.quantity,
-                    item.unit || '',
-                    formatCurrency(item.unitPrice, currencySymbol),
-                    formatCurrency(item.quantity * item.unitPrice, currencySymbol)
-                ] : [
-                    globalStartIndex + iIdx + 1,
-                    desc,
-                    item.quantity,
-                    item.unit || '',
-                    formatCurrency(item.unitPrice, currencySymbol),
-                    formatCurrency(item.quantity * item.unitPrice, currencySymbol)
-                ]);
             });
-        });
+
+            sequentialGroups.forEach((group: any, gIdx: number) => {
+                // Calculate global start index for this group
+                let globalStartIndex = 0;
+                for (let i = 0; i < gIdx; i++) {
+                    globalStartIndex += sequentialGroups[i].items.length;
+                }
+
+                if (group.area) {
+                    tableBody.push([{ content: group.area.toUpperCase(), colSpan: isTender ? 7 : 6, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 7.5, halign: 'left', cellPadding: 1.5 } }]);
+                }
+                group.items.forEach((item: any, iIdx: number) => {
+                    let desc = item.description;
+                    if (item.reason) {
+                        desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
+                    }
+                    if (item.notes) {
+                        const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
+                        const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
+                        if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
+                            // Omit redundant notes
+                        } else {
+                            desc = `${item.description}\n(Notes: ${item.notes})`;
+                        }
+                    }
+                    tableBody.push(isTender ? [
+                        globalStartIndex + iIdx + 1,
+                        item.code || '-',
+                        desc,
+                        item.quantity,
+                        item.unit || '',
+                        formatCurrency(item.unitPrice, currencySymbol),
+                        formatCurrency(item.quantity * item.unitPrice, currencySymbol)
+                    ] : [
+                        globalStartIndex + iIdx + 1,
+                        desc,
+                        item.quantity,
+                        item.unit || '',
+                        formatCurrency(item.unitPrice, currencySymbol),
+                        formatCurrency(item.quantity * item.unitPrice, currencySymbol)
+                    ]);
+                });
+            });
+        }
 
         autoTable(doc, {
             margin: { left: 14, right: 14 },
@@ -1422,79 +1506,115 @@ export function InvoiceViewer({
                 cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
             });
 
-            // 6. Table Body with Sequential Grouping
-            const sequentialGroups: { area: string, items: any[] }[] = [];
-            items.forEach((item: any) => {
-                const area = item.area?.trim() || "";
-                const lastGroup = sequentialGroups[sequentialGroups.length - 1];
-                if (lastGroup && lastGroup.area === area) {
-                    lastGroup.items.push(item);
-                } else {
-                    sequentialGroups.push({ area, items: [item] });
-                }
-            });
-
+            // 6. Table Body with Sequential Grouping or Summarized Row
+            const isSummarized = invoice.type === 'INVOICE' && !showDetailedBreakdown;
             currentRow++;
-            sequentialGroups.forEach((group: any, gIdx: number) => {
-                // Calculate global start index for this group
-                let globalStartIndex = 0;
-                for (let i = 0; i < gIdx; i++) {
-                    globalStartIndex += sequentialGroups[i].items.length;
+
+            if (isSummarized) {
+                const row = worksheet.getRow(currentRow);
+                row.height = 24;
+                let summaryDesc = `As per quotation ${quoteRefNumber}`;
+                if (invoice.clientPoNumber) {
+                    summaryDesc += ` (PO: ${invoice.clientPoNumber})`;
                 }
 
-                if (group.area) {
-                    worksheet.mergeCells(`A${currentRow}:G${currentRow}`);
-                    const groupCell = worksheet.getCell(`A${currentRow}`);
-                    groupCell.value = group.area.toUpperCase();
-                    groupCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-                    groupCell.font = { bold: true, size: 8, italic: true, color: { argb: 'FF14141E' } };
-                    groupCell.alignment = { horizontal: 'left' };
-                    currentRow++;
-                }
+                row.values = [
+                    1,
+                    isTender ? '-' : '',
+                    summaryDesc,
+                    1,
+                    'LOT',
+                    subtotal,
+                    subtotal
+                ];
 
-                group.items.forEach((item: any, iIdx: number) => {
-                    const row = worksheet.getRow(currentRow);
-                    row.height = 18; // Even more compact
-                    let desc = item.description;
-                    if (item.reason) {
-                        desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
-                    }
-                    if (item.notes) {
-                        const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
-                        const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
-                        if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
-                            // Omit redundant notes
-                        } else {
-                            desc = `${item.description}\n(Notes: ${item.notes})`;
-                        }
-                    }
-                    row.values = [
-                        globalStartIndex + iIdx + 1,
-                        isTender ? (item.code || '-') : '',
-                        desc,
-                        item.quantity,
-                        item.unit || '',
-                        item.unitPrice,
-                        item.quantity * item.unitPrice
-                    ];
-                    
-                    row.getCell(1).alignment = { horizontal: 'center' };
-                    row.getCell(3).alignment = { wrapText: true, horizontal: 'left' };
-                    row.getCell(4).alignment = { horizontal: 'center' };
-                    row.getCell(5).alignment = { horizontal: 'center' };
-                    row.getCell(6).alignment = { horizontal: 'right' };
-                    row.getCell(6).numFmt = '"R"#,##0.00';
-                    row.getCell(7).alignment = { horizontal: 'right' };
-                    row.getCell(7).numFmt = '"R"#,##0.00';
-                    row.getCell(7).font = { bold: true };
-                    
-                    // Borders
-                    row.eachCell((cell) => {
-                        cell.border = { bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } } };
-                    });
-                    currentRow++;
+                row.getCell(1).alignment = { horizontal: 'center' };
+                row.getCell(3).alignment = { wrapText: true, horizontal: 'left' };
+                row.getCell(4).alignment = { horizontal: 'center' };
+                row.getCell(5).alignment = { horizontal: 'center' };
+                row.getCell(6).alignment = { horizontal: 'right' };
+                row.getCell(6).numFmt = '"R"#,##0.00';
+                row.getCell(7).alignment = { horizontal: 'right' };
+                row.getCell(7).numFmt = '"R"#,##0.00';
+                row.getCell(7).font = { bold: true };
+
+                row.eachCell((cell) => {
+                    cell.border = { bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } } };
                 });
-            });
+                currentRow++;
+            } else {
+                const sequentialGroups: { area: string, items: any[] }[] = [];
+                items.forEach((item: any) => {
+                    const area = item.area?.trim() || "";
+                    const lastGroup = sequentialGroups[sequentialGroups.length - 1];
+                    if (lastGroup && lastGroup.area === area) {
+                        lastGroup.items.push(item);
+                    } else {
+                        sequentialGroups.push({ area, items: [item] });
+                    }
+                });
+
+                sequentialGroups.forEach((group: any, gIdx: number) => {
+                    // Calculate global start index for this group
+                    let globalStartIndex = 0;
+                    for (let i = 0; i < gIdx; i++) {
+                        globalStartIndex += sequentialGroups[i].items.length;
+                    }
+
+                    if (group.area) {
+                        worksheet.mergeCells(`A${currentRow}:G${currentRow}`);
+                        const groupCell = worksheet.getCell(`A${currentRow}`);
+                        groupCell.value = group.area.toUpperCase();
+                        groupCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+                        groupCell.font = { bold: true, size: 8, italic: true, color: { argb: 'FF14141E' } };
+                        groupCell.alignment = { horizontal: 'left' };
+                        currentRow++;
+                    }
+
+                    group.items.forEach((item: any, iIdx: number) => {
+                        const row = worksheet.getRow(currentRow);
+                        row.height = 18; // Even more compact
+                        let desc = item.description;
+                        if (item.reason) {
+                            desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
+                        }
+                        if (item.notes) {
+                            const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
+                            const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
+                            if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
+                                // Omit redundant notes
+                            } else {
+                                desc = `${item.description}\n(Notes: ${item.notes})`;
+                            }
+                        }
+                        row.values = [
+                            globalStartIndex + iIdx + 1,
+                            isTender ? (item.code || '-') : '',
+                            desc,
+                            item.quantity,
+                            item.unit || '',
+                            item.unitPrice,
+                            item.quantity * item.unitPrice
+                        ];
+                        
+                        row.getCell(1).alignment = { horizontal: 'center' };
+                        row.getCell(3).alignment = { wrapText: true, horizontal: 'left' };
+                        row.getCell(4).alignment = { horizontal: 'center' };
+                        row.getCell(5).alignment = { horizontal: 'center' };
+                        row.getCell(6).alignment = { horizontal: 'right' };
+                        row.getCell(6).numFmt = '"R"#,##0.00';
+                        row.getCell(7).alignment = { horizontal: 'right' };
+                        row.getCell(7).numFmt = '"R"#,##0.00';
+                        row.getCell(7).font = { bold: true };
+                        
+                        // Borders
+                        row.eachCell((cell) => {
+                            cell.border = { bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } } };
+                        });
+                        currentRow++;
+                    });
+                });
+            }
 
             // 7. Totals
             currentRow++;
@@ -1643,7 +1763,7 @@ export function InvoiceViewer({
         }
 
         try {
-            const newInvoiceId = await convertToInvoiceAction(invoice.id, convertPoNumber || undefined, finalPct);
+            const newInvoiceId = await convertToInvoiceAction(invoice.id, convertPoNumber || undefined, finalPct, convertPresentationStyle);
             setIsConvertDialogOpen(false);
             setLoading(false);
             router.push(`/invoices/${newInvoiceId}`);
@@ -1831,11 +1951,41 @@ export function InvoiceViewer({
                             <Download className="mr-2 h-4 w-4 text-rose-500" /> PDF
                         </Button>
                         
-                        <div className="w-px h-6 bg-white/10 self-center mx-1" />
-                        
-                        <Button variant="ghost" size="sm" onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
-                            <FileText className="mr-2 h-4 w-4 text-blue-400" /> {showDetailedBreakdown ? "Summarized" : "Detailed"}
-                        </Button>
+                        {invoice.type === 'INVOICE' && (
+                            <>
+                                <div className="w-px h-6 bg-white/10 self-center mx-1" />
+                                <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-white/10">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleBreakdown(false)}
+                                        title="Display as 'As per quotation'"
+                                        className={cn(
+                                            "px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5",
+                                            !showDetailedBreakdown
+                                                ? "bg-primary text-primary-foreground shadow-sm"
+                                                : "text-gray-400 hover:text-white"
+                                        )}
+                                    >
+                                        <FileText className="h-3.5 w-3.5" />
+                                        As per quotation
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleBreakdown(true)}
+                                        title="Display itemized line items"
+                                        className={cn(
+                                            "px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5",
+                                            showDetailedBreakdown
+                                                ? "bg-primary text-primary-foreground shadow-sm"
+                                                : "text-gray-400 hover:text-white"
+                                        )}
+                                    >
+                                        <ListFilter className="h-3.5 w-3.5" />
+                                        Detailed ({items.length})
+                                    </button>
+                                </div>
+                            </>
+                        )}
 
                         {invoice.type === 'INVOICE' && !isLocked && (
                             <>
@@ -1937,6 +2087,18 @@ export function InvoiceViewer({
                                                 />
                                             </div>
                                         )}
+                                        <div className="space-y-3">
+                                            <Label htmlFor="convertPresentation" className="text-[10px] font-black uppercase tracking-widest text-primary">Invoice Line Item Format</Label>
+                                            <select
+                                                id="convertPresentation"
+                                                value={convertPresentationStyle}
+                                                onChange={(e) => setConvertPresentationStyle(e.target.value as 'AS_PER_QUOTATION' | 'DETAILED')}
+                                                className="flex h-11 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-primary font-bold"
+                                            >
+                                                <option value="AS_PER_QUOTATION" className="bg-[#1E293B]">As per Quotation (Summary row with Quote ref)</option>
+                                                <option value="DETAILED" className="bg-[#1E293B]">Detailed Line Items (Itemize all quote rows)</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <DialogFooter>
                                         <Button variant="ghost" onClick={() => setIsConvertDialogOpen(false)} className="text-gray-400">Cancel</Button>
@@ -2559,24 +2721,51 @@ export function InvoiceViewer({
                     </div>
                 ) : (
                     <div className="mb-10 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
-                        {invoice.type === 'INVOICE' && !isLocked && (
-                            <div className="flex items-center justify-between mb-4 print:hidden">
+                        {invoice.type === 'INVOICE' && (
+                            <div className="flex flex-wrap items-center justify-between gap-3 mb-4 print:hidden bg-white/[0.02] p-2.5 rounded-xl border border-white/5">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Line Items</span>
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-gray-400">
-                                        {items.length} {items.length === 1 ? 'item' : 'items'}
-                                    </span>
+                                    <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Format:</span>
+                                    <div className="inline-flex rounded-lg bg-black/40 p-1 border border-white/10">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleBreakdown(false)}
+                                            className={cn(
+                                                "px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5",
+                                                !showDetailedBreakdown
+                                                    ? "bg-primary text-primary-foreground shadow-sm"
+                                                    : "text-gray-400 hover:text-white"
+                                            )}
+                                        >
+                                            <FileText className="h-3.5 w-3.5" />
+                                            As per quotation
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleBreakdown(true)}
+                                            className={cn(
+                                                "px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1.5",
+                                                showDetailedBreakdown
+                                                    ? "bg-primary text-primary-foreground shadow-sm"
+                                                    : "text-gray-400 hover:text-white"
+                                            )}
+                                        >
+                                            <ListFilter className="h-3.5 w-3.5" />
+                                            Detailed Items ({items.length})
+                                        </button>
+                                    </div>
                                 </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setIsEditingInvoiceItems(true)}
-                                    className="h-8 text-xs font-bold gap-2 bg-white/5 text-amber-300 border border-amber-500/30 hover:bg-amber-500/10"
-                                >
-                                    <Edit3 className="h-3.5 w-3.5 text-amber-400" />
-                                    Edit Line Items
-                                </Button>
+                                {!isLocked && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setIsEditingInvoiceItems(true)}
+                                        className="h-8 text-xs font-bold gap-2 bg-white/5 text-amber-300 border border-amber-500/30 hover:bg-amber-500/10"
+                                    >
+                                        <Edit3 className="h-3.5 w-3.5 text-amber-400" />
+                                        Edit Line Items
+                                    </Button>
+                                )}
                             </div>
                         )}
                         <table className="w-full min-w-[600px] md:min-w-full">
@@ -2590,7 +2779,38 @@ export function InvoiceViewer({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {(() => {
+                                {invoice.type === 'INVOICE' && !showDetailedBreakdown ? (
+                                    <tr className="group hover:bg-white/[0.02] transition-colors">
+                                        <td className="py-4 text-center align-middle relative">
+                                            <span className="text-xs font-black text-gray-400">1</span>
+                                        </td>
+                                        <td className="py-4 pr-8">
+                                            <div className="text-[13px] md:text-sm font-bold text-white tracking-tight leading-snug">
+                                                As per quotation {quoteRefNumber}
+                                            </div>
+                                            {invoice.clientPoNumber && (
+                                                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-primary font-medium">
+                                                    <span className="text-[8px] font-black uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">Client PO</span>
+                                                    <span>{invoice.clientPoNumber}</span>
+                                                </div>
+                                            )}
+                                            {site && (
+                                                <div className="mt-1 text-[11px] text-muted-foreground">
+                                                    Site: {site}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="py-4 text-center align-middle">
+                                            <span className="text-xs font-black text-gray-400">1 <span className="text-[9px] uppercase ml-1 opacity-50">LOT</span></span>
+                                        </td>
+                                        <td className="py-4 text-right align-middle">
+                                            <span className="text-xs font-bold text-white">{formatCurrency(subtotal, currencySymbol)}</span>
+                                        </td>
+                                        <td className="py-4 text-right font-black text-[13px] md:text-sm text-white align-middle">
+                                            {formatCurrency(subtotal, currencySymbol)}
+                                        </td>
+                                    </tr>
+                                ) : (() => {
                                     const sequentialGroups: { area: string, items: any[] }[] = [];
                                     items.forEach((item: any, index: number) => {
                                         const area = item.area?.trim() || "GENERAL"

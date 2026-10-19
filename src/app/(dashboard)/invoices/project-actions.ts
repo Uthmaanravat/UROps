@@ -31,7 +31,7 @@ export async function updateInvoiceProjectAction(invoiceId: string, projectId: s
     revalidatePath(`/invoices/${invoiceId}`)
     revalidatePath("/projects")
 }
-export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string, firstPaymentPercentage?: number | null, contactId?: string | null, attentionTo?: string | null, projectName?: string, workType?: 'GENERAL' | 'TENDER', tenderId?: string | null, rateYear?: number }) {
+export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string, firstPaymentPercentage?: number | null, contactId?: string | null, attentionTo?: string | null, projectName?: string, workType?: 'GENERAL' | 'TENDER', tenderId?: string | null, rateYear?: number, paymentNotes?: string | null }) {
     const companyId = await ensureAuth()
 
     const invoiceRecord = await prisma.invoice.findUnique({
@@ -94,6 +94,7 @@ export async function updateInvoiceDetailsAction(invoiceId: string, data: { site
         data: {
             site: data.site,
             reference: data.reference,
+            paymentNotes: data.paymentNotes !== undefined ? data.paymentNotes : undefined,
             quoteNumber: data.quoteNumber,
             number: nextNumber !== undefined ? nextNumber : undefined,
             date: data.date ? new Date(data.date) : undefined,
