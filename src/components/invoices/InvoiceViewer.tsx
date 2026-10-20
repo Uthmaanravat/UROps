@@ -1231,8 +1231,12 @@ export function InvoiceViewer({
         // Define page height for later calculations
         const pageHeight = doc.internal.pageSize.getHeight();
         let currentY = finalY;
-        if (invoice.paymentNotes) {
-            const notesLines = doc.splitTextToSize(invoice.paymentNotes, 180);
+        const rawPaymentNotes = (invoice.paymentNotes || "").trim();
+        const isPresentationFlag = rawPaymentNotes.toUpperCase() === 'AS_PER_QUOTATION' || rawPaymentNotes.toUpperCase() === 'DETAILED';
+        const customPaymentNotes = isPresentationFlag ? "" : rawPaymentNotes;
+
+        if (customPaymentNotes) {
+            const notesLines = doc.splitTextToSize(customPaymentNotes, 180);
             const notesHeight = (notesLines.length * 4.5) + 10;
             // Ensure we have space on the page
             if (currentY + notesHeight > pageHeight - 15) {
