@@ -2,7 +2,7 @@
 import React from 'react'
 
 import { Button } from "@/components/ui/button"
-import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
+import { formatCurrency, LINE_ITEM_REASONS, isReasonAlreadyInDescription } from "@/lib/utils"
 import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3, ListFilter } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import { LineItemEditor } from "@/components/invoices/LineItemEditor"
@@ -1101,7 +1101,7 @@ export function InvoiceViewer({
                 }
                 group.items.forEach((item: any, iIdx: number) => {
                     let desc = item.description;
-                    if (item.reason) {
+                    if (item.reason && !isReasonAlreadyInDescription(item.description, item.reason)) {
                         desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
                     }
                     if (item.notes) {
@@ -1110,7 +1110,7 @@ export function InvoiceViewer({
                         if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
                             // Omit redundant notes
                         } else {
-                            desc = `${item.description}\n(Notes: ${item.notes})`;
+                            desc = `${desc}\n(Notes: ${item.notes})`;
                         }
                     }
                     tableBody.push(isTender ? [
@@ -1579,7 +1579,7 @@ export function InvoiceViewer({
                         const row = worksheet.getRow(currentRow);
                         row.height = 18; // Even more compact
                         let desc = item.description;
-                        if (item.reason) {
+                        if (item.reason && !isReasonAlreadyInDescription(item.description, item.reason)) {
                             desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
                         }
                         if (item.notes) {
@@ -1588,7 +1588,7 @@ export function InvoiceViewer({
                             if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
                                 // Omit redundant notes
                             } else {
-                                desc = `${item.description}\n(Notes: ${item.notes})`;
+                                desc = `${desc}\n(Notes: ${item.notes})`;
                             }
                         }
                         row.values = [
@@ -2858,7 +2858,7 @@ export function InvoiceViewer({
                                                                 )}
                                                                 <div className="text-[13px] md:text-sm font-bold text-white tracking-tight leading-snug">{item.description}</div>
                                                             </div>
-                                                                {item.reason && (
+                                                                {item.reason && !isReasonAlreadyInDescription(item.description, item.reason) && (
                                                                     <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-300 font-medium">
                                                                         <span className="text-[8px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">Due to</span>
                                                                         <span>{item.reason.replace(/^due to:?\s*/i, '')}</span>

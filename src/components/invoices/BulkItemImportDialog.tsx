@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { formatCurrency, LINE_ITEM_REASONS } from "@/lib/utils"
+import { formatCurrency, LINE_ITEM_REASONS, isReasonAlreadyInDescription } from "@/lib/utils"
 import { ClipboardPaste, Check, AlertCircle, FileSpreadsheet, Trash2 } from "lucide-react"
 
 export interface ParsedBulkItem {
@@ -130,7 +130,7 @@ export function parseBulkLineItems(text: string): ParsedBulkItem[] {
             unitPrice = parseNumber(parts[4]);
             reason = parts[5] || "";
         } else if (parts.length === 5) {
-            if (isNaN(parseNumber(parts[2])) && !isNaN(parseNumber(parts[3]))) {
+            if (!isNaN(parseNumber(parts[2])) && !isNaN(parseNumber(parts[4]))) {
                 area = parts[0];
                 description = parts[1];
                 quantity = parseNumber(parts[2]) || 1;
@@ -298,7 +298,7 @@ export function BulkItemImportDialog({
                                                 </td>
                                                 <td className="py-1 px-2 text-white font-sans max-w-[240px] truncate" title={item.description}>
                                                     {item.description}
-                                                    {item.reason && (
+                                                    {item.reason && !isReasonAlreadyInDescription(item.description, item.reason) && (
                                                         <span className="ml-1.5 text-[9px] font-mono text-amber-400/90 bg-amber-400/10 px-1 py-0.2 rounded border border-amber-400/20">
                                                             {item.reason}
                                                         </span>

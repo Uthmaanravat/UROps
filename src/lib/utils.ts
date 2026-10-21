@@ -46,3 +46,44 @@ export function compareItemCodes(a?: string | null, b?: string | null): number {
     return a.trim().localeCompare(b.trim(), undefined, { numeric: true, sensitivity: 'base' });
 }
 
+/**
+ * Checks if the justification reason (e.g. "Damage", "Wear and Tear") is already
+ * explicitly stated inside the item's description text (e.g. "- Due to Damage").
+ * This prevents duplicating justifications on quotes/invoices like:
+ * "Replace Door Hinges - Due to Damage \n(Due to: Damage)"
+ */
+export function isReasonAlreadyInDescription(description?: string | null, reason?: string | null): boolean {
+    if (!description || !reason) return false;
+    const cleanReason = reason.replace(/^due to:?\s*/i, '').trim().toLowerCase().replace(/&/g, 'and');
+    if (!cleanReason) return false;
+
+    const cleanDesc = description.toLowerCase().replace(/&/g, 'and');
+
+    // 1. Direct match: contains "due to <reason>" or "due to: <reason>" or "due to - <reason>"
+    if (
+        cleanDesc.includes(`due to ${cleanReason}`) ||
+        cleanDesc.includes(`due to: ${cleanReason}`) ||
+        cleanDesc.includes(`due to - ${cleanReason}`) ||
+        cleanDesc.includes(`due to:${cleanReason}`)
+    ) {
+        return true;
+    }
+
+    // 2. Flexible regex matching "due to ... <reason>"
+    const escapedReason = cleanReason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`due\\s+to[:\\s\\-\\(\\[]*${escapedReason}`, 'i').test(cleanDesc)) {
+        return true;
+    }
+
+    // 3. Suffix format like "- Damage", "(Damage)", ": Damage", "– Damage" at end of line/string
+    if (new RegExp(`[\\-\\–\\—\\(:\\|]\\s*${escapedReason}\\s*\\)?$`, 'i').test(cleanDesc)) {
+        return true;
+    }
+
+    // 4. Any "due to" clause in the description that mentions the reason word
+    if (/due\s+to\b/i.test(cleanDesc) && cleanDesc.includes(cleanReason)) {
+        return true;
+    }
+
+    return false;
+}
