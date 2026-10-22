@@ -25,7 +25,10 @@ export function ItemPositionInput({
     // Keep input in sync with external position changes when not actively focused
     useEffect(() => {
         if (!isFocused) {
-            setInputValue(String(position));
+            setInputValue(prev => {
+                const target = String(position);
+                return prev === target ? prev : target;
+            });
         }
     }, [position, isFocused]);
 

@@ -13,7 +13,8 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
 
     // Validate invoice ownership once
     const invoice = await prisma.invoice.findUnique({
-        where: { id: invoiceId, companyId }
+        where: { id: invoiceId, companyId },
+        select: { id: true }
     })
     if (!invoice) throw new Error("Invoice not found or unauthorized")
 

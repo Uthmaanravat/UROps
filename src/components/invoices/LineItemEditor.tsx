@@ -71,7 +71,7 @@ function AutoGrowTextarea({
         <textarea
             ref={textareaRef}
             rows={1}
-            value={value}
+            value={value ?? ""}
             readOnly={readOnly}
             placeholder={placeholder}
             onChange={(e) => {
@@ -644,15 +644,16 @@ export function LineItemEditor({
                                             value={item.code || ""}
                                             onChange={(e) => {
                                                 const val = e.target.value.toUpperCase()
-                                                updateItem(index, "code", val)
                                                 setCodeSearchQuery(val)
                                                 setActiveCodeDropdownIndex(index)
                                                 setHighlightedCodeOptionIndex(0)
 
-                                                // Instant match check
+                                                // Instant match check: apply directly without double onChange triggering
                                                 const matched = catalog.find((c: any) => c.code?.toUpperCase() === val)
                                                 if (matched) {
                                                     applyCatalogItem(index, matched)
+                                                } else {
+                                                    updateItem(index, "code", val)
                                                 }
                                             }}
                                             onFocus={() => {

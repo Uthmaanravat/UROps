@@ -21,7 +21,7 @@ import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from
 import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction, getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction, renameProjectAction } from "@/app/(dashboard)/invoices/project-actions"
-import { useState, useEffect, useRef, useMemo, Fragment } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -54,11 +54,15 @@ export function InvoiceViewer({
     const itemsRef = useRef<any[]>(invoice.items);
     const draftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isSavingRef = useRef(false);
+    const queuedSaveRef = useRef(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [justSavedManually, setJustSavedManually] = useState(false);
+    const [savedCount, setSavedCount] = useState<number>(0);
 
-    useEffect(() => {
-        itemsRef.current = items;
-    }, [items]);
+    const updateItems = useCallback((newItems: any[]) => {
+        itemsRef.current = newItems;
+        setItems(newItems);
+    }, []);
     const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
     const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<boolean>(() => {
         if (invoice.type === 'QUOTE') return true;
@@ -321,8 +325,6 @@ export function InvoiceViewer({
             : ""
     );
 
-    const [justSavedManually, setJustSavedManually] = useState(false);
-
     const handleAddItem = () => {
         const newItem = {
             id: `new-${Date.now()}`,
@@ -335,8 +337,7 @@ export function InvoiceViewer({
             total: 0
         };
         const next = [...(itemsRef.current || items), newItem];
-        itemsRef.current = next;
-        setItems(next);
+        updateItems(next);
     };
 
     const handleDeleteItem = (id: string) => {
@@ -530,8 +531,7 @@ export function InvoiceViewer({
                 }
                 return item;
             });
-            itemsRef.current = nextItems;
-            setItems(nextItems);
+            updateItems(nextItems);
             setPricingSuggestions(res || {});
             alert(`Applied ${appliedCount} pricing rate${appliedCount === 1 ? '' : 's'} from Pricing Intelligence!`);
         } catch (err) {
@@ -640,11 +640,10 @@ export function InvoiceViewer({
         setNote(invoice.notes || "");
     };
 
-    // Debounced Auto-Save to localStorage
+    // Debounced Auto-Save to localStorage (safe: no synchronous setState in effect body)
     useEffect(() => {
         if (!initialLoaded.current || isRestoring.current || loading || pendingDraft || isDiscardedRef.current) return;
 
-        setIsSavingDraft(true);
         if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
         draftTimeoutRef.current = setTimeout(() => {
             const currentItems = itemsRef.current || items;
@@ -687,14 +686,13 @@ export function InvoiceViewer({
     }, [items, site, reference, quoteNumber, date, note, firstPaymentOption, customFirstPaymentPercentage, contactId, attentionTo, loading, pendingDraft]);
 
     const saveChanges = async () => {
-        // Prevent concurrent overlapping save invocations (e.g. onBlur + onClick)
-        if (isSavingRef.current) return;
-        isSavingRef.current = true;
-
-        // Blur active element to force committing any pending browser inputs
-        if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
+        // Concurrency safeguard: queue pending save if a save is currently in-flight to prevent dropped edits!
+        if (isSavingRef.current) {
+            queuedSaveRef.current = true;
+            return;
         }
+        isSavingRef.current = true;
+        queuedSaveRef.current = false;
 
         // Cancel any pending auto-save draft timer
         if (draftTimeoutRef.current) {
@@ -704,10 +702,13 @@ export function InvoiceViewer({
 
         setLoading(true);
         setSaveError(null);
+
+        // Capture snapshot of items being dispatched to the server
+        const currentSnapshot = itemsRef.current || items;
+
         try {
-            const currentItems = itemsRef.current || items;
-            // Map local items to the format expected by the server action
-            const updates = currentItems.map(item => ({
+            // Map snapshot items to the format expected by the server action
+            const updates = currentSnapshot.map(item => ({
                 id: item.id,
                 description: item.description,
                 area: item.area,
@@ -720,67 +721,95 @@ export function InvoiceViewer({
                 rateYear: item.rateYear || null
             }));
 
-            let savedItems = null;
-            if (updates.length > 0) {
-                savedItems = await updateInvoiceItemsAction(invoice.id, updates);
-            }
+            // 25s save timeout safeguard: never leave button in infinite spinner
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("Save request timed out after 25s. Your edits remain intact in browser storage. Click Retry Save.")), 25000)
+            );
 
-            const promises = [];
-
-            // Always save note if it's different
-            if (note !== invoice.notes) {
-                promises.push(updateInvoiceNoteAction(invoice.id, note));
-            }
-
-            // Handle Project/Site/Ref/QuoteNumber updates
-            let finalPct: number | null = null;
-            if (firstPaymentOption === "20") finalPct = 20;
-            else if (firstPaymentOption === "50") finalPct = 50;
-            else if (firstPaymentOption === "75") finalPct = 75;
-            else if (firstPaymentOption === "custom") {
-                const parsed = parseFloat(customFirstPaymentPercentage);
-                if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
-                    finalPct = parsed;
+            const performSave = async () => {
+                let savedItems = null;
+                if (updates.length > 0) {
+                    savedItems = await updateInvoiceItemsAction(invoice.id, updates);
                 }
-            }
 
-            const dbPct = invoice.firstPaymentPercentage;
-            const isProjectRenamed = invoice.projectId && projectName.trim() && projectName.trim() !== invoice.project?.name;
-            const workTypeChanged = workType !== invoice.workType;
-            const tenderIdChanged = (workType === 'TENDER' ? selectedTenderId : null) !== invoice.tenderId;
-            const rateYearChanged = effectiveRateYear !== invoice.rateYear;
+                const promises = [];
 
-            const currentPresentation = invoice.type === 'INVOICE' ? (showDetailedBreakdown ? 'DETAILED' : 'AS_PER_QUOTATION') : undefined;
-            const presentationChanged = invoice.type === 'INVOICE' && invoice.paymentNotes !== currentPresentation;
+                if (note !== invoice.notes) {
+                    promises.push(updateInvoiceNoteAction(invoice.id, note));
+                }
 
-            if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed || workTypeChanged || tenderIdChanged || rateYearChanged || presentationChanged) {
-                promises.push(updateInvoiceDetailsAction(invoice.id, { 
-                    site, 
-                    reference, 
-                    quoteNumber, 
-                    date, 
-                    firstPaymentPercentage: finalPct,
-                    contactId: contactId || null,
-                    attentionTo: attentionTo || null,
-                    projectName: projectName.trim() || undefined,
-                    workType,
-                    tenderId: workType === 'TENDER' ? selectedTenderId : null,
-                    rateYear: effectiveRateYear,
-                    paymentNotes: currentPresentation
-                }));
-            }
+                let finalPct: number | null = null;
+                if (firstPaymentOption === "20") finalPct = 20;
+                else if (firstPaymentOption === "50") finalPct = 50;
+                else if (firstPaymentOption === "75") finalPct = 75;
+                else if (firstPaymentOption === "custom") {
+                    const parsed = parseFloat(customFirstPaymentPercentage);
+                    if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                        finalPct = parsed;
+                    }
+                }
 
-            if (promises.length > 0) {
-                await Promise.all(promises);
-            }
+                const dbPct = invoice.firstPaymentPercentage;
+                const isProjectRenamed = invoice.projectId && projectName.trim() && projectName.trim() !== invoice.project?.name;
+                const workTypeChanged = workType !== invoice.workType;
+                const tenderIdChanged = (workType === 'TENDER' ? selectedTenderId : null) !== invoice.tenderId;
+                const rateYearChanged = effectiveRateYear !== invoice.rateYear;
 
+                const currentPresentation = invoice.type === 'INVOICE' ? (showDetailedBreakdown ? 'DETAILED' : 'AS_PER_QUOTATION') : undefined;
+                const presentationChanged = invoice.type === 'INVOICE' && invoice.paymentNotes !== currentPresentation;
+
+                if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed || workTypeChanged || tenderIdChanged || rateYearChanged || presentationChanged) {
+                    promises.push(updateInvoiceDetailsAction(invoice.id, { 
+                        site, 
+                        reference, 
+                        quoteNumber, 
+                        date, 
+                        firstPaymentPercentage: finalPct,
+                        contactId: contactId || null,
+                        attentionTo: attentionTo || null,
+                        projectName: projectName.trim() || undefined,
+                        workType,
+                        tenderId: workType === 'TENDER' ? selectedTenderId : null,
+                        rateYear: effectiveRateYear,
+                        paymentNotes: currentPresentation
+                    }));
+                }
+
+                if (promises.length > 0) {
+                    await Promise.all(promises);
+                }
+
+                return savedItems;
+            };
+
+            const savedItems = await Promise.race([performSave(), timeoutPromise]);
+
+            // Protect against data loss if user made further edits while save was in-flight!
             if (savedItems) {
-                itemsRef.current = savedItems;
-                setItems(savedItems);
+                if (itemsRef.current === currentSnapshot) {
+                    // No edits occurred during save round-trip — safe to set returned items
+                    itemsRef.current = savedItems;
+                    setItems(savedItems);
+                } else {
+                    // User made in-flight edits while saving! Preserve local edits and assign generated IDs
+                    const currentList = itemsRef.current || [];
+                    const merged = currentList.map((item, idx) => {
+                        const match = savedItems[idx];
+                        if (match && match.id && (!item.id || item.id.startsWith('clone-') || item.id.startsWith('bulk-'))) {
+                            return { ...item, id: match.id };
+                        }
+                        return item;
+                    });
+                    itemsRef.current = merged;
+                    setItems(merged);
+                    // Mark queued save so user's in-flight edits will be saved immediately
+                    queuedSaveRef.current = true;
+                }
             }
 
             const now = Date.now();
             setDbSavedAt(now);
+            setSavedCount(updates.length);
             setJustSavedManually(true);
             setTimeout(() => setJustSavedManually(false), 4500);
 
@@ -793,17 +822,25 @@ export function InvoiceViewer({
             console.error("Error saving changes:", error);
             const msg = error?.message || "Failed to save changes. Please try again.";
             setSaveError(msg);
-            alert(`Failed to save changes: ${msg}`);
         } finally {
             setLoading(false);
             isSavingRef.current = false;
-            try {
-                router.refresh();
-            } catch (err) {
-                console.error("router.refresh error:", err);
+
+            // If user made edits during in-flight save, automatically persist them now!
+            if (queuedSaveRef.current) {
+                queuedSaveRef.current = false;
+                setTimeout(() => {
+                    saveChanges();
+                }, 100);
+            } else {
+                try {
+                    router.refresh();
+                } catch (err) {
+                    console.error("router.refresh error:", err);
+                }
             }
         }
-    }
+    };
 
     const handleProjectChange = async (newProjectId: string) => {
         setLoading(true);
@@ -2687,10 +2724,7 @@ export function InvoiceViewer({
                                 </div>
                                 <LineItemEditor
                                     items={items}
-                                    onChange={(newItems) => {
-                                        itemsRef.current = newItems;
-                                        setItems(newItems);
-                                    }}
+                                    onChange={updateItems}
                                     catalog={activeCatalog}
                                     workType={workType}
                                     rateYear={effectiveRateYear}
@@ -3040,9 +3074,21 @@ export function InvoiceViewer({
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
                             {saveError && (
-                                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-bold animate-in fade-in">
-                                    <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
-                                    <span>Save Error: {saveError}</span>
+                                <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-bold animate-in fade-in">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                                        <span>Save Failed: {saveError}</span>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={saveChanges}
+                                        disabled={loading}
+                                        className="h-7 px-3 bg-red-500/20 hover:bg-red-500/30 text-red-100 text-xs font-bold rounded-lg border border-red-500/30"
+                                    >
+                                        Retry Now
+                                    </Button>
                                 </div>
                             )}
                             {invoice.type === 'QUOTE' && checkInvalidItems(items).length > 0 && (
@@ -3067,10 +3113,22 @@ export function InvoiceViewer({
                             >
                                 {loading ? (
                                     <span className="flex items-center gap-2">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Saving...
+                                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                        Saving to Database...
                                     </span>
-                                ) : justSavedManually ? "✓ Saved to Database!" : saveError ? "Retry Save" : "Save Changes"}
+                                ) : justSavedManually ? (
+                                    <span className="flex items-center gap-2 text-white">
+                                        <CheckCircle2 className="h-4 w-4 text-white" />
+                                        ✓ Saved ({savedCount || items.length} {((savedCount || items.length) === 1) ? 'item' : 'items'})!
+                                    </span>
+                                ) : saveError ? (
+                                    <span className="flex items-center gap-2 text-red-300">
+                                        <AlertCircle className="h-4 w-4 text-red-400" />
+                                        Retry Save
+                                    </span>
+                                ) : (
+                                    "Save Changes"
+                                )}
                             </Button>
                             {invoice.type === 'QUOTE' && (
                                 <Button 
