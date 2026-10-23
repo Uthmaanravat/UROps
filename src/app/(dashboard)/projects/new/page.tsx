@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/prisma"
 import { ProjectForm } from "@/components/projects/ProjectForm"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export const dynamic = 'force-dynamic'
 
 export default async function NewProjectPage() {
+    const companyId = await ensureAuth()
     const clients = await prisma.client.findMany({
+        where: { companyId },
         orderBy: { name: 'asc' },
         select: { id: true, name: true }
     })

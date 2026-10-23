@@ -7,12 +7,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { signUpAction } from "@/app/actions/auth"
+import { Badge } from "@/components/ui/badge"
 
-export function SignUpForm() {
-    const [email, setEmail] = useState("")
-    const [password, setPassword] = useState("")
+interface SignUpFormProps {
+    token: string
+    email: string
+    role: string
+    companyName: string
+}
+
+export function SignUpForm({ token, email, role, companyName }: SignUpFormProps) {
     const [name, setName] = useState("")
-    const [role, setRole] = useState<"ADMIN" | "MANAGER">("MANAGER")
+    const [password, setPassword] = useState("")
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const router = useRouter()
@@ -24,39 +30,61 @@ export function SignUpForm() {
 
         try {
             const formData = new FormData()
-            formData.append("email", email)
-            formData.append("password", password)
+            formData.append("token", token)
             formData.append("name", name)
-            formData.append("role", role)
+            formData.append("password", password)
 
             const result = await signUpAction(formData)
 
             if (result.success) {
                 if ((result as any).needsConfirmation) {
-                    router.push("/login?message=Check your email (and spam folder) to confirm your account")
+                    router.push("/login?message=Check your email to confirm your account")
                 } else {
                     router.push("/dashboard")
                 }
             } else {
-                setError(result.error || "An error occurred")
+                setError(result.error || "An error occurred during registration.")
             }
         } catch (err: any) {
-            setError(err.message)
+            setError(err.message || "An unexpected error occurred.")
         } finally {
             setLoading(false)
         }
     }
 
     return (
-        <Card className="w-full max-w-md mx-auto">
-            <CardHeader>
-                <CardTitle>Create an Account</CardTitle>
+        <Card className="w-full max-w-md mx-auto border-white/10 shadow-xl bg-card">
+            <CardHeader className="space-y-1">
+                <CardTitle className="text-xl">Complete Registration</CardTitle>
                 <CardDescription>
-                    Sign up to start managing your projects and invoices.
+                    Create your login credentials for <span className="text-white font-medium">{companyName}</span>.
                 </CardDescription>
             </CardHeader>
             <form onSubmit={handleSignUp}>
                 <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="email">Invited Email</Label>
+                        <Input
+                            id="email"
+                            type="email"
+                            value={email}
+                            disabled
+                            className="bg-muted/50 cursor-not-allowed text-muted-foreground"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="role">Assigned Role</Label>
+                            <Badge variant="outline" className="border-primary/40 text-primary uppercase text-[10px] tracking-wider">
+                                {role}
+                            </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Role is defined by your invitation and cannot be changed here.
+                        </p>
+                    </div>
+
                     <div className="space-y-2">
                         <Label htmlFor="name">Full Name</Label>
                         <Input
@@ -65,49 +93,33 @@ export function SignUpForm() {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             required
+                            autoFocus
                         />
                     </div>
+
                     <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            placeholder="john@example.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
+                        <Label htmlFor="password">Create Password</Label>
                         <Input
                             id="password"
                             type="password"
+                            placeholder="••••••••"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
+                            minLength={6}
                         />
+                        <p className="text-xs text-muted-foreground">Minimum 6 characters.</p>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="role">Role</Label>
-                        <select
-                            id="role"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            value={role}
-                            onChange={(e) => setRole(e.target.value as "ADMIN" | "MANAGER")}
-                            required
-                        >
-                            <option value="MANAGER">Project Manager</option>
-                            <option value="ADMIN">Administrator</option>
-                        </select>
-                    </div>
+
                     {error && (
-                        <p className="text-sm text-destructive">{error}</p>
+                        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+                            {error}
+                        </div>
                     )}
                 </CardContent>
                 <CardFooter>
-                    <Button type="submit" className="w-full" disabled={loading}>
-                        {loading ? "Signing up..." : "Sign Up"}
+                    <Button type="submit" className="w-full font-semibold" disabled={loading}>
+                        {loading ? "Creating Account..." : "Create Account & Join"}
                     </Button>
                 </CardFooter>
             </form>

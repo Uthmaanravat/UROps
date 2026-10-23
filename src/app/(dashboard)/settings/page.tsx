@@ -1,7 +1,7 @@
 import { getCompanySettings } from "./actions"
 import { SettingsForm } from "@/components/settings/SettingsForm"
 import Link from "next/link"
-import { Building2, ShieldCheck } from "lucide-react"
+import { Building2, ShieldCheck, Users } from "lucide-react"
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +14,7 @@ export default async function SettingsPage() {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
                     <p className="text-muted-foreground text-sm">
-                        Manage your company branding, financial details, and quotation terms.
+                        Manage your company branding, financial details, quotation terms, and team members.
                     </p>
                 </div>
 
@@ -24,7 +24,7 @@ export default async function SettingsPage() {
                         className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-black flex items-center gap-1.5 shadow-sm"
                     >
                         <Building2 className="h-3.5 w-3.5" />
-                        Company & Branding
+                        Company &amp; Branding
                     </Link>
                     <Link
                         href="/settings/terms"
@@ -32,6 +32,13 @@ export default async function SettingsPage() {
                     >
                         <ShieldCheck className="h-3.5 w-3.5 text-lime-400" />
                         Quotation Terms
+                    </Link>
+                    <Link
+                        href="/settings/team"
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-muted-foreground hover:text-white flex items-center gap-1.5 transition-colors"
+                    >
+                        <Users className="h-3.5 w-3.5" />
+                        Team
                     </Link>
                 </div>
             </div>

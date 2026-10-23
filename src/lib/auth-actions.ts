@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
+import React from "react"
 
-import { cache } from "react"
+const cache = (React as any).cache || ((fn: any) => fn)
 
 export const getAuthCompanyId = cache(async () => {
     const supabase = createClient()
@@ -11,8 +12,13 @@ export const getAuthCompanyId = cache(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
 
-    const dbUser = await prisma.user.findUnique({
-        where: { id: user.id },
+    const dbUser = await prisma.user.findFirst({
+        where: {
+            OR: [
+                { id: user.id },
+                { email: { equals: user.email?.trim().toLowerCase(), mode: 'insensitive' } }
+            ]
+        },
         select: { companyId: true }
     })
 

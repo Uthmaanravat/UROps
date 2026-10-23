@@ -2,6 +2,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { prisma } from "@/lib/prisma"
+import { ensureAuth } from "@/lib/auth-actions"
 import OpenAI from "openai"
 import { generateContentWithFallback } from "@/lib/ai"
 
@@ -80,6 +81,7 @@ export async function transcribeAudio(formData: FormData) {
 }
 
 export async function getPricingSuggestions(items: { description: string }[]) {
+    const companyId = await ensureAuth();
     const suggestions: Record<string, { typicalPrice: number; source: string; minPrice?: number; maxPrice?: number }> = {};
 
     for (const item of items) {
@@ -89,6 +91,7 @@ export async function getPricingSuggestions(items: { description: string }[]) {
         // 1. Check Standard Catalog (FixedPriceItem)
         const catalogItem = await prisma.fixedPriceItem.findFirst({
             where: {
+                companyId,
                 description: {
                     contains: desc,
                     mode: 'insensitive'
@@ -107,6 +110,7 @@ export async function getPricingSuggestions(items: { description: string }[]) {
         // 2. Check PricingKnowledge (Direct or partial match)
         const knowledge = await prisma.pricingKnowledge.findFirst({
             where: {
+                companyId,
                 description: {
                     contains: desc,
                     mode: 'insensitive'
@@ -129,6 +133,7 @@ export async function getPricingSuggestions(items: { description: string }[]) {
         const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 3);
         if (words.length > 0) {
             const allKnowledge = await prisma.pricingKnowledge.findMany({
+                where: { companyId },
                 orderBy: { frequency: 'desc' },
                 take: 100
             });
@@ -160,6 +165,7 @@ export async function getPricingSuggestions(items: { description: string }[]) {
         // 3. Check previous InvoiceItem history
         const historicalItem = await prisma.invoiceItem.findFirst({
             where: {
+                invoice: { companyId },
                 description: {
                     contains: desc,
                     mode: 'insensitive'

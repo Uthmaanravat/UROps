@@ -2,9 +2,11 @@
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { ensureAuth } from "@/lib/auth-actions"
 
-export async function getReports(companyId: string) {
+export async function getReports(providedCompanyId?: string) {
   try {
+    const companyId = await ensureAuth()
     return await prisma.report.findMany({
       where: { companyId },
       include: {
@@ -22,8 +24,9 @@ export async function getReports(companyId: string) {
 
 export async function getReportById(id: string) {
   try {
-    return await prisma.report.findUnique({
-      where: { id },
+    const companyId = await ensureAuth()
+    return await prisma.report.findFirst({
+      where: { id, companyId },
       include: {
         client: true,
         project: true,
@@ -47,19 +50,31 @@ export async function createReport(data: {
   date?: Date
   type?: string
   metadata?: any
-  companyId: string
+  companyId?: string
 }) {
   try {
+    const companyId = await ensureAuth()
+
+    if (data.clientId) {
+      const client = await prisma.client.findFirst({ where: { id: data.clientId, companyId } })
+      if (!client) return { success: false, error: "Client not found or unauthorized" }
+    }
+
+    if (data.projectId) {
+      const project = await prisma.project.findFirst({ where: { id: data.projectId, companyId } })
+      if (!project) return { success: false, error: "Project not found or unauthorized" }
+    }
+
     const report = await prisma.report.create({
       data: {
         title: data.title,
         description: data.description,
-        clientId: data.clientId,
-        projectId: data.projectId,
+        clientId: data.clientId || null,
+        projectId: data.projectId || null,
         coverImage: data.coverImage,
         selectedSections: data.selectedSections,
         sectionOrder: data.sectionOrder,
-        companyId: data.companyId,
+        companyId,
         date: data.date || new Date(),
         type: data.type || "BASIC",
         metadata: data.metadata || null
@@ -75,7 +90,13 @@ export async function createReport(data: {
 
 export async function deleteReport(id: string) {
   try {
-    await prisma.report.delete({ where: { id } })
+    const companyId = await ensureAuth()
+    const result = await prisma.report.deleteMany({
+      where: { id, companyId }
+    })
+    if (result.count === 0) {
+      return { success: false, error: "Report not found or unauthorized" }
+    }
     revalidatePath("/reports")
     return { success: true }
   } catch (error) {
@@ -95,6 +116,12 @@ export async function addReportItem(data: {
   recommendation?: string
 }) {
   try {
+    const companyId = await ensureAuth()
+    const report = await prisma.report.findFirst({
+      where: { id: data.reportId, companyId }
+    })
+    if (!report) return { success: false, error: "Report not found or unauthorized" }
+
     const urls = data.imageUrls || (data.imageUrl ? [data.imageUrl] : [])
     const primaryUrl = urls[0] || null
 
@@ -125,7 +152,15 @@ export async function addReportItem(data: {
 
 export async function deleteReportItem(itemId: string, reportId: string) {
   try {
-    await prisma.reportItem.delete({ where: { id: itemId } })
+    const companyId = await ensureAuth()
+    const report = await prisma.report.findFirst({
+      where: { id: reportId, companyId }
+    })
+    if (!report) return { success: false, error: "Report not found or unauthorized" }
+
+    await prisma.reportItem.deleteMany({
+      where: { id: itemId, reportId }
+    })
     revalidatePath(`/reports/${reportId}`)
     return { success: true }
   } catch (error) {
@@ -136,10 +171,13 @@ export async function deleteReportItem(itemId: string, reportId: string) {
 
 export async function updateReportConclusion(reportId: string, conclusion: string) {
   try {
-    await prisma.report.update({
-      where: { id: reportId },
+    const companyId = await ensureAuth()
+    const result = await prisma.report.updateMany({
+      where: { id: reportId, companyId },
       data: { conclusion }
     })
+    if (result.count === 0) return { success: false, error: "Report not found or unauthorized" }
+
     revalidatePath(`/reports/${reportId}`)
     return { success: true }
   } catch (error) {
@@ -150,10 +188,13 @@ export async function updateReportConclusion(reportId: string, conclusion: strin
 
 export async function updateReportMetadata(reportId: string, type: string, metadata: any) {
   try {
-    await prisma.report.update({
-      where: { id: reportId },
+    const companyId = await ensureAuth()
+    const result = await prisma.report.updateMany({
+      where: { id: reportId, companyId },
       data: { type, metadata }
     })
+    if (result.count === 0) return { success: false, error: "Report not found or unauthorized" }
+
     revalidatePath(`/reports/${reportId}`)
     return { success: true }
   } catch (error) {
@@ -174,10 +215,17 @@ export async function updateReportItem(data: {
   recommendation?: string
 }) {
   try {
+    const companyId = await ensureAuth()
+    const report = await prisma.report.findFirst({
+      where: { id: data.reportId, companyId }
+    })
+    if (!report) return { success: false, error: "Report not found or unauthorized" }
+
     const urls = data.imageUrls || (data.imageUrl ? [data.imageUrl] : [])
     const primaryUrl = urls[0] || null
-    await prisma.reportItem.update({
-      where: { id: data.id },
+
+    const result = await prisma.reportItem.updateMany({
+      where: { id: data.id, reportId: data.reportId },
       data: {
         description: data.description,
         title: data.title,
@@ -188,6 +236,8 @@ export async function updateReportItem(data: {
         recommendation: data.recommendation
       }
     })
+    if (result.count === 0) return { success: false, error: "Report item not found or unauthorized" }
+
     revalidatePath(`/reports/${data.reportId}`)
     return { success: true }
   } catch (error) {
@@ -198,6 +248,12 @@ export async function updateReportItem(data: {
 
 export async function reorderReportItem(itemId: string, reportId: string, direction: "up" | "down") {
   try {
+    const companyId = await ensureAuth()
+    const report = await prisma.report.findFirst({
+      where: { id: reportId, companyId }
+    })
+    if (!report) return { success: false, error: "Report not found or unauthorized" }
+
     const items = await prisma.reportItem.findMany({
       where: { reportId },
       orderBy: [
@@ -211,7 +267,7 @@ export async function reorderReportItem(itemId: string, reportId: string, direct
     
     const swapIndex = direction === "up" ? index - 1 : index + 1
     if (swapIndex < 0 || swapIndex >= items.length) {
-      return { success: true } // No-op
+      return { success: true }
     }
     
     const currentItem = items[index]
@@ -257,8 +313,20 @@ export async function updateReportDetails(data: {
   projectId?: string
 }) {
   try {
-    await prisma.report.update({
-      where: { id: data.id },
+    const companyId = await ensureAuth()
+
+    if (data.clientId) {
+      const client = await prisma.client.findFirst({ where: { id: data.clientId, companyId } })
+      if (!client) return { success: false, error: "Client not found or unauthorized" }
+    }
+
+    if (data.projectId) {
+      const project = await prisma.project.findFirst({ where: { id: data.projectId, companyId } })
+      if (!project) return { success: false, error: "Project not found or unauthorized" }
+    }
+
+    const result = await prisma.report.updateMany({
+      where: { id: data.id, companyId },
       data: {
         title: data.title,
         date: data.date,
@@ -266,6 +334,8 @@ export async function updateReportDetails(data: {
         projectId: data.projectId || null
       }
     })
+    if (result.count === 0) return { success: false, error: "Report not found or unauthorized" }
+
     revalidatePath(`/reports/${data.id}`)
     revalidatePath("/reports")
     return { success: true }

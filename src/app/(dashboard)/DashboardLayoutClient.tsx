@@ -9,6 +9,7 @@ import { CompanySettings, User } from "@prisma/client";
 import { signOutAction, updateUserRoleAction } from "@/app/actions/auth";
 import { Role } from "@prisma/client";
 import { useTheme } from "@/components/theme-provider";
+import { setActiveCompanyId, clearDraftStateOnLogout } from "@/lib/drafts";
 
 export default function DashboardLayoutClient({
     children,

@@ -134,10 +134,14 @@ export async function uploadQuotationAction(formData: FormData) {
 
 export async function deletePricingKnowledgeAction(id: string) {
     try {
-        console.log("Deleting pricing knowledge:", id);
-        await prisma.pricingKnowledge.delete({
-            where: { id }
+        const companyId = await ensureAuth()
+        console.log("Deleting pricing knowledge:", id, "companyId:", companyId);
+        const result = await prisma.pricingKnowledge.deleteMany({
+            where: { id, companyId }
         })
+        if (result.count === 0) {
+            return { success: false, error: "Pricing knowledge not found or unauthorized" }
+        }
         revalidatePath("/knowledge")
         return { success: true }
     } catch (error) {

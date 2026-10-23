@@ -2,16 +2,18 @@
 
 import { sendRealEmail } from "@/lib/email"
 import { prisma } from "@/lib/prisma"
+import { ensureAuth } from "@/lib/auth-actions"
 
 export async function sendInvoiceEmail(invoiceId: string, recipients?: string[], customBody?: string) {
     try {
-        const invoice = await prisma.invoice.findUnique({
-            where: { id: invoiceId },
+        const companyId = await ensureAuth()
+        const invoice = await prisma.invoice.findFirst({
+            where: { id: invoiceId, companyId },
             include: { client: true, items: true }
         })
 
         if (!invoice) {
-            return { success: false, error: "Invoice not found" }
+            return { success: false, error: "Invoice not found or unauthorized" }
         }
 
         if (!invoice.items || invoice.items.length === 0) {
@@ -49,38 +51,29 @@ The UROps Team`
         // Formatter for Resend from address: "Name <email@domain.com>"
         const formattedFrom = fromEmail.includes('<') ? fromEmail : `${fromName} <${fromEmail}>`;
 
-        console.log(`[EMAIL ACTION] Sending real email for ${invoiceId} to ${toEmails.join(', ')} from ${formattedFrom}`);
-        const emailResult = await sendRealEmail({
+        // Send via Resend
+        const result = await sendRealEmail({
             to: toEmails,
-            from: formattedFrom,
             subject,
-            body
-        });
+            body: body,
+            from: formattedFrom,
+        })
 
-        if (emailResult.success) {
-            // Log as interaction
-            await prisma.interaction.create({
-                data: {
-                    clientId: invoice.clientId,
-                    companyId: invoice.companyId,
-                    type: "EMAIL",
-                    content: `Sent ${invoice.type}: ${subject} \n\nTo: ${toEmails.join(', ')} `
-                }
-            });
-            // Update status to SENT
-            await prisma.invoice.update({
-                where: { id: invoiceId },
-                data: { status: 'SENT' }
-            });
-
-            console.log(`[EMAIL ACTION] Email sent successfully for ${invoiceId}`);
-            return { success: true }
-        } else {
-            console.error(`[EMAIL ACTION] Email failed for ${invoiceId}: `, emailResult.error);
-            return { success: false, error: emailResult.error }
+        if (!result.success) {
+            return { success: false, error: result.error || "Failed to send email" }
         }
-    } catch (error) {
-        console.error("Error sending invoice email:", error)
-        return { success: false, error: String(error) }
+
+        // Record the send activity/interaction
+        await prisma.invoice.update({
+            where: { id: invoice.id },
+            data: {
+                status: invoice.status === 'DRAFT' ? 'SENT' : invoice.status
+            }
+        })
+
+        return { success: true, messageId: (result as any).id || (result as any).data?.id }
+    } catch (error: any) {
+        console.error("sendInvoiceEmail error:", error)
+        return { success: false, error: error.message || "Failed to send email" }
     }
 }

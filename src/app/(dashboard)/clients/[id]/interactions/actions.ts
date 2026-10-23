@@ -1,6 +1,6 @@
 'use server'
 
-import { getAuthCompanyId } from "@/lib/auth-actions"
+import { getAuthCompanyId, ensureAuth } from "@/lib/auth-actions"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { InteractionType } from "@prisma/client"
@@ -11,14 +11,18 @@ export async function createInteraction(data: {
     content: string
     date?: Date
 }) {
-    // Basic validation
     if (!data.content || !data.clientId) {
         return { success: false, error: "Missing required fields" }
     }
 
-    const companyId = await getAuthCompanyId();
-    if (!companyId) {
-        return { success: false, error: "Unauthorized" }
+    const companyId = await ensureAuth()
+
+    // Verify client belongs to this company
+    const client = await prisma.client.findFirst({
+        where: { id: data.clientId, companyId }
+    })
+    if (!client) {
+        return { success: false, error: "Client not found or unauthorized" }
     }
 
     try {
@@ -26,7 +30,7 @@ export async function createInteraction(data: {
             data: {
                 clientId: data.clientId,
                 companyId,
-                type: data.type as InteractionType, // unsafe cast if not validated, but UI provides valid types
+                type: data.type as InteractionType,
                 content: data.content,
                 date: data.date || new Date()
             }
@@ -41,10 +45,16 @@ export async function createInteraction(data: {
 }
 
 export async function deleteInteraction(id: string, clientId: string) {
+    const companyId = await ensureAuth()
+
     try {
-        await prisma.interaction.delete({
-            where: { id }
+        // Enforce companyId scoping on delete
+        const result = await prisma.interaction.deleteMany({
+            where: { id, companyId }
         })
+        if (result.count === 0) {
+            return { success: false, error: "Interaction not found or unauthorized" }
+        }
         revalidatePath(`/clients/${clientId}`)
         return { success: true }
     } catch (error) {

@@ -37,6 +37,43 @@ model Company {
   unlockLogs     UnlockLog[]
   creditNotes    CreditNote[]
   termsTemplates TermsTemplate[]
+  invitations    Invitation[]
+  auditLogs      CompanyAuditLog[]
+}
+
+model Invitation {
+  id              String    @id @default(uuid())
+  email           String
+  role            Role      @default(MANAGER)
+  companyId       String
+  tokenHash       String    @unique
+  invitedByUserId String?
+  expiresAt       DateTime
+  usedAt          DateTime?
+  status          String    @default("PENDING")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([tokenHash])
+  @@index([email])
+}
+
+model CompanyAuditLog {
+  id           String   @id @default(uuid())
+  companyId    String
+  actorUserId  String?
+  actorName    String?
+  action       String
+  targetUserId String?
+  targetEmail  String?
+  details      Json?
+  createdAt    DateTime @default(now())
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([createdAt(sort: Desc)])
 }
 
 model User {

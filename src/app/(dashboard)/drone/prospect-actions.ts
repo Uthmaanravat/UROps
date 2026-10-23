@@ -228,7 +228,7 @@ export async function deleteProspectAction(prospectId: string) {
             return { success: false, error: "Fable-37 prospects are permanent and cannot be deleted. Mark as 'passed' instead." }
         }
 
-        await prisma.prospect.delete({ where: { id: prospectId } })
+        const { count } = await prisma.prospect.deleteMany({ where: { id: prospectId, companyId: prospect.companyId } }); if (count === 0) return { success: false, error: 'Prospect not found or unauthorized' };
         revalidatePath("/drone")
         return { success: true }
     } catch (error: any) {

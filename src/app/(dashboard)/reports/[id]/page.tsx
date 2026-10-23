@@ -3,15 +3,15 @@ import { ensureAuth } from "@/lib/auth-actions"
 import { ReportEditor } from "./ReportEditor"
 import { redirect, notFound } from "next/navigation"
 
-
+export const dynamic = 'force-dynamic'
 
 export default async function ReportDetailPage({ params }: { params: { id: string } }) {
     const companyId = await ensureAuth()
     if (!companyId) redirect('/login')
 
     const [report, settings, clients, projects] = await Promise.all([
-        prisma.report.findUnique({
-            where: { id: params.id },
+        prisma.report.findFirst({
+            where: { id: params.id, companyId },
             include: {
                 client: true,
                 project: true,
@@ -37,16 +37,15 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
     ])
 
     if (!report) notFound()
-    if (report.companyId !== companyId) redirect('/reports')
 
     const company = {
-        name: settings?.name || "LR Builders & Maintenance Pty (Ltd)",
-        address: settings?.address || "15 Culemborg Street, Avondale, Parow, Cape Town, 7500",
-        email: settings?.email || "Loedvi@lrbuilders.co.za",
-        phone: settings?.phone || "082 448 7490",
+        name: settings?.name || "Company",
+        address: settings?.address || "",
+        email: settings?.email || "",
+        phone: settings?.phone || "",
         logoUrl: settings?.logoUrl || "",
         slogan: settings?.slogan || "",
-        vatNumber: settings?.taxId || "", // Fixed mapping from schema taxId
+        vatNumber: settings?.taxId || "",
         layoutPreferences: settings?.layoutPreferences
     }
 
@@ -54,12 +53,12 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
     serializedReport.items = serializedReport.items || [];
 
     return (
-        <div className="max-w-5xl mx-auto py-6">
-            <ReportEditor 
-                report={serializedReport} 
-                company={company} 
-                clients={clients || []} 
-                projects={projects || []} 
+        <div className="space-y-6">
+            <ReportEditor
+                report={serializedReport}
+                company={company}
+                clients={clients}
+                projects={projects}
             />
         </div>
     )
