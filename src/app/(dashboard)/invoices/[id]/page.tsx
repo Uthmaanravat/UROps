@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { InvoiceViewer } from "@/components/invoices/InvoiceViewer";
 import { getCompanySettings } from "@/app/(dashboard)/settings/actions";
@@ -69,13 +71,33 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         notFound();
     }
 
+    const isTendersEnabled = companySettings?.tendersEnabled === true;
+
+    const prospectId = ((invoice as any)?.client?.customFields as any)?.prospectId;
+    const linkedProspect = prospectId
+        ? await prisma.prospect.findUnique({ where: { id: prospectId } })
+        : await prisma.prospect.findFirst({
+            where: { companyId, name: { equals: (invoice as any)?.client?.name || '', mode: 'insensitive' } }
+        });
+
     return (
         <div className="space-y-6">
+            {linkedProspect && (
+                <div className="flex justify-end">
+                    <Link
+                        href={`/drone?prospectId=${linkedProspect.id}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all"
+                    >
+                        <span>🎯 Origin: Core Target / Prospect &quot;{linkedProspect.name}&quot;</span>
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                </div>
+            )}
             <InvoiceViewer
                 invoice={invoice}
                 companySettings={companySettings}
                 availableProjects={projects as any[]}
-                tenders={tenders as any[]}
+                tenders={isTendersEnabled ? (tenders as any[]) : []}
                 termsTemplates={termsTemplates as any[]}
                 isAdmin={isAdmin}
             />

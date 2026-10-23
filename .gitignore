@@ -25,3 +25,5 @@ venv/
 .venv/
 .claude/
 *.tsbuildinfo
+
+scratch/

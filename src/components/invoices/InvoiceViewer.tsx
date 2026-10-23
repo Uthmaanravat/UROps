@@ -13,7 +13,7 @@ import { logItemUnlockAction } from "@/app/(dashboard)/tenders/actions"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import jsPDF from "jspdf"
-import { drawPdfHeader } from "@/lib/pdf-utils"
+import { drawPdfHeader, getThemePrimaryHex, getThemePrimaryRGB } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
 import ExcelJS from "exceljs"
 import { saveAs } from "file-saver"
@@ -138,13 +138,16 @@ export function InvoiceViewer({
     const [rawCatalog, setRawCatalog] = useState<any[]>([]);
     const [isCreditNoteModalOpen, setIsCreditNoteModalOpen] = useState(false);
 
+    const isTendersEnabled = companySettings?.tendersEnabled === true;
+
     const activeTender = useMemo(() => {
+        if (!isTendersEnabled) return null;
         return tenders.find((t: any) => t.id === selectedTenderId) || invoice.tender || tenders[0];
-    }, [tenders, selectedTenderId, invoice.tender]);
+    }, [tenders, selectedTenderId, invoice.tender, isTendersEnabled]);
 
     const effectiveRateYear = rateYear;
-    const isTender = workType === "TENDER" || Boolean(invoice.tenderId) || Boolean(invoice.tender);
-    const isCityTender = isTender || Boolean(invoice.client?.name?.toLowerCase().includes("cape town"));
+    const isTender = isTendersEnabled && (workType === "TENDER" || Boolean(invoice.tenderId) || Boolean(invoice.tender));
+    const isCityTender = isTendersEnabled && (isTender || Boolean(invoice.client?.name?.toLowerCase().includes("cape town")));
 
     const handleRateYearChange = (newYear: 1 | 2 | 3) => {
         setRateYear(newYear);
@@ -932,15 +935,15 @@ export function InvoiceViewer({
 
     // Default company details if not set
     const company = {
-        name: companySettings?.name || "LR Builders & Maintenance Pty (Ltd)",
+        name: companySettings?.name || "Company",
         address: companySettings?.address || "15 Culemborg Street, Avondale, Parow, Cape Town, 7500",
-        email: companySettings?.email || "Loedvi@lrbuilders.co.za",
-        phone: companySettings?.phone || "082 448 7490",
+        email: companySettings?.email || "",
+        phone: companySettings?.phone || "",
         logoUrl: companySettings?.logoUrl || "",
         vatNumber: companySettings?.taxId || "",
         registrationNumber: companySettings?.registrationNumber || "",
         paymentTerms: companySettings?.paymentTerms || "",
-        bankDetails: companySettings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510",
+        bankDetails: companySettings?.bankDetails || "",
         layoutPreferences: companySettings?.layoutPreferences
     };
 
@@ -981,6 +984,7 @@ export function InvoiceViewer({
     const generatePDF = async () => {
         const doc = new jsPDF();
         const currencySymbol = companySettings?.currency || "R";
+        const [themeR, themeG, themeB] = getThemePrimaryRGB(companySettings?.theme);
 
         // 1. Header Bar (Shared)
         const numberLabel = quoteNumber
@@ -994,7 +998,7 @@ export function InvoiceViewer({
         const gridY = nextY + 5; // e.g., 53
 
         // Column 1: Document Details
-        doc.setTextColor(163, 230, 53); // Lime 
+        doc.setTextColor(themeR, themeG, themeB); // Lime 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.text("DETAILS", 14, gridY);
@@ -1050,7 +1054,7 @@ export function InvoiceViewer({
         }
 
         // Column 2: Bill To
-        doc.setTextColor(163, 230, 53); // Lime 
+        doc.setTextColor(themeR, themeG, themeB); // Lime 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.text("BILL TO", 85, gridY);
@@ -1090,7 +1094,7 @@ export function InvoiceViewer({
         }
 
         // Column 3: From (Company Contact)
-        doc.setTextColor(163, 230, 53); // Lime
+        doc.setTextColor(themeR, themeG, themeB); // Lime
         doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
         doc.text("FROM", 196, gridY, { align: 'right' });
@@ -1127,7 +1131,7 @@ export function InvoiceViewer({
         doc.text(compAddr, 196, fromY, { align: 'right' });
         fromY += (compAddr.length * 4.5);
 
-        doc.setTextColor(163, 230, 53); // Lime
+        doc.setTextColor(themeR, themeG, themeB); // Lime
         doc.setFont("helvetica", "bold");
         doc.text(company.phone, 196, fromY, { align: 'right' });
         fromY += 4.5;
@@ -1243,7 +1247,7 @@ export function InvoiceViewer({
             theme: 'striped',
             headStyles: {
                 fillColor: [20, 20, 30],
-                textColor: [163, 230, 53],
+                textColor: [themeR, themeG, themeB],
                 fontStyle: 'bold',
                 fontSize: 8.5,
                 cellPadding: 2
@@ -1334,7 +1338,7 @@ export function InvoiceViewer({
             doc.setFont("helvetica", "bold");
             doc.setTextColor(20, 20, 30);
             doc.text("PAYMENT NOTES", 14, currentY);
-            doc.setDrawColor(163, 230, 53); // Lime separator
+            doc.setDrawColor(themeR, themeG, themeB); // Lime separator
             doc.line(14, currentY + 2, 40, currentY + 2);
             doc.setFont("helvetica", "normal");
             doc.setTextColor(71, 85, 105);
@@ -1426,7 +1430,7 @@ export function InvoiceViewer({
             doc.setFont("helvetica", "bold");
             doc.setTextColor(20, 20, 30);
             doc.text("TERMS AND CONDITIONS", 14, currentY);
-            doc.setDrawColor(163, 230, 53); // Lime separator
+            doc.setDrawColor(themeR, themeG, themeB); // Lime separator
             doc.line(14, currentY + 2, 55, currentY + 2);
             currentY += 8;
 
@@ -1470,7 +1474,7 @@ export function InvoiceViewer({
             doc.setFont("helvetica", "bold");
             doc.setTextColor(20, 20, 30);
             doc.text("TERMS & NOTES", 14, currentY);
-            doc.setDrawColor(163, 230, 53); // Lime separator
+            doc.setDrawColor(themeR, themeG, themeB); // Lime separator
             doc.line(14, currentY + 2, 40, currentY + 2);
 
             doc.setFont("helvetica", "normal");
@@ -1491,7 +1495,7 @@ export function InvoiceViewer({
         doc.setFont("helvetica", "bold");
         doc.setTextColor(20, 20, 30);
         doc.text("BANKING DETAILS", 14, currentY);
-        doc.setDrawColor(163, 230, 53);
+        doc.setDrawColor(themeR, themeG, themeB);
         doc.line(14, currentY + 2, 40, currentY + 2);
 
         doc.setFont("helvetica", "normal");
@@ -1515,6 +1519,7 @@ export function InvoiceViewer({
     const generateExcel = async () => {
         setLoading(true);
         try {
+            const themeHex = getThemePrimaryHex(companySettings?.theme);
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet(invoice.type === 'QUOTE' ? 'Quote' : 'Invoice');
 
@@ -1542,7 +1547,7 @@ export function InvoiceViewer({
             const limeBar = worksheet.getRow(2);
             limeBar.height = 3;
             worksheet.mergeCells('A2:G2');
-            worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
+            worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: themeHex } };
 
             // 3. Logo & Document Title
             worksheet.getRow(4).height = 40;
@@ -1572,7 +1577,7 @@ export function InvoiceViewer({
             worksheet.mergeCells('F5:G5');
             const numCell = worksheet.getCell('F5');
             numCell.value = numberLabel;
-            numCell.font = { name: 'Arial', bold: true, size: 12, color: { argb: 'FFA3E635' } };
+            numCell.font = { name: 'Arial', bold: true, size: 12, color: { argb: themeHex } };
             numCell.alignment = { horizontal: 'right' };
 
             // 4. Metadata (Bill To, Dates, Project)
@@ -1627,7 +1632,7 @@ export function InvoiceViewer({
             tableHead.values = isTender 
                 ? ['#', 'CODE', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL']
                 : ['#', 'AREA/HEADING', 'DESCRIPTION', 'QTY', 'UNIT', 'PRICE', 'TOTAL'];
-            tableHead.font = { bold: true, size: 9, color: { argb: 'FFA3E635' } };
+            tableHead.font = { bold: true, size: 9, color: { argb: themeHex } };
             tableHead.height = 20;
             tableHead.eachCell((cell, colNumber) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } };
@@ -1770,7 +1775,7 @@ export function InvoiceViewer({
             totalRow.getCell(7).value = total;
             totalRow.getCell(7).font = { bold: true, size: 13 };
             totalRow.getCell(7).numFmt = '"R"#,##0.00';
-            totalRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
+            totalRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: themeHex } };
             totalRow.getCell(7).alignment = { horizontal: 'right' };
 
             let currentPct: number | undefined = undefined;
@@ -3125,15 +3130,15 @@ export function InvoiceViewer({
                 {invoice.type === 'QUOTE' && effectiveNumberedClauses.length > 0 && (
                     <div className="mt-8 pt-8 border-t border-white/10 space-y-4">
                         <div className="space-y-1">
-                            <h4 className="text-[11px] font-black uppercase tracking-[0.25em] text-lime-400">
+                            <h4 className="text-[11px] font-black uppercase tracking-[0.25em] text-primary">
                                 TERMS AND CONDITIONS
                             </h4>
-                            <div className="h-0.5 w-12 bg-lime-400 rounded-full" />
+                            <div className="h-0.5 w-12 bg-primary rounded-full" />
                         </div>
                         <div className="space-y-3 max-w-4xl">
                             {effectiveNumberedClauses.map((clause) => (
                                 <div key={clause.clauseNumber} className="flex items-start gap-3 text-xs md:text-sm text-gray-300 leading-relaxed font-sans">
-                                    <span className="font-mono font-bold text-lime-400 shrink-0 w-6">
+                                    <span className="font-mono font-bold text-primary shrink-0 w-6">
                                         {clause.clauseNumber}.
                                     </span>
                                     <span className="text-gray-200">{clause.text}</span>
@@ -3165,14 +3170,14 @@ export function InvoiceViewer({
                                 className="w-full flex items-center justify-between p-4 text-left hover:bg-white/[0.02] transition-colors"
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-xl bg-lime-400/10 border border-lime-400/20 text-lime-400">
+                                    <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 text-primary">
                                         <ShieldCheck className="h-4 w-4" />
                                     </div>
                                     <div>
                                         <div className="flex flex-wrap items-center gap-2">
                                             <span className="text-sm font-black uppercase tracking-wider text-white">Quotation Terms & Conditions Settings</span>
                                             {activeTermsTemplate ? (
-                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-lime-400/20 text-lime-400 border border-lime-400/30">
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30">
                                                     {activeTermsTemplate.name}
                                                 </span>
                                             ) : (

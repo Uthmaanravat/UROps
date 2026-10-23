@@ -6,7 +6,7 @@
 
 - On every load of the Drone Operations page, the app checks which seed `id`s are missing from the database for your company and inserts only those (source: `fable_37`).
 - Already-imported prospects are **never overwritten** — your statuses, notes, and contact logs are safe.
-- Fable-37 prospects cannot be deleted from the UI; new discoveries can.
+- Core Target prospects cannot be deleted from the UI; new discoveries can.
 
 ## Adding or amending prospects
 

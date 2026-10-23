@@ -21,7 +21,7 @@ export default async function DroneDashboardPage() {
             redirect("/dashboard");
         }
 
-        // Import any Fable-37 seed prospects not yet in the DB (never overwrites existing ones)
+        // Import any Core Target seed prospects not yet in the DB (never overwrites existing ones)
         await ensureFable37Seeded(companyId);
 
         const supabase = createClient();
@@ -32,7 +32,7 @@ export default async function DroneDashboardPage() {
             ? await prisma.user.findUnique({ where: { id: user.id }, select: { name: true, phone: true } })
             : null;
 
-        const [leads, optOuts, prospects] = await Promise.all([
+        const [leads, optOuts, prospects, quotes, clients, projects] = await Promise.all([
             prisma.lead.findMany({
                 where: { companyId },
                 include: {
@@ -55,11 +55,27 @@ export default async function DroneDashboardPage() {
             prisma.prospect.findMany({
                 where: { companyId },
                 orderBy: { createdAt: 'asc' }
+            }),
+            prisma.invoice.findMany({
+                where: { companyId, type: 'QUOTE' },
+                include: { client: true },
+                orderBy: { createdAt: 'desc' }
+            }),
+            prisma.client.findMany({
+                where: { companyId },
+                select: { id: true, name: true, email: true, phone: true, customFields: true }
+            }),
+            prisma.project.findMany({
+                where: { companyId },
+                select: { id: true, name: true, status: true, clientId: true }
             })
         ]);
 
         const droneData = JSON.parse(JSON.stringify({ leads, optOuts }));
         const prospectData = JSON.parse(JSON.stringify(prospects));
+        const quotesData = JSON.parse(JSON.stringify(quotes));
+        const clientsData = JSON.parse(JSON.stringify(clients));
+        const projectsData = JSON.parse(JSON.stringify(projects));
 
         const sender = {
             name: dbUser?.name || (settings as any)?.name || "Operations",
@@ -68,9 +84,18 @@ export default async function DroneDashboardPage() {
             companyName: (settings as any)?.name || "UROps"
         };
 
-        return <DroneWorkspace prospects={prospectData} sender={sender} scannerData={droneData} />;
+        return (
+            <DroneWorkspace
+                prospects={prospectData}
+                sender={sender}
+                scannerData={droneData}
+                quotes={quotesData}
+                clients={clientsData}
+                projects={projectsData}
+            />
+        );
     } catch (error) {
-        console.error("Drone Dashboard Load Error:", error);
+        console.error("Sales Pipeline Load Error:", error);
         redirect("/dashboard");
     }
 }

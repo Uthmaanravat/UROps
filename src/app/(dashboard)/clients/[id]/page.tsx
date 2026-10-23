@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, ArrowUpRight } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ClientStatementButton } from "@/components/clients/ClientStatementButton";
 import { DeleteClientButton } from "@/components/clients/DeleteClientButton";

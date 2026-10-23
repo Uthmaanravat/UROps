@@ -1,3 +1,33 @@
+export function getThemePrimaryRGB(theme?: string): [number, number, number] {
+    if (!theme) return [163, 230, 53]; // default lime
+    const lower = theme.toLowerCase();
+    if (lower.includes('orange')) {
+        return [208, 94, 0]; // Dark Orange #D05E00
+    }
+    if (lower.includes('blue')) {
+        return [37, 99, 235];
+    }
+    if (lower.includes('violet')) {
+        return [139, 92, 246];
+    }
+    return [163, 230, 53]; // default lime
+}
+
+export function getThemePrimaryHex(theme?: string): string {
+    if (!theme) return 'FFA3E635';
+    const lower = theme.toLowerCase();
+    if (lower.includes('orange')) {
+        return 'FFD05E00';
+    }
+    if (lower.includes('blue')) {
+        return 'FF2563EB';
+    }
+    if (lower.includes('violet')) {
+        return 'FF8B5CF6';
+    }
+    return 'FFA3E635';
+}
+
 import jsPDF from "jspdf";
 
 export async function getTransformedLogoDataUrl(
@@ -72,8 +102,9 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
     doc.setFillColor(15, 23, 42); // slate-900 (#0F172A)
     doc.rect(0, 0, 210, 8, 'F');
 
-    // Lime accent line (2mm)
-    doc.setFillColor(163, 230, 53); // lime-400 (#A3E635)
+    // Theme primary accent line (2mm)
+    const [pr, pg, pb] = getThemePrimaryRGB(company?.theme || company?.settings?.theme);
+    doc.setFillColor(pr, pg, pb);
     doc.rect(0, 8, 210, 2, 'F');
 
     // Logo & Company Name (Left)
@@ -129,12 +160,14 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
         } catch (err) { console.warn("Failed to add logo", err); }
     } else {
         // Fallback logo box
-        doc.setFillColor(163, 230, 53);
+        const [fallbackR, fallbackG, fallbackB] = getThemePrimaryRGB(company?.theme || company?.settings?.theme);
+        doc.setFillColor(fallbackR, fallbackG, fallbackB);
         doc.roundedRect(logoStartX, 16, 20, 20, 3, 3, 'F');
-        doc.setTextColor(15, 23, 42);
-        doc.setFontSize(16);
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
-        doc.text("LR", logoStartX + 10, 29, { align: 'center' });
+        const initials = ((company?.name || "Ops").trim().slice(0, 2)).toUpperCase();
+        doc.text(initials, logoStartX + 10, 29, { align: 'center' });
         logoWidthMm = 20;
     }
 
@@ -196,7 +229,7 @@ export async function drawPdfHeader(doc: jsPDF, company: any, title: string, num
 
     if (numberLabel) {
         doc.setFontSize(12);
-        doc.setTextColor(163, 230, 53); // Lime 
+        doc.setTextColor(pr, pg, pb);
         doc.setFont("helvetica", "bold");
         doc.text(`# ${numberLabel}`, 196, 34, { align: 'right' });
     }
@@ -247,11 +280,12 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
         return drawAdvancedReportPdf(doc, company, report);
     }
     
+    const [repR, repG, repB] = getThemePrimaryRGB(company?.theme);
     let currentY = await drawPdfHeader(doc, company, 'REPORT', `REP-${report.number.toString().padStart(3, '0')}`);
 
     // Report Info Header
     doc.setFontSize(8);
-    doc.setTextColor(163, 230, 53); // Lime 
+    doc.setTextColor(repR, repG, repB);
     doc.setFont("helvetica", "bold");
     doc.text("REPORT DETAILS", 14, currentY + 5);
 
@@ -265,7 +299,7 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
     if (report.client || report.project) {
         let clientY = currentY + 12;
         doc.setFontSize(8);
-        doc.setTextColor(163, 230, 53); // Lime 
+        doc.setTextColor(repR, repG, repB);
         doc.setFont("helvetica", "bold");
         doc.text("PROJECT / CLIENT", 105, currentY + 5);
 
@@ -387,7 +421,7 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
 
         // Conclusion header
         doc.setFontSize(8);
-        doc.setTextColor(163, 230, 53); // Lime
+        doc.setTextColor(repR, repG, repB);
         doc.setFont("helvetica", "bold");
         doc.text("CONCLUSION", 14, currentY);
         currentY += 7;
@@ -401,7 +435,7 @@ export async function drawReportPdf(doc: jsPDF, company: any, report: any) {
         currentY += (conclusionLines.length * 5) + 10;
 
         // Final divider
-        doc.setDrawColor(163, 230, 53); // Lime accent
+        doc.setDrawColor(repR, repG, repB);
         doc.setLineWidth(1);
         doc.line(14, currentY - 5, 196, currentY - 5);
     }
@@ -416,7 +450,8 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
     // 1. Header Area
     doc.setFillColor(15, 23, 42);
     doc.rect(0, 0, 210, 8, 'F');
-    doc.setFillColor(163, 230, 53);
+    const [advR, advG, advB] = getThemePrimaryRGB(company?.theme);
+    doc.setFillColor(advR, advG, advB);
     doc.rect(0, 8, 210, 2, 'F');
 
     // Logo
@@ -950,11 +985,11 @@ export async function drawAdvancedReportPdf(doc: jsPDF, company: any, report: an
             }
             // Recommendation box with lime accent
             doc.setFillColor(248, 250, 252);
-            doc.setDrawColor(163, 230, 53);
+            doc.setDrawColor(advR, advG, advB);
             doc.setLineWidth(0.5);
             doc.roundedRect(14, currentY, 182, recBlockH, 2, 2, 'FD');
             
-            doc.setTextColor(163, 230, 53);
+            doc.setTextColor(advR, advG, advB);
             doc.setFontSize(7);
             doc.setFont("helvetica", "bold");
             doc.text(recommendationLabel, 18, currentY + 5);

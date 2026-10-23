@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Plus, MapPin, Phone, Mail } from "lucide-react";
+import { Plus, MapPin, Phone, Mail, Flame } from "lucide-react";
 import { SearchInput } from "@/components/ui/search-input";
 import { ensureAuth } from "@/lib/auth-actions";
 

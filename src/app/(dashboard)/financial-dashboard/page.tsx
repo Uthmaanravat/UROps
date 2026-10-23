@@ -13,10 +13,15 @@ export default async function FinancialDashboardPage() {
         include: { settings: true }
     });
     
+    const isTendersEnabled = company?.settings?.tendersEnabled === true;
     const businessName = company?.settings?.name || company?.name || "Your Company";
 
     const invoices = await prisma.invoice.findMany({
-        where: { companyId, type: 'INVOICE' },
+        where: {
+            companyId,
+            type: 'INVOICE',
+            ...(isTendersEnabled ? {} : { workType: { not: 'TENDER' } })
+        },
         include: { payments: true, client: true, project: true }
     });
 
@@ -26,7 +31,10 @@ export default async function FinancialDashboardPage() {
     });
 
     const projects = await prisma.project.findMany({
-        where: { companyId },
+        where: {
+            companyId,
+            ...(isTendersEnabled ? {} : { workType: { not: 'TENDER' } })
+        },
         include: { client: true }
     });
 

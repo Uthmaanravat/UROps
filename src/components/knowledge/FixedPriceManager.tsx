@@ -43,12 +43,14 @@ interface FixedPriceManagerProps {
     clients?: { id: string; name: string }[]
     tenders?: { id: string; name: string; tenderNumber: string }[]
     initialScope?: "all" | "general" | "tender"
+    tendersEnabled?: boolean
 }
 
 export function FixedPriceManager({
     clients = [],
     tenders: initialTenders = [],
-    initialScope = "all"
+    initialScope = "all",
+    tendersEnabled = false
 }: FixedPriceManagerProps) {
     const [items, setItems] = useState<any[]>([])
     const [tenders, setTenders] = useState<any[]>(initialTenders)

@@ -6,11 +6,17 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileText, FileCheck, DollarSign, Calendar, Plus, Book, CheckCircle2, AlertCircle, ArrowUpRight } from "lucide-react"
 import { ensureAuth } from "@/lib/auth-actions"
+import { notFound } from "next/navigation"
+import { prisma } from "@/lib/prisma"
 
 export const dynamic = 'force-dynamic'
 
 export default async function TendersPage() {
-    await ensureAuth()
+    const companyId = await ensureAuth()
+    const settings = await prisma.companySettings.findUnique({ where: { companyId } })
+    if (!settings?.tendersEnabled) {
+        notFound()
+    }
     const summary = await getTenderSummaryAction()
 
     if (!summary || !summary.tender) {

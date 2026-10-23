@@ -19,7 +19,7 @@ interface SeedProspect {
 }
 
 /**
- * Idempotently imports the Fable-37 prospect list for a company.
+ * Idempotently imports the Core Target prospect list for a company.
  * Only inserts seed ids that don't exist yet, so statuses/notes/contact
  * logs on already-imported prospects are never touched.
  */

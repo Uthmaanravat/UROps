@@ -7,7 +7,7 @@ import { ensureAuth } from "@/lib/auth-actions";
 export default async function NewQuotePage({
     searchParams
 }: {
-    searchParams: { clientId?: string; projectId?: string; scope?: string; type?: string; tenderId?: string }
+    searchParams: { clientId?: string; projectId?: string; scope?: string; type?: string; tenderId?: string; site?: string; prospectId?: string }
 }) {
     const companyId = await ensureAuth();
 
@@ -36,6 +36,7 @@ export default async function NewQuotePage({
         })
     ]);
 
+    const isTendersEnabled = settings?.tendersEnabled === true;
     const aiEnabled = settings?.aiEnabled ?? true;
     const isInvoice = searchParams.type === 'INVOICE';
 
@@ -45,13 +46,16 @@ export default async function NewQuotePage({
             <QuoteForm
                 clients={clients as any}
                 projects={projects}
-                tenders={tenders}
+                tenders={isTendersEnabled ? tenders : []}
+                tendersEnabled={isTendersEnabled}
                 termsTemplates={termsTemplates}
                 initialClientId={searchParams.clientId}
                 initialProjectId={searchParams.projectId}
                 initialScope={searchParams.scope}
                 initialType={isInvoice ? 'INVOICE' : 'QUOTE'}
-                initialTenderId={searchParams.tenderId}
+                initialTenderId={isTendersEnabled ? searchParams.tenderId : undefined}
+                initialSite={searchParams.site}
+                initialProspectId={searchParams.prospectId}
                 aiEnabled={aiEnabled}
             />
         </div>

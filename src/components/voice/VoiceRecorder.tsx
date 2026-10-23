@@ -148,7 +148,7 @@ export function VoiceRecorder({ onParsed }: VoiceRecorderProps) {
                     Stop Recording
                 </Button>
             ) : (
-                <Button onClick={startRecording} variant="outline" size="sm" className="bg-lime-500 hover:bg-lime-600 text-black border-none">
+                <Button onClick={startRecording} variant="outline" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground border-none">
                     <Mic className="mr-2 h-4 w-4" />
                     Start Voice Note
                 </Button>

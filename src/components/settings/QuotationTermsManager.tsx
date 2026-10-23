@@ -442,10 +442,10 @@ export function QuotationTermsManager({ initialTemplates }: QuotationTermsManage
                             /* Live Quote Preview Representation */
                             <div className="space-y-3 p-6 rounded-2xl bg-[#090D16] border border-white/10">
                                 <div className="space-y-1">
-                                    <div className="text-[11px] font-black uppercase tracking-[0.25em] text-lime-400">
+                                    <div className="text-[11px] font-black uppercase tracking-[0.25em] text-primary">
                                         TERMS AND CONDITIONS
                                     </div>
-                                    <div className="h-0.5 w-12 bg-lime-400 rounded-full" />
+                                    <div className="h-0.5 w-12 bg-primary rounded-full" />
                                 </div>
                                 <div className="mt-4 space-y-2.5">
                                     {parsedClauses.length === 0 ? (
@@ -453,7 +453,7 @@ export function QuotationTermsManager({ initialTemplates }: QuotationTermsManage
                                     ) : (
                                         parsedClauses.map((clause, idx) => (
                                             <div key={idx} className="flex items-start gap-2.5 text-xs text-gray-300 leading-relaxed font-sans">
-                                                <span className="font-mono font-bold text-lime-400 shrink-0 w-6">{idx + 1}.</span>
+                                                <span className="font-mono font-bold text-primary shrink-0 w-6">{idx + 1}.</span>
                                                 <span className="text-gray-200">{clause}</span>
                                             </div>
                                         ))

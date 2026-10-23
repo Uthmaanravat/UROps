@@ -26,16 +26,17 @@ export async function createInvoiceAction(data: {
     rateYear?: number
     termsTemplateId?: string | null
     customTermsBody?: string | null
+    prospectId?: string
 }) {
     const companyId = await ensureAuth()
     const year = new Date().getFullYear();
     let nextNumber = 0;
     let formattedQuoteNumber = data.quoteNumber;
     const isInvoice = data.type === 'INVOICE';
-    const isTender = data.workType === 'TENDER';
-    
     const settings = await prisma.companySettings.findUnique({ where: { companyId } });
     if (!settings) throw new Error("Company settings not found");
+    const isTendersEnabled = settings.tendersEnabled === true;
+    const isTender = isTendersEnabled && data.workType === 'TENDER';
 
     const clientObj = await prisma.client.findFirst({
         where: { id: data.clientId, companyId }
@@ -361,6 +362,36 @@ export async function createInvoiceAction(data: {
         }
     }
 
+    // Update linked prospect if exists
+    const targetProspectId = (data as any).prospectId || (clientObj?.customFields as any)?.prospectId;
+    if (targetProspectId) {
+        try {
+            const p = await prisma.prospect.findUnique({ where: { id: targetProspectId } });
+            if (p && p.companyId === companyId) {
+                const existingLog = (p.contactLog as any[]) || [];
+                await prisma.prospect.update({
+                    where: { id: targetProspectId },
+                    data: {
+                        status: 'quoted',
+                        lastContactDate: new Date(),
+                        contactLog: [
+                            ...existingLog,
+                            {
+                                date: new Date().toISOString(),
+                                method: 'status',
+                                outcome: `Quotation #${formattedQuoteNumber} created for ${data.site || p.name}`,
+                                quoteId: invoice.id
+                            }
+                        ]
+                    }
+                });
+            }
+        } catch (pErr) {
+            console.warn("Could not link prospect on quote creation:", pErr);
+        }
+    }
+
+    revalidatePath("/drone");
     revalidatePath("/invoices");
     revalidatePath("/projects");
     revalidatePath("/clients");
@@ -419,15 +450,112 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
     const companyId = await ensureAuth()
     const invoice = await prisma.invoice.update({
         where: { id, companyId },
-        data: { status }
+        data: { status },
+        include: { client: true, project: true }
     })
     
     if (status === 'PAID') {
         await markAssociatedQuotesAsPaid(id, companyId);
     }
+
+    // PART 4: Link prospect updates
+    const prospectId = (invoice.client?.customFields as any)?.prospectId;
+    if (prospectId) {
+        try {
+            const p = await prisma.prospect.findUnique({ where: { id: prospectId } });
+            if (p && p.companyId === companyId) {
+                const existingLog = (p.contactLog as any[]) || [];
+                const now = new Date();
+
+                if (status === 'SENT' && p.status !== 'won') {
+                    await prisma.prospect.update({
+                        where: { id: prospectId },
+                        data: {
+                            status: 'quoted',
+                            lastContactDate: now,
+                            contactLog: [
+                                ...existingLog,
+                                {
+                                    date: now.toISOString(),
+                                    method: 'email',
+                                    outcome: `Quote #${invoice.quoteNumber || invoice.number} sent to client`,
+                                    quoteId: invoice.id
+                                }
+                            ]
+                        }
+                    });
+                } else if (status === 'ACCEPTED') {
+                    await prisma.prospect.update({
+                        where: { id: prospectId },
+                        data: {
+                            status: 'won',
+                            lastContactDate: now,
+                            contactLog: [
+                                ...existingLog,
+                                {
+                                    date: now.toISOString(),
+                                    method: 'status',
+                                    outcome: `Quote #${invoice.quoteNumber || invoice.number} accepted - Deal won!`,
+                                    quoteId: invoice.id
+                                }
+                            ]
+                        }
+                    });
+
+                    // Auto-create or update Project
+                    if (!invoice.projectId) {
+                        const newProject = await prisma.project.create({
+                            data: {
+                                companyId,
+                                name: `${invoice.client.name} - ${invoice.site || 'Site Work'}`,
+                                clientId: invoice.clientId,
+                                status: 'SCHEDULED',
+                                workflowStage: 'SOW',
+                                commercialStatus: 'AWAITING_PO',
+                                description: `Project auto-created from accepted Quote #${invoice.quoteNumber || invoice.number}`
+                            }
+                        });
+                        await prisma.invoice.update({
+                            where: { id: invoice.id },
+                            data: { projectId: newProject.id }
+                        });
+                    } else {
+                        await prisma.project.update({
+                            where: { id: invoice.projectId },
+                            data: {
+                                status: 'SCHEDULED',
+                                workflowStage: 'SOW',
+                                commercialStatus: 'AWAITING_PO'
+                            }
+                        });
+                    }
+                } else if (status === 'REJECTED' || status === 'CANCELLED') {
+                    await prisma.prospect.update({
+                        where: { id: prospectId },
+                        data: {
+                            status: 'lost',
+                            lastContactDate: now,
+                            contactLog: [
+                                ...existingLog,
+                                {
+                                    date: now.toISOString(),
+                                    method: 'status',
+                                    outcome: `Quote #${invoice.quoteNumber || invoice.number} rejected/cancelled`,
+                                    quoteId: invoice.id
+                                }
+                            ]
+                        }
+                    });
+                }
+            }
+        } catch (pErr) {
+            console.warn("Could not update linked prospect in updateInvoiceStatus:", pErr);
+        }
+    }
     
     revalidatePath(`/invoices/${id}`)
     revalidatePath("/invoices")
+    revalidatePath("/drone")
     revalidatePath("/clients")
     revalidatePath(`/clients/${invoice.clientId}`)
     if (invoice.projectId) {
@@ -675,6 +803,35 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
         where: { id: quote.id },
         data: { status: 'INVOICED' }
     })
+
+    // PART 4: Update linked prospect to WON
+    const prospectId = (client?.customFields as any)?.prospectId;
+    if (prospectId) {
+        try {
+            const p = await prisma.prospect.findUnique({ where: { id: prospectId } });
+            if (p && p.companyId === companyId) {
+                const existingLog = (p.contactLog as any[]) || [];
+                await prisma.prospect.update({
+                    where: { id: prospectId },
+                    data: {
+                        status: 'won',
+                        lastContactDate: new Date(),
+                        contactLog: [
+                            ...existingLog,
+                            {
+                                date: new Date().toISOString(),
+                                method: 'status',
+                                outcome: `Quote #${quote.quoteNumber || quote.number} converted to Invoice #${formattedInvoiceNumber} - Won!`,
+                                quoteId: quote.id
+                            }
+                        ]
+                    }
+                });
+            }
+        } catch (pErr) {
+            console.warn("Could not update linked prospect in convertToInvoiceAction:", pErr);
+        }
+    }
 
     // 6. Update Project Stage
     if (invoice.projectId) {

@@ -58,6 +58,9 @@ interface QuoteFormProps {
     initialScope?: string
     initialType?: 'QUOTE' | 'INVOICE'
     initialTenderId?: string
+    initialSite?: string
+    initialProspectId?: string
+    tendersEnabled?: boolean
     aiEnabled?: boolean
     isAdmin?: boolean
 }
@@ -72,9 +75,13 @@ export function QuoteForm({
     initialScope,
     initialType = 'QUOTE',
     initialTenderId,
+    initialSite,
+    initialProspectId,
+    tendersEnabled = false,
     aiEnabled = true,
     isAdmin = true
 }: QuoteFormProps) {
+    const isTendersEnabled = tendersEnabled
     const router = useRouter()
     const docType = initialType
     const STORAGE_KEY = `urops_draft_${docType.toLowerCase()}_new`
@@ -91,8 +98,14 @@ export function QuoteForm({
     const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null)
 
     // Work Type and Tender selection
-    const defaultTender = tenders.length > 0 ? (initialTenderId ? tenders.find(t => t.id === initialTenderId) : tenders[0]) : null
-    const [workType, setWorkType] = useState<"GENERAL" | "TENDER">(initialTenderId ? "TENDER" : "GENERAL")
+    const defaultTender = isTendersEnabled && tenders.length > 0 ? (initialTenderId ? tenders.find(t => t.id === initialTenderId) : tenders[0]) : null
+    const [workType, setWorkType] = useState<"GENERAL" | "TENDER">(isTendersEnabled && initialTenderId ? "TENDER" : "GENERAL")
+
+    useEffect(() => {
+        if (!isTendersEnabled && workType === "TENDER") {
+            setWorkType("GENERAL")
+        }
+    }, [isTendersEnabled, workType])
     const [selectedTenderId, setSelectedTenderId] = useState<string>(initialTenderId || defaultTender?.id || "")
 
     const activeTender = useMemo(() => {
@@ -158,7 +171,7 @@ export function QuoteForm({
     )
     const [highlightIndex, setHighlightIndex] = useState<number | null>(null)
 
-    const [site, setSite] = useState("")
+    const [site, setSite] = useState(initialSite || "")
     const [quoteNumber, setQuoteNumber] = useState("")
     const [reference, setReference] = useState("")
     const [projectName, setProjectName] = useState("")
@@ -526,7 +539,8 @@ export function QuoteForm({
                 tenderId: workType === "TENDER" ? selectedTenderId : null,
                 rateYear: workType === "TENDER" ? effectiveRateYear : 1,
                 termsTemplateId: docType === 'QUOTE' ? (selectedTermsTemplateId || null) : null,
-                customTermsBody: docType === 'QUOTE' ? (customTermsText.trim() || null) : null
+                customTermsBody: docType === 'QUOTE' ? (customTermsText.trim() || null) : null,
+                prospectId: initialProspectId || undefined
             })
 
             clearDraft(STORAGE_KEY)
@@ -547,7 +561,8 @@ export function QuoteForm({
         <div className="flex flex-col lg:flex-row gap-6 items-start">
             <div className="flex-1 w-full space-y-6">
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* WORK TYPE SELECTOR BAR (Requirement 1 & 2) */}
+                    {/* WORK TYPE SELECTOR BAR (Requirement 1 & 2) - Only if tendersEnabled */}
+                    {isTendersEnabled && (
                     <div className="p-4 rounded-2xl bg-[#14141E] border border-white/10 shadow-lg space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
@@ -620,6 +635,7 @@ export function QuoteForm({
                             )}
                         </div>
                     </div>
+                    )}
 
                     {/* Header Details Card */}
                     <div className="grid gap-6 md:grid-cols-2 p-6 rounded-2xl bg-[#14141E] border border-white/5 shadow-xl">
@@ -868,14 +884,14 @@ export function QuoteForm({
                                     className="w-full flex items-center justify-between p-4 text-left hover:bg-white/[0.02] transition-colors"
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 rounded-xl bg-lime-400/10 border border-lime-400/20 text-lime-400">
+                                        <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 text-primary">
                                             <ShieldCheck className="h-4 w-4" />
                                         </div>
                                         <div>
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="text-sm font-black uppercase tracking-wider text-white">Terms and Conditions</span>
                                                 {activeTermsTemplate ? (
-                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-lime-400/20 text-lime-400 border border-lime-400/30">
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30">
                                                         {activeTermsTemplate.name}
                                                     </span>
                                                 ) : (
@@ -969,13 +985,13 @@ export function QuoteForm({
                                         {/* Live Sequential Preview */}
                                         {numberedClausesPreview.length > 0 && (
                                             <div className="space-y-2 pt-2 border-t border-white/5">
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-lime-400 flex items-center gap-1.5">
+                                                <div className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
                                                     <span>Sequential Clauses Preview (As Rendered On Quote)</span>
                                                 </div>
                                                 <div className="p-4 rounded-xl bg-[#090D16] border border-white/5 space-y-2 max-h-48 overflow-y-auto font-sans">
                                                     {numberedClausesPreview.map((clause) => (
                                                         <div key={clause.clauseNumber} className="flex items-start gap-2 text-xs text-gray-300 leading-relaxed">
-                                                            <span className="font-mono font-bold text-lime-400 shrink-0 w-6">
+                                                            <span className="font-mono font-bold text-primary shrink-0 w-6">
                                                                 {clause.clauseNumber}.
                                                             </span>
                                                             <span className={clause.source === 'custom' ? 'text-cyan-200' : 'text-gray-300'}>

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { ClipboardList, Loader2 } from "lucide-react"
 import jsPDF from "jspdf"
-import { drawPdfHeader } from "@/lib/pdf-utils"
+import { drawPdfHeader, getThemePrimaryRGB } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
 import { useState } from "react"
 
@@ -39,10 +39,10 @@ export function SOWChecklistButton({ project, latestScope, settings, className, 
     const [loading, setLoading] = useState(false)
 
     const company = {
-        name: settings?.name || "LR Builders & Maintenance Pty (Ltd)",
+        name: settings?.name || "Company",
         address: settings?.address || "15 Culemborg Street, Avondale, Parow, Cape Town, 7500",
-        email: settings?.email || "Loedvi@lrbuilders.co.za",
-        phone: settings?.phone || "082 448 7490",
+        email: settings?.email || "",
+        phone: settings?.phone || "",
         logoUrl: settings?.logoUrl || "",
         vatNumber: settings?.vatNumber || "",
         paymentTerms: settings?.paymentTerms || "",
@@ -53,6 +53,7 @@ export function SOWChecklistButton({ project, latestScope, settings, className, 
     const generateChecklistPdf = async () => {
         setLoading(true)
         try {
+            const [themeR, themeG, themeB] = getThemePrimaryRGB(settings?.theme)
             const doc = new jsPDF()
 
             // Header (Shared branding)
@@ -68,7 +69,7 @@ export function SOWChecklistButton({ project, latestScope, settings, className, 
 
             // Document Details Grid (Left)
             doc.setFontSize(8)
-            doc.setTextColor(163, 230, 53) // Lime
+            doc.setTextColor(themeR, themeG, themeB) // Lime
             doc.setFont("helvetica", "bold")
             doc.text("DOCUMENT DETAILS", 14, gridY)
 
@@ -96,7 +97,7 @@ export function SOWChecklistButton({ project, latestScope, settings, className, 
 
             // Site Location Grid (Right)
             doc.setFontSize(8)
-            doc.setTextColor(163, 230, 53) // Lime
+            doc.setTextColor(themeR, themeG, themeB) // Lime
             doc.setFont("helvetica", "bold")
             doc.text("SITE LOCATION", 110, gridY)
 
@@ -152,7 +153,7 @@ export function SOWChecklistButton({ project, latestScope, settings, className, 
                 theme: 'striped',
                 headStyles: {
                     fillColor: [15, 23, 42], // slate-900 Navy
-                    textColor: [163, 230, 53], // Lime pop
+                    textColor: (settings?.theme || '').toLowerCase().includes('orange') ? [208, 94, 0] : [163, 230, 53],
                     fontStyle: 'bold',
                     fontSize: 9,
                     cellPadding: 4

@@ -11,11 +11,17 @@ export default async function ProjectsPage() {
 
     try {
         company = await prisma.company.findUnique({
-            where: { id: companyId }
+            where: { id: companyId },
+            include: { settings: true }
         })
 
+        const isTendersEnabled = company?.settings?.tendersEnabled === true
+
         projects = await prisma.project.findMany({
-            where: { companyId },
+            where: {
+                companyId,
+                ...(isTendersEnabled ? {} : { workType: { not: 'TENDER' } })
+            },
             orderBy: { updatedAt: 'desc' },
             include: {
                 client: true,
@@ -70,5 +76,6 @@ export default async function ProjectsPage() {
         projects = []
     }
 
-    return <ProjectDashboardClient projects={projects} company={company} />
+    const isTendersEnabled = company?.settings?.tendersEnabled === true
+    return <ProjectDashboardClient projects={projects} company={company} tendersEnabled={isTendersEnabled} />
 }

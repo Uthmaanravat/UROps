@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Flame } from "lucide-react"
 import { CalendarView } from "@/components/calendar/CalendarView"
 import { ensureAuth } from "@/lib/auth-actions"
 

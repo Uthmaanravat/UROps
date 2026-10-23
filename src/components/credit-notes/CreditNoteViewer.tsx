@@ -19,10 +19,10 @@ export function CreditNoteViewer({ creditNote, companySettings }: CreditNoteView
     const [isUpdating, setIsUpdating] = useState(false)
 
     const company = {
-        name: companySettings?.name || "LR Builders & Maintenance Pty (Ltd)",
+        name: companySettings?.name || "Company",
         address: companySettings?.address || "15 Culemborg Street, Avondale, Parow, Cape Town, 7500",
-        email: companySettings?.email || "Loedvi@lrbuilders.co.za",
-        phone: companySettings?.phone || "082 448 7490",
+        email: companySettings?.email || "",
+        phone: companySettings?.phone || "",
         vatNumber: companySettings?.taxId || "4880295847",
         logoUrl: companySettings?.logoUrl || ""
     }

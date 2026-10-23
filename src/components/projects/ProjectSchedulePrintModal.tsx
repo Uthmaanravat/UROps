@@ -17,6 +17,7 @@ export interface ProjectSchedulePrintModalProps {
     projects: any[]
     company?: any
     initialWorkType?: "ALL" | "GENERAL" | "TENDER"
+    tendersEnabled?: boolean
 }
 
 export function isTenderProject(p: any): boolean {
@@ -165,9 +166,11 @@ export function ProjectSchedulePrintModal({
     onClose,
     projects,
     company,
-    initialWorkType = "ALL"
+    initialWorkType = "ALL",
+    tendersEnabled
 }: ProjectSchedulePrintModalProps) {
-    const [workTypeFilter, setWorkTypeFilter] = useState<"ALL" | "GENERAL" | "TENDER">(initialWorkType)
+    const isTendersEnabled = tendersEnabled ?? (company?.settings?.tendersEnabled === true);
+    const [workTypeFilter, setWorkTypeFilter] = useState<"ALL" | "GENERAL" | "TENDER">(isTendersEnabled ? initialWorkType : "GENERAL")
     
     // Graph / Document Style Selector (Gantt timeline, weekly planner, or table)
     const [graphType, setGraphType] = useState<"GANTT" | "PLANNER" | "TABLE">("GANTT")
@@ -282,15 +285,17 @@ export function ProjectSchedulePrintModal({
             format: "a4"
         })
 
-        const companyName = company?.name || "LR BUILDERS"
-        const companyPhone = company?.phone || "082 821 7247"
-        const companyEmail = company?.email || "info@lrbuilders.co.za"
+        const companyName = company?.settings?.name || company?.name || "Company Operations"
+        const companyPhone = company?.settings?.phone || company?.phone || ""
+        const companyEmail = company?.settings?.email || company?.email || ""
+        const companyReg = company?.settings?.registrationNumber || company?.registrationNumber || ""
         const pageWidth = doc.internal.pageSize.getWidth()
 
         // 1. Signature Brand Header Bars (Navy #14141E + Lime #A3E635)
         doc.setFillColor(20, 20, 30) // Navy #14141E
         doc.rect(0, 0, pageWidth, 9, 'F')
-        doc.setFillColor(163, 230, 53) // Lime #A3E635
+        const [pr, pg, pb] = (company?.theme || company?.settings?.theme || '').toLowerCase().includes('orange') ? [208, 94, 0] : [163, 230, 53]
+            doc.setFillColor(pr, pg, pb)
         doc.rect(0, 9, pageWidth, 2.5, 'F')
 
         // 2. Company Details & Document Title
@@ -393,7 +398,7 @@ export function ProjectSchedulePrintModal({
                 theme: 'grid',
                 headStyles: {
                     fillColor: [20, 20, 30], // Navy #14141E
-                    textColor: [163, 230, 53], // Lime #A3E635
+                    textColor: (company?.theme || company?.settings?.theme || '').toLowerCase().includes('orange') ? [208, 94, 0] : [163, 230, 53],
                     fontSize: 7.5,
                     fontStyle: 'bold',
                     halign: 'center'
@@ -483,7 +488,7 @@ export function ProjectSchedulePrintModal({
                 theme: 'grid',
                 headStyles: {
                     fillColor: [20, 20, 30],
-                    textColor: [163, 230, 53],
+                    textColor: (company?.theme || company?.settings?.theme || '').toLowerCase().includes('orange') ? [208, 94, 0] : [163, 230, 53],
                     fontSize: 8,
                     fontStyle: 'bold'
                 },
@@ -555,7 +560,7 @@ export function ProjectSchedulePrintModal({
                             onClick={handlePrint}
                             disabled={finalProjects.length === 0}
                             size="sm"
-                            className="bg-primary hover:bg-primary/90 text-black font-black text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(163,230,53,0.3)]"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-1.5 shadow-md"
                         >
                             <Printer className="h-4 w-4" /> Print Document
                         </Button>
@@ -800,7 +805,7 @@ export function ProjectSchedulePrintModal({
                         >
                             {/* Signature Quote & Invoice Brand Bar: Navy #14141E (9px) + Accent Lime #A3E635 (3px) */}
                             <div className="h-2.5 bg-[#14141E] w-full" />
-                            <div className="h-1 bg-[#A3E635] w-full" />
+                            <div className="h-1 bg-primary w-full" />
 
                             <div className="p-6 md:p-8 space-y-6">
                                 {/* Document Header */}
@@ -810,7 +815,7 @@ export function ProjectSchedulePrintModal({
                                             {company?.name || "LR BUILDERS"}
                                         </h2>
                                         <p className="text-[11px] font-bold text-slate-500 mt-0.5">
-                                            Phone: {company?.phone || "082 821 7247"} &nbsp;|&nbsp; Email: {company?.email || "info@lrbuilders.co.za"}
+                                            Phone: {company?.settings?.phone || company?.phone || ""} &nbsp;|&nbsp; Email: {company?.settings?.email || company?.email || ""}
                                         </p>
                                     </div>
                                     <div className="text-right">
@@ -847,7 +852,7 @@ export function ProjectSchedulePrintModal({
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-xs font-black uppercase tracking-wider text-[#14141E] flex items-center gap-1.5">
-                                                <span className="h-2.5 w-2.5 rounded-full bg-[#A3E635] border border-[#14141E] inline-block" />
+                                                <span className="h-2.5 w-2.5 rounded-full bg-primary border border-[#14141E] inline-block" />
                                                 Work Schedule &amp; Execution Timeline (Gantt Graph)
                                             </h3>
                                             <div className="flex items-center gap-2 text-[8px] font-bold text-slate-600 flex-wrap">
@@ -864,7 +869,7 @@ export function ProjectSchedulePrintModal({
                                             <table className="w-full text-left text-xs border-collapse">
                                                 <thead>
                                                     {/* Table Header: Dark Navy #14141E with Lime #A3E635 Text */}
-                                                    <tr className="bg-[#14141E] text-[#A3E635] text-[9px] font-black uppercase tracking-wider">
+                                                    <tr className="bg-[#14141E] text-primary text-[9px] font-black uppercase tracking-wider">
                                                         <th className="py-2.5 px-2 w-7 text-center">#</th>
                                                         <th className="py-2.5 px-3 min-w-[140px]">Project &amp; Site</th>
                                                         <th className="py-2.5 px-1 text-center w-16 border-l border-white/10 text-emerald-400">
@@ -979,7 +984,7 @@ export function ProjectSchedulePrintModal({
                                 {graphType === "PLANNER" && (
                                     <div className="space-y-3">
                                         <h3 className="text-xs font-black uppercase tracking-wider text-[#14141E] flex items-center gap-1.5">
-                                            <span className="h-2.5 w-2.5 rounded-full bg-[#A3E635] inline-block" />
+                                            <span className="h-2.5 w-2.5 rounded-full bg-primary inline-block" />
                                             Weekly &amp; Monthly Operations Planning Matrix
                                         </h3>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
@@ -1125,7 +1130,7 @@ export function ProjectSchedulePrintModal({
                                             <table className="w-full text-left text-xs border-collapse">
                                                 <thead>
                                                     {/* Header: Dark Navy #14141E with Lime #A3E635 */}
-                                                    <tr className="bg-[#14141E] text-[#A3E635] text-[9px] font-black uppercase tracking-wider">
+                                                    <tr className="bg-[#14141E] text-primary text-[9px] font-black uppercase tracking-wider">
                                                         <th className="py-2 px-2 text-center w-8">#</th>
                                                         <th className="py-2 px-3">Project &amp; Tasks</th>
                                                         {showSite && <th className="py-2 px-3 w-36">Site Location</th>}

@@ -72,14 +72,20 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
 
     const dynamicNavigation = navigation.map(group => {
         if (group.title === "Dashboard" && isDroneEnabled) {
-            const hasDroneItem = group.items.some(item => item.title === "Drone Operations");
-            if (!hasDroneItem) {
+            const hasPipelineItem = group.items.some(item => item.title === "Sales Pipeline" || item.title === "Drone Operations");
+            if (!hasPipelineItem) {
                 return {
                     ...group,
                     items: [
-                        ...group.items,
-                        { title: "Drone Operations", href: "/drone" }
+                        { title: "Command Center", href: "/dashboard" },
+                        { title: "Sales Pipeline", href: "/drone" },
+                        ...group.items.filter(item => item.title !== "Command Center" && item.title !== "Drone Operations" && item.title !== "Sales Pipeline")
                     ]
+                };
+            } else {
+                return {
+                    ...group,
+                    items: group.items.map(item => item.title === "Drone Operations" ? { ...item, title: "Sales Pipeline" } : item)
                 };
             }
         }

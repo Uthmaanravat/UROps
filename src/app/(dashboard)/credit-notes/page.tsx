@@ -7,6 +7,9 @@ export const dynamic = 'force-dynamic'
 export default async function CreditNotesPage() {
     const companyId = await ensureAuth()
 
+    const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+    const isTendersEnabled = settings?.tendersEnabled === true;
+
     const [creditNotes, clients, invoices, tenders] = await Promise.all([
         prisma.creditNote.findMany({
             where: { companyId },
@@ -67,7 +70,8 @@ export default async function CreditNotesPage() {
             creditNotes={creditNotes}
             clients={clients}
             invoices={invoices}
-            tenders={tenders}
+            tenders={isTendersEnabled ? tenders : []}
+            tendersEnabled={isTendersEnabled}
         />
     )
 }

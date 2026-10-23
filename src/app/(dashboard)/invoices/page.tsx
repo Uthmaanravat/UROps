@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, ArrowUpRight } from "lucide-react";
+import { Plus, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, ArrowUpRight, Flame } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 import { SearchInput } from "@/components/ui/search-input";
 import { InvoiceFilters } from "@/components/invoices/InvoiceFilters";
@@ -37,8 +37,12 @@ export default async function InvoicesPage({
     const showPaid = searchParams.showPaid === 'true';
     let invoices: any[] = [];
     let clients: { id: string; name: string }[] = [];
+    let isTendersEnabled = false;
 
     try {
+        const companySettings = await prisma.companySettings.findUnique({ where: { companyId } });
+        isTendersEnabled = companySettings?.tendersEnabled === true;
+
         // Fetch client list for filter options
         clients = await prisma.client.findMany({
             where: { companyId },
@@ -52,6 +56,9 @@ export default async function InvoicesPage({
         };
 
         const workTypePrismaCondition = () => {
+            if (!isTendersEnabled) {
+                return { workType: { not: 'TENDER' } };
+            }
             if (workTypeFilter === 'TENDER') {
                 return { workType: 'TENDER' };
             }
@@ -373,44 +380,66 @@ export default async function InvoicesPage({
                 </Link>
             </div>
 
-            {/* Work Type Filter Tabs: All | General Work | Tender 152G */}
-            <div className="flex items-center gap-2 border-b border-border/40 pb-3 flex-wrap">
-                <span className="text-xs font-bold text-muted-foreground mr-1 uppercase tracking-wider text-[10px]">Work Type:</span>
-                <Link
-                    href={getWorkTypeFilterUrl("")}
-                    className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                        !workTypeFilter
-                            ? "bg-primary text-black shadow-sm"
-                            : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
-                    )}
-                >
-                    All Work
-                </Link>
-                <Link
-                    href={getWorkTypeFilterUrl("GENERAL")}
-                    className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                        workTypeFilter === "GENERAL"
-                            ? "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm"
-                            : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
-                    )}
-                >
-                    General Work
-                </Link>
-                <Link
-                    href={getWorkTypeFilterUrl("TENDER")}
-                    className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
-                        workTypeFilter === "TENDER"
-                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm font-black"
-                            : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
-                    )}
-                >
-                    <span className="h-2 w-2 rounded-full bg-amber-400" />
-                    Tender 152G Work
+            {/* Next Actions Banner */}
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <Flame className="h-5 w-5 text-primary shrink-0" />
+                    <div>
+                        <div className="text-xs font-black uppercase text-primary">Next Actions: {typeFilter === 'INVOICE' ? 'Billing Operations' : 'Quotation Pipeline'}</div>
+                        <div className="text-xs text-white/90">
+                            {typeFilter === 'INVOICE'
+                                ? 'Track unpaid client balances, record payments, and reconcile project disbursements.'
+                                : 'Finalize draft quotations, send to clients, and convert accepted quotes to scheduled operational jobs.'}
+                        </div>
+                    </div>
+                </div>
+                <Link href={typeFilter === 'INVOICE' ? '/payments' : '/drone'}>
+                    <Button size="sm" variant="outline" className="h-8 text-xs font-bold border-white/10 text-white hover:bg-white/5">
+                        {typeFilter === 'INVOICE' ? 'Payments ↗' : 'Sales Pipeline ↗'}
+                    </Button>
                 </Link>
             </div>
+
+            {/* Work Type Filter Tabs: All | General Work | Tender 152G (Only if tendersEnabled) */}
+            {isTendersEnabled && (
+                <div className="flex items-center gap-2 border-b border-border/40 pb-3 flex-wrap">
+                    <span className="text-xs font-bold text-muted-foreground mr-1 uppercase tracking-wider text-[10px]">Work Type:</span>
+                    <Link
+                        href={getWorkTypeFilterUrl("")}
+                        className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                            !workTypeFilter
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                        )}
+                    >
+                        All Work
+                    </Link>
+                    <Link
+                        href={getWorkTypeFilterUrl("GENERAL")}
+                        className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                            workTypeFilter === "GENERAL"
+                                ? "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm"
+                                : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                        )}
+                    >
+                        General Work
+                    </Link>
+                    <Link
+                        href={getWorkTypeFilterUrl("TENDER")}
+                        className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                            workTypeFilter === "TENDER"
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm font-black"
+                                : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                        )}
+                    >
+                        <span className="h-2 w-2 rounded-full bg-amber-400" />
+                        Tender 152G Work
+                    </Link>
+                </div>
+            )}
 
             {/* Quick Filter Bar for Quotes */}
             {typeFilter === 'QUOTE' && (
@@ -422,7 +451,7 @@ export default async function InvoicesPage({
                             className={cn(
                                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
                                 !statusFilter && sortParam !== 'uninvoiced_first' && sortParam !== 'invoiced_first'
-                                    ? "bg-primary text-black shadow-sm font-black"
+                                    ? "bg-primary text-primary-foreground shadow-sm font-black"
                                     : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
                             )}
                         >
@@ -518,7 +547,7 @@ export default async function InvoicesPage({
                             className={cn(
                                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
                                 !statusFilter
-                                    ? "bg-primary text-black shadow-sm font-black"
+                                    ? "bg-primary text-primary-foreground shadow-sm font-black"
                                     : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
                             )}
                         >

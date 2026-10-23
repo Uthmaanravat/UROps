@@ -36,10 +36,10 @@ export default async function ManagerDashboard() {
             </div>
 
             {/* Quick Voice Entry */}
-            <Card className="border-lime-500/30 bg-lime-500/5">
+            <Card className="border-primary/30 bg-primary/5">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Mic className="h-5 w-5 text-lime-500" />
+                        <Mic className="h-5 w-5 text-primary" />
                         Quick Voice Quote
                     </CardTitle>
                     <CardDescription>
@@ -48,7 +48,7 @@ export default async function ManagerDashboard() {
                 </CardHeader>
                 <CardContent>
                     <Link href="/scope/new">
-                        <Button className="w-full bg-lime-500 hover:bg-lime-600 text-black font-bold h-12 shadow-lg">
+                        <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-12 shadow-lg">
                             Start New Scope Entry
                         </Button>
                     </Link>

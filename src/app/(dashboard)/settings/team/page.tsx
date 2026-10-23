@@ -37,7 +37,7 @@ export default async function TeamSettingsPage() {
                         href="/settings/terms"
                         className="px-3 py-1.5 rounded-lg text-xs font-bold text-muted-foreground hover:text-white flex items-center gap-1.5 transition-colors"
                     >
-                        <ShieldCheck className="h-3.5 w-3.5 text-lime-400" />
+                        <ShieldCheck className="h-3.5 w-3.5 text-primary" />
                         Quotation Terms
                     </Link>
                     <Link

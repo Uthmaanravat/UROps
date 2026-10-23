@@ -14,10 +14,12 @@ export default async function KnowledgePage({
     let aiEnabled = true;
     let clients: any[] = [];
     let tenders: any[] = [];
+    let isTendersEnabled = false;
 
     try {
         const settings = await prisma.companySettings.findUnique({ where: { companyId } });
         aiEnabled = settings?.aiEnabled ?? true;
+        isTendersEnabled = settings?.tendersEnabled === true;
 
         const [historyData, clientsData, tendersData] = await Promise.all([
             prisma.pricingKnowledge.findMany({
@@ -39,7 +41,7 @@ export default async function KnowledgePage({
 
         items = historyData;
         clients = clientsData;
-        tenders = tendersData;
+        tenders = isTendersEnabled ? tendersData : [];
     } catch (e) {
         console.error("Knowledge DB Error:", e);
     }
@@ -56,6 +58,7 @@ export default async function KnowledgePage({
                 tenders={tenders}
                 initialTab={initialTab}
                 initialScope={initialScope}
+                tendersEnabled={isTendersEnabled}
             />
         </div>
     );

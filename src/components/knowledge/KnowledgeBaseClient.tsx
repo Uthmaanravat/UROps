@@ -14,6 +14,7 @@ interface KnowledgeBaseClientProps {
     tenders?: { id: string; name: string; tenderNumber: string }[]
     initialTab?: 'historical' | 'fixed'
     initialScope?: 'all' | 'general' | 'tender'
+    tendersEnabled?: boolean
 }
 
 export function KnowledgeBaseClient({ 

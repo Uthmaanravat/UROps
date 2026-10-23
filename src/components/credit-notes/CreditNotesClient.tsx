@@ -14,6 +14,7 @@ interface CreditNotesClientProps {
     clients: any[]
     invoices: any[]
     tenders: any[]
+    tendersEnabled?: boolean
 }
 
 export function CreditNotesClient({

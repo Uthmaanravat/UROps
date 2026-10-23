@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { FileText, Loader2, Table } from "lucide-react"
 import jsPDF from "jspdf"
-import { drawPdfHeader } from "@/lib/pdf-utils"
+import { drawPdfHeader, getThemePrimaryRGB, getThemePrimaryHex } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
 import ExcelJS from "exceljs"
 import { saveAs } from "file-saver"
@@ -15,14 +15,14 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
     const [loading, setLoading] = useState(false)
 
     const company = {
-        name: settings?.name || "LR Builders & Maintenance Pty (Ltd)",
+        name: settings?.name || "Company",
         address: settings?.address || "15 Culemborg Street, Avondale, Parow, Cape Town, 7500",
-        email: settings?.email || "Loedvi@lrbuilders.co.za",
-        phone: settings?.phone || "082 448 7490",
+        email: settings?.email || "",
+        phone: settings?.phone || "",
         logoUrl: settings?.logoUrl || "",
         vatNumber: settings?.vatNumber || "",
         paymentTerms: settings?.paymentTerms || "",
-        bankDetails: settings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510",
+        bankDetails: settings?.bankDetails || "",
         layoutPreferences: settings?.layoutPreferences
     };
 
@@ -55,6 +55,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
             const statementNumber = await createStatementAction(client.id, totalDue);
 
+            const [themeR, themeG, themeB] = getThemePrimaryRGB(settings?.theme);
             const doc = new jsPDF()
 
             // Header (Shared)
@@ -65,7 +66,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             
             // Column 1: Details
             doc.setFontSize(8);
-            doc.setTextColor(163, 230, 53); // Lime
+            doc.setTextColor(themeR, themeG, themeB); // Lime
             doc.setFont("helvetica", "bold");
             doc.text("DETAILS", 14, gridY);
             
@@ -86,7 +87,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
             // Column 2: Bill To
             doc.setFontSize(8);
-            doc.setTextColor(163, 230, 53); // Lime
+            doc.setTextColor(themeR, themeG, themeB); // Lime
             doc.setFont("helvetica", "bold");
             doc.text("BILL TO", 80, gridY);
             
@@ -121,7 +122,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
             // Column 3: From
             doc.setFontSize(8);
-            doc.setTextColor(163, 230, 53); // Lime
+            doc.setTextColor(themeR, themeG, themeB); // Lime
             doc.setFont("helvetica", "bold");
             doc.text("FROM", 196, gridY, { align: 'right' });
             
@@ -143,7 +144,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 doc.text(addressLines, 196, currentFromY, { align: 'right' });
                 currentFromY += addressLines.length * 4.5;
             }
-            doc.setTextColor(163, 230, 53); // Lime pop for phone
+            doc.setTextColor(themeR, themeG, themeB); // Lime pop for phone
             doc.setFont("helvetica", "bold");
             doc.text(company.phone, 196, currentFromY, { align: 'right' });
 
@@ -196,7 +197,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
                 theme: 'striped',
                 headStyles: {
                     fillColor: [20, 20, 30], // Professional Navy
-                    textColor: [163, 230, 53], // Lime pop
+                    textColor: (settings?.theme || '').toLowerCase().includes('orange') ? [208, 94, 0] : [163, 230, 53],
                     fontStyle: 'bold',
                     cellPadding: 3
                 },
@@ -266,6 +267,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             
             const statementNumber = await createStatementAction(client.id, totalDue);
 
+            const themeHex = getThemePrimaryHex(settings?.theme);
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Statement');
 
@@ -287,7 +289,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             const limeBar = worksheet.getRow(2);
             limeBar.height = 4;
             worksheet.mergeCells('A2:E2');
-            worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA3E635' } };
+            worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: themeHex } };
 
             // 3. Logo & Title
             worksheet.getRow(4).height = 40;
@@ -325,15 +327,15 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             
             // Headings
             worksheet.getCell(`A${currentRow}`).value = 'DETAILS';
-            worksheet.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FFA3E635' } };
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, color: { argb: themeHex } };
             
             worksheet.getCell(`C${currentRow}`).value = 'BILL TO';
-            worksheet.getCell(`C${currentRow}`).font = { bold: true, color: { argb: 'FFA3E635' } };
+            worksheet.getCell(`C${currentRow}`).font = { bold: true, color: { argb: themeHex } };
             
             worksheet.mergeCells(`D${currentRow}:E${currentRow}`);
             const fromCell = worksheet.getCell(`D${currentRow}`);
             fromCell.value = 'FROM';
-            fromCell.font = { bold: true, color: { argb: 'FFA3E635' } };
+            fromCell.font = { bold: true, color: { argb: themeHex } };
             fromCell.alignment = { horizontal: 'right' };
             
             currentRow++;
@@ -415,7 +417,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             worksheet.mergeCells(`D${fromRow}:E${fromRow}`);
             const phoneCell = worksheet.getCell(`D${fromRow}`);
             phoneCell.value = company.phone;
-            phoneCell.font = { bold: true, color: { argb: 'FFA3E635' } };
+            phoneCell.font = { bold: true, color: { argb: themeHex } };
             phoneCell.alignment = { horizontal: 'right' };
             fromRow++;
             
@@ -428,7 +430,7 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
             tableHead.height = 20;
             tableHead.eachCell((cell, colNumber) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14141E' } }; // Professional Navy
-                cell.font = { bold: true, color: { argb: 'FFA3E635' } }; // Lime pop
+                cell.font = { bold: true, color: { argb: themeHex } }; // Lime pop
                 cell.alignment = { 
                     vertical: 'middle', 
                     horizontal: colNumber <= 3 ? 'left' : 'right' 

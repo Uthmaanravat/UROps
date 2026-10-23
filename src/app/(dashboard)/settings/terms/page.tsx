@@ -30,7 +30,7 @@ export default async function QuotationTermsPage() {
                         href="/settings/terms"
                         className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-black flex items-center gap-1.5 shadow-sm"
                     >
-                        <ShieldCheck className="h-3.5 w-3.5 text-lime-400" />
+                        <ShieldCheck className="h-3.5 w-3.5 text-primary" />
                         Quotation Terms
                     </Link>
                     <Link
