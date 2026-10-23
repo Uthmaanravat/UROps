@@ -24,6 +24,8 @@ export async function createInvoiceAction(data: {
     workType?: 'GENERAL' | 'TENDER'
     tenderId?: string | null
     rateYear?: number
+    termsTemplateId?: string | null
+    customTermsBody?: string | null
 }) {
     const companyId = await ensureAuth()
     const year = new Date().getFullYear();
@@ -285,6 +287,59 @@ export async function createInvoiceAction(data: {
             }
         }
     })
+
+    // Snapshot Quotation Terms and Conditions
+    if (invoice.type === 'QUOTE') {
+        let position = 0;
+        let templateToUse: any = null;
+
+        if (data.termsTemplateId) {
+            templateToUse = await prisma.termsTemplate.findFirst({
+                where: { id: data.termsTemplateId, companyId }
+            });
+        } else if (data.termsTemplateId === undefined) {
+            // Check client default first, then company default
+            const targetTemplateId = clientObj.defaultTermsTemplateId;
+            if (targetTemplateId) {
+                templateToUse = await prisma.termsTemplate.findFirst({
+                    where: { id: targetTemplateId, companyId }
+                });
+            }
+            if (!templateToUse) {
+                templateToUse = await prisma.termsTemplate.findFirst({
+                    where: { companyId, isDefault: true }
+                });
+            }
+        }
+
+        if (templateToUse && templateToUse.body.trim()) {
+            await prisma.quoteTerm.create({
+                data: {
+                    quoteId: invoice.id,
+                    source: 'template',
+                    templateId: templateToUse.id,
+                    bodySnapshot: templateToUse.body.trim(),
+                    position: position++
+                }
+            });
+        }
+
+        const effectiveCustomTerms = data.customTermsBody !== undefined
+            ? (data.customTermsBody?.trim() || "")
+            : (clientObj.defaultCustomTerms?.trim() || "");
+
+        if (effectiveCustomTerms) {
+            await prisma.quoteTerm.create({
+                data: {
+                    quoteId: invoice.id,
+                    source: 'custom',
+                    templateId: null,
+                    bodySnapshot: effectiveCustomTerms,
+                    position: position++
+                }
+            });
+        }
+    }
 
     if (effectiveProjectId) {
         if (invoice.status === 'PENDING_SCOPE') {

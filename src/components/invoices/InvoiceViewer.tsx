@@ -3,7 +3,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS, isReasonAlreadyInDescription } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3, ListFilter } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3, ListFilter, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import { LineItemEditor } from "@/components/invoices/LineItemEditor"
 import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
@@ -32,19 +32,22 @@ import { saveDraft, getDraft, clearDraft } from "@/lib/drafts"
 import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
 import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
 import { CreateCreditNoteModal } from "@/components/credit-notes/CreateCreditNoteModal"
-
+import { parseClauses, buildNumberedClauses } from "@/lib/terms-utils"
+import { saveQuoteTermsAction, saveCustomTermsAsTemplateAction } from "@/app/(dashboard)/settings/terms/actions"
 
 export function InvoiceViewer({ 
     invoice, 
     companySettings, 
     availableProjects = [],
     tenders = [],
+    termsTemplates = [],
     isAdmin = false
 }: { 
     invoice: any, 
     companySettings?: any, 
     availableProjects?: any[],
     tenders?: any[],
+    termsTemplates?: any[],
     isAdmin?: boolean
 }) {
     const router = useRouter();
@@ -479,6 +482,41 @@ export function InvoiceViewer({
 
     const [note, setNote] = useState(invoice.notes || "");
 
+    // Terms & Conditions state
+    const existingTemplateTerm = invoice.terms?.find((t: any) => t.source === 'template');
+    const existingCustomTerm = invoice.terms?.find((t: any) => t.source === 'custom');
+
+    const defaultCompanyTemplate = useMemo(() => {
+        return termsTemplates.find((t: any) => t.isDefault) || (termsTemplates.length > 0 ? termsTemplates[0] : null);
+    }, [termsTemplates]);
+
+    const [availableTemplates, setAvailableTemplates] = useState<any[]>(termsTemplates);
+    const [selectedTermsTemplateId, setSelectedTermsTemplateId] = useState<string>(
+        existingTemplateTerm?.templateId || (invoice.terms && invoice.terms.length > 0 ? "" : (invoice.client?.defaultTermsTemplateId || defaultCompanyTemplate?.id || ""))
+    );
+    const [customTermsText, setCustomTermsText] = useState<string>(
+        existingCustomTerm?.bodySnapshot || (invoice.terms && invoice.terms.length > 0 ? "" : (invoice.client?.defaultCustomTerms || ""))
+    );
+    const [isTermsCollapsed, setIsTermsCollapsed] = useState<boolean>(true);
+    const [isSaveNewTemplateOpen, setIsSaveNewTemplateOpen] = useState(false);
+    const [newTemplateName, setNewTemplateName] = useState("");
+    const [isSavingNewTemplate, setIsSavingNewTemplate] = useState(false);
+
+    const activeTermsTemplate = useMemo(() => {
+        return availableTemplates.find((t: any) => t.id === selectedTermsTemplateId) || null;
+    }, [availableTemplates, selectedTermsTemplateId]);
+
+    const effectiveNumberedClauses = useMemo(() => {
+        if (!isLocked) {
+            const templateText = activeTermsTemplate ? activeTermsTemplate.body : (existingTemplateTerm?.bodySnapshot || "");
+            return buildNumberedClauses(templateText, customTermsText);
+        } else {
+            const templateText = existingTemplateTerm?.bodySnapshot || "";
+            const customText = existingCustomTerm?.bodySnapshot || "";
+            return buildNumberedClauses(templateText, customText);
+        }
+    }, [isLocked, activeTermsTemplate, existingTemplateTerm, existingCustomTerm, customTermsText]);
+
     const DRAFT_KEY = `urops_draft_invoice_${invoice.id}`;
     const [pendingDraft, setPendingDraft] = useState<any | null>(null);
     const [lastSavedTimestamp, setLastSavedTimestamp] = useState<number | null>(null);
@@ -772,6 +810,13 @@ export function InvoiceViewer({
                         tenderId: workType === 'TENDER' ? selectedTenderId : null,
                         rateYear: effectiveRateYear,
                         paymentNotes: currentPresentation
+                    }));
+                }
+
+                if (invoice.type === 'QUOTE') {
+                    promises.push(saveQuoteTermsAction(invoice.id, {
+                        templateId: selectedTermsTemplateId || null,
+                        customTermsBody: customTermsText.trim() || null
                     }));
                 }
 
@@ -1363,8 +1408,49 @@ export function InvoiceViewer({
             doc.text(formatCurrency(total * ((100 - currentPct) / 100), currencySymbol), 196, currentY + 14, { align: 'right' });
         }
 
+        // Terms & Conditions (PDF rendering for Quotes)
+        if (invoice.type === 'QUOTE' && effectiveNumberedClauses.length > 0) {
+            currentY += 24;
+
+            if (currentY + 25 > pageHeight - 15) {
+                doc.addPage();
+                currentY = 25;
+            }
+
+            doc.setFontSize(8.5);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(20, 20, 30);
+            doc.text("TERMS AND CONDITIONS", 14, currentY);
+            doc.setDrawColor(163, 230, 53); // Lime separator
+            doc.line(14, currentY + 2, 55, currentY + 2);
+            currentY += 8;
+
+            doc.setFontSize(8);
+
+            for (const clause of effectiveNumberedClauses) {
+                const numText = `${clause.clauseNumber}.`;
+                const clauseLines = doc.splitTextToSize(clause.text, 172);
+                const clauseHeight = (clauseLines.length * 4) + 2.5;
+
+                if (currentY + clauseHeight > pageHeight - 15) {
+                    doc.addPage();
+                    currentY = 25;
+                }
+
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(20, 20, 30);
+                doc.text(numText, 14, currentY);
+
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(71, 85, 105);
+                doc.text(clauseLines, 21, currentY);
+
+                currentY += clauseHeight;
+            }
+        }
+
         // 5. Notes & Banking (Professional Footer)
-        currentY += 28;
+        currentY += 24;
 
         if (note) {
             const noteLines = doc.splitTextToSize(note, 180);
@@ -3027,6 +3113,151 @@ export function InvoiceViewer({
                     </div>
                 </div>
 
+                {/* TERMS AND CONDITIONS (Web View & Print for Quotations) */}
+                {invoice.type === 'QUOTE' && effectiveNumberedClauses.length > 0 && (
+                    <div className="mt-8 pt-8 border-t border-white/10 space-y-4">
+                        <div className="space-y-1">
+                            <h4 className="text-[11px] font-black uppercase tracking-[0.25em] text-lime-400">
+                                TERMS AND CONDITIONS
+                            </h4>
+                            <div className="h-0.5 w-12 bg-lime-400 rounded-full" />
+                        </div>
+                        <div className="space-y-3 max-w-4xl">
+                            {effectiveNumberedClauses.map((clause) => (
+                                <div key={clause.clauseNumber} className="flex items-start gap-3 text-xs md:text-sm text-gray-300 leading-relaxed font-sans">
+                                    <span className="font-mono font-bold text-lime-400 shrink-0 w-6">
+                                        {clause.clauseNumber}.
+                                    </span>
+                                    <span className="text-gray-200">{clause.text}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Quotation Terms Editor (Visible in draft edit mode) */}
+                {isPricingMode && invoice.type === 'QUOTE' && (
+                    <div className="mt-8 print:hidden space-y-4">
+                        {!defaultCompanyTemplate && (
+                            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-start gap-3">
+                                <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                                <div className="text-xs space-y-1">
+                                    <p className="font-bold">No Default Quotation Terms Configured</p>
+                                    <p className="text-amber-300/80">
+                                        This business has no default terms template set. This quotation will render without a terms section unless you select a template below or configure one under Settings &gt; Quotation Terms.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="rounded-2xl bg-[#14141E] border border-white/10 shadow-lg overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={() => setIsTermsCollapsed(!isTermsCollapsed)}
+                                className="w-full flex items-center justify-between p-4 text-left hover:bg-white/[0.02] transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-xl bg-lime-400/10 border border-lime-400/20 text-lime-400">
+                                        <ShieldCheck className="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-sm font-black uppercase tracking-wider text-white">Quotation Terms & Conditions Settings</span>
+                                            {activeTermsTemplate ? (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-lime-400/20 text-lime-400 border border-lime-400/30">
+                                                    {activeTermsTemplate.name}
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-gray-400 border border-white/10">
+                                                    None Selected
+                                                </span>
+                                            )}
+                                            {effectiveNumberedClauses.length > 0 && (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-gray-400 bg-white/5 border border-white/10">
+                                                    {effectiveNumberedClauses.length} {effectiveNumberedClauses.length === 1 ? 'clause' : 'clauses'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {isTermsCollapsed ? "Click to expand, switch template, or add custom client clauses" : "Configure quotation terms and client-specific conditions"}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-muted-foreground pr-2">
+                                    {isTermsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                </div>
+                            </button>
+
+                            {!isTermsCollapsed && (
+                                <div className="p-5 border-t border-white/5 space-y-5 bg-black/20">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="viewerTermsTemplate" className="text-xs font-bold text-gray-300">
+                                                Terms Template
+                                            </Label>
+                                            <Link 
+                                                href="/settings/terms" 
+                                                target="_blank"
+                                                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                                            >
+                                                Manage Templates ↗
+                                            </Link>
+                                        </div>
+                                        <select
+                                            id="viewerTermsTemplate"
+                                            value={selectedTermsTemplateId}
+                                            onChange={(e) => setSelectedTermsTemplateId(e.target.value)}
+                                            className="flex h-10 w-full rounded-xl border border-white/10 bg-[#0F172A] px-3 py-2 text-xs font-medium text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                                        >
+                                            <option value="">None (Omit terms section)</option>
+                                            {availableTemplates.map((t) => (
+                                                <option key={t.id} value={t.id}>
+                                                    {t.name} {t.isDefault ? "(Business Default)" : ""} (v{t.version})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="viewerCustomTerms" className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                                                Add Custom Terms
+                                                <InfoTooltip content="Add clauses specific to this client or job. Custom terms are appended after the template terms and numbered on sequentially from the last template clause." />
+                                            </Label>
+                                            {customTermsText.trim() && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setNewTemplateName("")
+                                                        setIsSaveNewTemplateOpen(true)
+                                                    }}
+                                                    className="h-7 px-2 text-[11px] font-bold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                                                >
+                                                    <Sparkles className="h-3 w-3 mr-1" />
+                                                    Save as New Template
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <Textarea
+                                            id="viewerCustomTerms"
+                                            rows={3}
+                                            value={customTermsText}
+                                            onChange={(e) => setCustomTermsText(e.target.value)}
+                                            placeholder="Enter any client or job-specific clauses (one per line). These will append after the template clauses..."
+                                            className="bg-[#0F172A] border-white/10 text-xs font-sans text-gray-200 min-h-[80px]"
+                                        />
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Custom terms are saved against this quote only and never modify any template. Click &quot;Save Changes&quot; below to persist.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {(isPricingMode || (invoice.type === 'INVOICE' && !isLocked)) && (
                     <div className="mt-12 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 print:hidden">
                         <div className="flex items-center gap-2">
@@ -3176,6 +3407,84 @@ export function InvoiceViewer({
                     initialInvoiceId={invoice.id}
                     initialClientId={invoice.clientId}
                 />
+
+                {/* Save Custom Terms as New Template Dialog */}
+                <Dialog open={isSaveNewTemplateOpen} onOpenChange={setIsSaveNewTemplateOpen}>
+                    <DialogContent className="max-w-md bg-[#0F172A] border border-white/10 text-white shadow-2xl p-6">
+                        <DialogHeader>
+                            <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-cyan-400" />
+                                Save Custom Terms as New Template
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">
+                                Create a reusable terms template from these custom clauses so recurring variations can be applied to future quotes.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4 py-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="viewerNewTemplateName" className="text-xs font-bold text-gray-300">
+                                    Template Name *
+                                </Label>
+                                <Input
+                                    id="viewerNewTemplateName"
+                                    value={newTemplateName}
+                                    onChange={(e) => setNewTemplateName(e.target.value)}
+                                    placeholder="e.g. Specialized Rigging Terms"
+                                    className="bg-black/40 border-white/10 text-white text-xs h-10"
+                                />
+                            </div>
+                            <div className="p-3 rounded-lg bg-black/40 border border-white/5 text-xs text-gray-300 max-h-32 overflow-y-auto">
+                                <p className="text-[10px] font-mono text-muted-foreground uppercase mb-1">Clauses to be saved:</p>
+                                {parseClauses(customTermsText).map((c, i) => (
+                                    <div key={i} className="flex gap-1.5 text-[11px]">
+                                        <span className="text-muted-foreground">{i + 1}.</span>
+                                        <span>{c}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <DialogFooter className="pt-2 border-t border-white/10 flex items-center justify-between">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsSaveNewTemplateOpen(false)}
+                                className="text-xs text-gray-400 hover:text-white"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={isSavingNewTemplate || !newTemplateName.trim()}
+                                onClick={async () => {
+                                    setIsSavingNewTemplate(true)
+                                    try {
+                                        const created = await saveCustomTermsAsTemplateAction({
+                                            name: newTemplateName.trim(),
+                                            body: customTermsText.trim()
+                                        })
+                                        setAvailableTemplates(prev => [...prev, created])
+                                        setSelectedTermsTemplateId(created.id)
+                                        setCustomTermsText("")
+                                        setIsSaveNewTemplateOpen(false)
+                                        alert(`Template "${created.name}" created and selected!`)
+                                    } catch (err: any) {
+                                        alert(err.message || "Failed to save template")
+                                    } finally {
+                                        setIsSavingNewTemplate(false)
+                                    }
+                                }}
+                                className="bg-primary text-black font-bold text-xs"
+                            >
+                                {isSavingNewTemplate ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                                Save Template
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
     )

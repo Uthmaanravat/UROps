@@ -13,7 +13,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     const dbUser = user ? await prisma.user.findUnique({ where: { id: user.id }, select: { role: true } }) : null;
     const isAdmin = dbUser?.role === 'ADMIN';
 
-    const [invoice, companySettings, projects, tenders] = await Promise.all([
+    const [invoice, companySettings, projects, tenders, termsTemplates] = await Promise.all([
         prisma.invoice.findFirst({
             where: { id: params.id, companyId },
             include: {
@@ -33,6 +33,10 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                 unlockLogs: {
                     orderBy: { createdAt: 'desc' }
                 },
+                terms: {
+                    orderBy: { position: 'asc' },
+                    include: { template: true }
+                },
                 project: {
                     include: {
                         invoices: {
@@ -51,6 +55,13 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             where: { companyId },
             include: { client: true },
             orderBy: { createdAt: 'asc' }
+        }),
+        prisma.termsTemplate.findMany({
+            where: { companyId },
+            orderBy: [
+                { isDefault: 'desc' },
+                { name: 'asc' }
+            ]
         })
     ]);
 
@@ -58,7 +69,6 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         notFound();
     }
 
-    // Pass plain object to client component if needed (dates might need converting to string if using simple components, but RSC handles Date objects to Client components in newer versions, usually serializable. Actually, Dates are serializable now).
     return (
         <div className="space-y-6">
             <InvoiceViewer
@@ -66,6 +76,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                 companySettings={companySettings}
                 availableProjects={projects as any[]}
                 tenders={tenders as any[]}
+                termsTemplates={termsTemplates as any[]}
                 isAdmin={isAdmin}
             />
         </div>

@@ -20,6 +20,8 @@ export async function createClient(formData: FormData) {
         vendorNumber: formData.get('vendorNumber') as string,
         codePrefix: (formData.get('codePrefix') as string || "").toUpperCase() || null,
         notes: formData.get('notes') as string,
+        defaultTermsTemplateId: (formData.get('defaultTermsTemplateId') as string) || null,
+        defaultCustomTerms: (formData.get('defaultCustomTerms') as string) || null,
     }
     const client = await prisma.client.create({ data })
     revalidatePath('/clients')
@@ -40,6 +42,8 @@ export async function updateClient(id: string, formData: FormData) {
         vendorNumber: formData.get('vendorNumber') as string,
         codePrefix: (formData.get('codePrefix') as string || "").toUpperCase() || null,
         notes: formData.get('notes') as string,
+        defaultTermsTemplateId: (formData.get('defaultTermsTemplateId') as string) || null,
+        defaultCustomTerms: (formData.get('defaultCustomTerms') as string) || null,
     }
     await prisma.client.update({
         where: { id, companyId },

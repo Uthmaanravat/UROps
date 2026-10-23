@@ -51,7 +51,8 @@ const navigation = [
         title: "System",
         icon: Settings,
         items: [
-            { title: "Settings", href: "/settings" }
+            { title: "Settings", href: "/settings" },
+            { title: "Quotation Terms", href: "/settings/terms" }
         ]
     }
 ];

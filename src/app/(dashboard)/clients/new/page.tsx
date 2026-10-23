@@ -7,9 +7,19 @@ import { createClient } from "../actions";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { prisma } from "@/lib/prisma";
+import { ensureAuth } from "@/lib/auth-actions";
 
 
-export default function NewClientPage() {
+export default async function NewClientPage() {
+    const companyId = await ensureAuth();
+    const termsTemplates = await prisma.termsTemplate.findMany({
+        where: { companyId },
+        orderBy: [
+            { isDefault: 'desc' },
+            { name: 'asc' }
+        ]
+    });
     return (
         <div className="max-w-2xl mx-auto space-y-6">
             <div className="flex items-center gap-4">
@@ -88,6 +98,46 @@ export default function NewClientPage() {
                             className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             placeholder="e.g. Primary contact: Sarah, preferred site access times etc."
                         />
+                    </div>
+
+                    <div className="pt-2 border-t border-border space-y-4">
+                        <div>
+                            <h3 className="text-sm font-semibold flex items-center gap-2">
+                                Quotation Terms & Conditions Defaults
+                                <InfoTooltip content="Set client-specific quotation terms. New quotes for this client will inherit these settings automatically, while remaining fully overridable per quote." />
+                            </h3>
+                            <p className="text-xs text-muted-foreground">Customize default terms clauses applied when quoting this client.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="defaultTermsTemplateId">Default Terms Template</Label>
+                            <select
+                                id="defaultTermsTemplateId"
+                                name="defaultTermsTemplateId"
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                                <option value="">Use Company Default Template</option>
+                                {termsTemplates.map(t => (
+                                    <option key={t.id} value={t.id}>
+                                        {t.name} {t.isDefault ? "(Company Default)" : ""}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="defaultCustomTerms" className="flex items-center gap-1.5">
+                                Standing Custom Terms
+                                <InfoTooltip content="Enter standing custom clauses specific to this client. These will automatically append after the template terms on new quotes." />
+                            </Label>
+                            <textarea
+                                id="defaultCustomTerms"
+                                name="defaultCustomTerms"
+                                rows={3}
+                                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                placeholder="e.g. Invoicing requires submission of monthly signed delivery note."
+                            />
+                        </div>
                     </div>
 
                     <div className="pt-4 flex justify-end gap-2">

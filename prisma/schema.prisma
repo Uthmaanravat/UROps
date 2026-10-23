@@ -36,6 +36,7 @@ model Company {
   tenders        Tender[]
   unlockLogs     UnlockLog[]
   creditNotes    CreditNote[]
+  termsTemplates TermsTemplate[]
 }
 
 model User {
@@ -107,9 +108,12 @@ model Client {
   reports              Report[]
   statements           Statement[]
   fixedItems           FixedPriceItem[]
-  contacts             ClientContact[]
-  tenders              Tender[]
-  creditNotes          CreditNote[]
+  contacts               ClientContact[]
+  tenders                Tender[]
+  creditNotes            CreditNote[]
+  defaultTermsTemplateId String?
+  defaultCustomTerms     String?          @db.Text
+  defaultTermsTemplate   TermsTemplate?   @relation("ClientDefaultTerms", fields: [defaultTermsTemplateId], references: [id], onDelete: SetNull)
 }
 
 model Project {
@@ -267,6 +271,7 @@ model Invoice {
   payments               Payment[]
   unlockLogs             UnlockLog[]
   creditNotes            CreditNote[]
+  terms                  QuoteTerm[]
 }
 
 model Statement {
@@ -706,4 +711,48 @@ model CreditNoteItem {
   total        Float      @default(0)
   position     Int        @default(0)
   creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+}
+
+model TermsTemplate {
+  id          String                 @id @default(uuid())
+  companyId   String                 @map("business_id")
+  name        String
+  body        String                 @db.Text
+  isDefault   Boolean                @default(false) @map("is_default")
+  version     Int                    @default(1)
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  company     Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  versions    TermsTemplateVersion[]
+  quoteTerms  QuoteTerm[]
+  clients     Client[]               @relation("ClientDefaultTerms")
+
+  @@map("terms_templates")
+}
+
+model TermsTemplateVersion {
+  id         String        @id @default(uuid())
+  templateId String        @map("template_id")
+  version    Int
+  name       String
+  body       String        @db.Text
+  createdAt  DateTime      @default(now()) @map("created_at")
+  template   TermsTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@map("terms_template_versions")
+}
+
+model QuoteTerm {
+  id           String         @id @default(uuid())
+  quoteId      String         @map("quote_id")
+  source       String         // 'template' | 'custom'
+  templateId   String?        @map("template_id")
+  bodySnapshot String         @db.Text @map("body_snapshot")
+  position     Int            @default(0)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  quote        Invoice        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  template     TermsTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@map("quote_terms")
 }
