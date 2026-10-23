@@ -68,6 +68,7 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
     }
 
     const isDroneEnabled = settings?.layoutPreferences?.dashboardView === "drone";
+    const isTendersEnabled = settings?.tendersEnabled === true;
 
     const dynamicNavigation = navigation.map(group => {
         if (group.title === "Dashboard" && isDroneEnabled) {
@@ -81,6 +82,12 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
                     ]
                 };
             }
+        }
+        if (group.title === "Financials" && !isTendersEnabled) {
+            return {
+                ...group,
+                items: group.items.filter(item => item.href !== "/tenders")
+            };
         }
         return group;
     });

@@ -938,6 +938,7 @@ export function InvoiceViewer({
         phone: companySettings?.phone || "082 448 7490",
         logoUrl: companySettings?.logoUrl || "",
         vatNumber: companySettings?.taxId || "",
+        registrationNumber: companySettings?.registrationNumber || "",
         paymentTerms: companySettings?.paymentTerms || "",
         bankDetails: companySettings?.bankDetails || "Name: LR Builders & Maintenance Pty (Ltd), Bank: FNB, Acc No.: 63114141714, Branch Code: 200510",
         layoutPreferences: companySettings?.layoutPreferences
@@ -1106,6 +1107,10 @@ export function InvoiceViewer({
 
         if (company.vatNumber) {
             doc.text(`VAT: ${company.vatNumber}`, 196, fromY, { align: 'right' });
+            fromY += 4.5;
+        }
+        if (company.registrationNumber) {
+            doc.text(`REG: ${company.registrationNumber}`, 196, fromY, { align: 'right' });
             fromY += 4.5;
         }
 
@@ -2752,6 +2757,9 @@ export function InvoiceViewer({
                             <div className="text-lg md:text-xl font-black text-white">{company.name}</div>
                             {company.vatNumber && (
                                 <div className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">VAT: {company.vatNumber}</div>
+                            )}
+                            {company.registrationNumber && (
+                                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">REG: {company.registrationNumber}</div>
                             )}
                             {isCityTender && invoice.client.vendorNumber && (
                                 <div className="text-[11px] font-bold text-amber-300 uppercase tracking-tighter flex items-center justify-center md:justify-end gap-1.5 pt-0.5">

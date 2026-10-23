@@ -32,6 +32,8 @@ export async function updateCompanySettings(data: {
     theme?: string
     aiEnabled?: boolean
     layoutPreferences?: any
+    registrationNumber?: string
+    tendersEnabled?: boolean
 }) {
     try {
         const companyId = await ensureAuth()

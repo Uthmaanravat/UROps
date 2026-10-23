@@ -179,6 +179,8 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         slogan: initialSettings?.slogan || "",
         logoUrl: initialSettings?.logoUrl || "",
         taxId: initialSettings?.taxId || "",
+        registrationNumber: initialSettings?.registrationNumber || "",
+        tendersEnabled: initialSettings?.tendersEnabled ?? false,
         bankDetails: initialSettings?.bankDetails || "",
         paymentTerms: initialSettings?.paymentTerms || "",
         currency: initialSettings?.currency || "R",
@@ -749,6 +751,18 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                 </div>
                             </div>
                         </div>
+                    
+                            <div className="space-y-2 col-span-1 md:col-span-2 pt-2 border-t border-white/5 flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="tendersEnabled"
+                                    name="tendersEnabled"
+                                    checked={formData.tendersEnabled || false}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, tendersEnabled: e.target.checked }))}
+                                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary bg-background"
+                                />
+                                <Label htmlFor="tendersEnabled" className="text-sm font-medium cursor-pointer">Enable Tenders Management (Tender 152G)</Label>
+                            </div>
                     </CardContent>
                 </Card>
 
@@ -761,13 +775,23 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                     </CardHeader>
                     <CardContent className="grid gap-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
+                                                        <div className="space-y-2">
                                 <Label htmlFor="taxId">Tax ID / VAT Number</Label>
                                 <Input
                                     id="taxId"
                                     name="taxId"
                                     value={formData.taxId}
                                     onChange={handleChange}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="registrationNumber">Business Registration Number</Label>
+                                <Input
+                                    id="registrationNumber"
+                                    name="registrationNumber"
+                                    value={formData.registrationNumber || ""}
+                                    onChange={handleChange}
+                                    placeholder="e.g. 2026/475172/07"
                                 />
                             </div>
                             <div className="space-y-2">
