@@ -290,7 +290,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
 
             const result = await updateCompanySettings(finalFormData)
             if (result.success) {
-                setTheme(formData.theme)
+                setTheme(formData.theme, initialSettings?.companyId)
                 router.refresh()
                 // You might want to show a toast here
                 alert("Settings saved successfully!")

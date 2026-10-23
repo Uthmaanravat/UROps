@@ -75,6 +75,8 @@ model CompanySettings {
   lastInvoiceNumber    Int      @default(0)
   lastStatementNumber  Int      @default(0)
   lastCreditNoteNumber Int      @default(0)
+  tendersEnabled       Boolean  @default(false)
+  registrationNumber   String?
 }
 
 model Client {

@@ -2,12 +2,13 @@
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { UserCircle, Menu, X, LogOut, Rocket, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CompanySettings, User } from "@prisma/client";
 import { signOutAction, updateUserRoleAction } from "@/app/actions/auth";
 import { Role } from "@prisma/client";
+import { useTheme } from "@/components/theme-provider";
 
 export default function DashboardLayoutClient({
     children,
@@ -21,6 +22,14 @@ export default function DashboardLayoutClient({
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUpdatingRole, setIsUpdatingRole] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const { setTheme } = useTheme();
+
+    // Ensure company theme is applied on load and workspace switch, isolated per business ID
+    useEffect(() => {
+        if (settings?.theme && user?.companyId) {
+            setTheme(settings.theme, user.companyId);
+        }
+    }, [settings?.theme, user?.companyId, setTheme]);
 
     console.log("DashboardLayoutClient rendering for role:", user.role);
 

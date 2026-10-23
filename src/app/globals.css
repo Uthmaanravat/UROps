@@ -72,9 +72,10 @@
     --accent: 221 83% 53%;
   }
   .theme-orange {
-    --primary: 25 95% 53%;
-    --ring: 25 95% 53%;
-    --accent: 25 95% 53%;
+    --primary: 27 100% 41%; /* AeroWash Brand Orange #D05E00 */
+    --primary-foreground: 0 0% 100%;
+    --ring: 27 100% 41%;
+    --accent: 27 100% 41%;
   }
   .theme-violet {
     --primary: 262 83% 58%;
