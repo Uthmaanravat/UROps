@@ -22,7 +22,9 @@ import {
     MapPin,
     User,
     Flame,
-    Loader2
+    Loader2,
+    Repeat,
+    CalendarDays
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -31,7 +33,10 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { generateWeeklySchedulePdf, generateJobSheetPdf } from "@/lib/project-print-utils"
+import { generateSchedulePdf, generateJobSheetPdf } from "@/lib/project-print-utils"
+import { ProjectScheduleView } from "@/components/projects/ProjectScheduleView"
+import { ProjectCalendarView } from "@/components/projects/ProjectCalendarView"
+import { ProjectRecurrenceModal } from "@/components/projects/ProjectRecurrenceModal"
 
 // PART 5 REQUIREMENT: Scheduled -> In Progress -> Completed -> Invoiced -> Paid
 const COLUMNS = [
@@ -75,22 +80,34 @@ const COLUMNS = [
 export function ProjectDashboardClient({
     projects: initialProjects,
     company,
-    tendersEnabled
+    tendersEnabled,
+    reactiveEnabled,
+    clients = [],
+    quotes = [],
+    prospects = []
 }: {
     projects: any[]
     company?: any
     tendersEnabled?: boolean
+    reactiveEnabled?: boolean
+    clients?: any[]
+    quotes?: any[]
+    prospects?: any[]
 }) {
     const isTendersEnabled = tendersEnabled ?? (company?.settings?.tendersEnabled === true)
-    const [view, setView] = useState<'KANBAN' | 'LIST'>('KANBAN')
+    const isReactiveEnabled = reactiveEnabled ?? (company?.settings?.reactiveEnabled === true)
+
+    const [view, setView] = useState<'KANBAN' | 'LIST' | 'SCHEDULE' | 'CALENDAR'>('KANBAN')
     const [projects, setProjects] = useState(initialProjects || [])
     const [filterCategory, setFilterCategory] = useState<'ALL' | 'WAITING_PO' | 'REACTIVE' | 'TENDER'>('ALL')
     const [isPending, startTransition] = useTransition()
     const router = useRouter()
 
-    // Weekly Schedule Print Modal
+    // Modals
     const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
+    const [recurrenceModalOpen, setRecurrenceModalOpen] = useState(false)
     const [showPricesOnSchedule, setShowPricesOnSchedule] = useState(false)
+    const [scheduleRangeMonths, setScheduleRangeMonths] = useState<number>(2)
     const [isPrintingSchedule, setIsPrintingSchedule] = useState(false)
     const [printingJobSheetId, setPrintingJobSheetId] = useState<string | null>(null)
 
@@ -101,8 +118,9 @@ export function ProjectDashboardClient({
     // Filter projects
     const displayedProjects = projects.filter(p => {
         if (!isTendersEnabled && p.workType === 'TENDER') return false
+        if (!isReactiveEnabled && (p.commercialStatus === 'REACTIVE_WORK' || p.commercialStatus === 'EMERGENCY_WORK') && filterCategory === 'REACTIVE') return false
         if (filterCategory === 'WAITING_PO') return p.commercialStatus === 'AWAITING_PO'
-        if (filterCategory === 'REACTIVE') return p.commercialStatus === 'REACTIVE_WORK' || p.commercialStatus === 'EMERGENCY_WORK'
+        if (filterCategory === 'REACTIVE' && isReactiveEnabled) return p.commercialStatus === 'REACTIVE_WORK' || p.commercialStatus === 'EMERGENCY_WORK'
         if (filterCategory === 'TENDER') return p.workType === 'TENDER' || Boolean(p.tenderId)
         return true
     })
@@ -142,15 +160,18 @@ export function ProjectDashboardClient({
     }
 
     // Print handlers
-    const handlePrintWeeklySchedule = async () => {
+    const handlePrintSchedule = async () => {
         setIsPrintingSchedule(true)
         try {
-            const doc = await generateWeeklySchedulePdf(displayedProjects, company, showPricesOnSchedule)
-            doc.save(`Weekly_Schedule_${new Date().toISOString().slice(0, 10)}.pdf`)
+            const doc = await generateSchedulePdf(displayedProjects, company, {
+                rangeMonths: scheduleRangeMonths,
+                showPrices: showPricesOnSchedule
+            })
+            doc.save(`Operations_Schedule_${scheduleRangeMonths}_Months_${new Date().toISOString().slice(0, 10)}.pdf`)
             setScheduleModalOpen(false)
         } catch (err: any) {
             console.error(err)
-            alert(err.message || "Failed to generate Weekly Schedule PDF")
+            alert(err.message || "Failed to generate Schedule PDF")
         } finally {
             setIsPrintingSchedule(false)
         }
@@ -193,21 +214,33 @@ export function ProjectDashboardClient({
                     {/* Top Next Actions summary */}
                     <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#14141E] border border-white/10 text-xs text-gray-300">
                         <Flame className="h-4 w-4 text-primary shrink-0" />
-                        <span><strong>Next Actions:</strong> {scheduledCount} scheduled · {inProgressCount} in progress · {awaitingPoCount} awaiting PO</span>
+                        <span>
+                            <strong>Next Actions:</strong> {scheduledCount} scheduled · {inProgressCount} in progress · {awaitingPoCount} awaiting PO
+                            {isReactiveEnabled && reactiveCount > 0 ? ` · ${reactiveCount} reactive` : ""}
+                        </span>
                     </div>
 
-                    {/* Button 1: Print Weekly Schedule */}
+                    {/* Button 1: Print Schedule */}
                     <Button
                         onClick={() => setScheduleModalOpen(true)}
                         className="bg-[#14141E] text-white border border-primary/40 hover:border-primary hover:bg-primary/10 font-bold shadow-sm text-xs flex items-center gap-2 h-9 px-4 transition-all"
                     >
                         <Printer className="h-4 w-4 text-primary" />
-                        <span>Print Weekly Schedule</span>
+                        <span>Print Schedule</span>
                     </Button>
 
-                    {/* Button 2: New Project */}
+                    {/* Button 2: New Recurring Contract */}
+                    <Button
+                        onClick={() => setRecurrenceModalOpen(true)}
+                        className="bg-[#14141E] text-white border border-teal-500/40 hover:border-teal-400 hover:bg-teal-500/10 font-bold shadow-sm text-xs flex items-center gap-2 h-9 px-4 transition-all"
+                    >
+                        <Repeat className="h-4 w-4 text-teal-400" />
+                        <span>+ Contract Work</span>
+                    </Button>
+
+                    {/* Button 3: New Project */}
                     <Link href="/projects/new">
-                        <Button className="bg-primary text-black font-black hover:bg-primary/90 shadow-md text-xs h-9 px-4">
+                        <Button className="bg-primary text-primary-foreground font-black hover:bg-primary/90 shadow-md text-xs h-9 px-4">
                             <Plus className="mr-1.5 h-4 w-4" /> New Project
                         </Button>
                     </Link>
@@ -216,13 +249,13 @@ export function ProjectDashboardClient({
 
             {/* Quick Filter Bar & View Switcher */}
             <div className="bg-[#14141E]/90 backdrop-blur-md p-1.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 border border-white/10 shadow-xl">
-                {/* View Switcher: Board vs List */}
+                {/* View Switcher: Board vs List vs Schedule vs Calendar */}
                 <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
                     <button
                         type="button"
                         onClick={() => setView('KANBAN')}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-                            view === 'KANBAN' ? 'bg-primary text-black shadow-md' : 'text-gray-400 hover:text-white'
+                            view === 'KANBAN' ? 'bg-primary text-primary-foreground shadow-md' : 'text-gray-400 hover:text-white'
                         }`}
                     >
                         <LayoutGrid className="h-3.5 w-3.5" /> Board
@@ -231,14 +264,32 @@ export function ProjectDashboardClient({
                         type="button"
                         onClick={() => setView('LIST')}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-                            view === 'LIST' ? 'bg-primary text-black shadow-md' : 'text-gray-400 hover:text-white'
+                            view === 'LIST' ? 'bg-primary text-primary-foreground shadow-md' : 'text-gray-400 hover:text-white'
                         }`}
                     >
                         <List className="h-3.5 w-3.5" /> List
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => setView('SCHEDULE')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                            view === 'SCHEDULE' ? 'bg-primary text-primary-foreground shadow-md' : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                        <CalendarDays className="h-3.5 w-3.5" /> Schedule
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setView('CALENDAR')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                            view === 'CALENDAR' ? 'bg-primary text-primary-foreground shadow-md' : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                        <CalendarIcon className="h-3.5 w-3.5" /> Calendar
+                    </button>
                 </div>
 
-                {/* Filter Tabs: All | Awaiting PO | Reactive | Credit Notes */}
+                {/* Filter Tabs: All | Awaiting PO | Reactive (if enabled) | Tender (if enabled) | Credit Notes */}
                 <div className="flex flex-wrap items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
                     <button
                         type="button"
@@ -258,15 +309,17 @@ export function ProjectDashboardClient({
                     >
                         Awaiting PO ({awaitingPoCount})
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => setFilterCategory('REACTIVE')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            filterCategory === 'REACTIVE' ? 'bg-amber-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
-                        }`}
-                    >
-                        Reactive Work ({reactiveCount})
-                    </button>
+                    {isReactiveEnabled && (
+                        <button
+                            type="button"
+                            onClick={() => setFilterCategory('REACTIVE')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                filterCategory === 'REACTIVE' ? 'bg-amber-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                            Reactive Work ({reactiveCount})
+                        </button>
+                    )}
                     {isTendersEnabled && (
                         <button
                             type="button"
@@ -287,7 +340,27 @@ export function ProjectDashboardClient({
                 </div>
             </div>
 
-            {/* PART 5 REQUIREMENT: Clean board of jobs */}
+            {/* 1. SCHEDULE HORIZON VIEW */}
+            {view === 'SCHEDULE' && (
+                <ProjectScheduleView
+                    projects={displayedProjects}
+                    company={company}
+                    onJobClick={(project) => router.push(`/projects/${project.id}`)}
+                />
+            )}
+
+            {/* 2. CALENDAR VIEW */}
+            {view === 'CALENDAR' && (
+                <ProjectCalendarView
+                    projects={displayedProjects}
+                    quotes={quotes}
+                    prospects={prospects}
+                    company={company}
+                    onDateClick={(date) => {}}
+                />
+            )}
+
+            {/* 3. KANBAN BOARD VIEW */}
             {view === 'KANBAN' && (
                 <div className="overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
                     <div className="flex gap-4 min-w-full pt-2">
@@ -311,119 +384,136 @@ export function ProjectDashboardClient({
                                         </span>
                                     </div>
 
-                                {/* Project Cards */}
-                                <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-                                    {colProjects.map(project => {
-                                        const latestInvoice = project.invoices?.[0]
-                                        const totalWorth = latestInvoice?.total || 0
-                                        const poNumber = latestInvoice?.clientPoNumber || latestInvoice?.reference || null
-                                        const site = project.site || project.client?.address || "Site address on file"
-                                        const dateStr = project.startDate
-                                            ? new Date(project.startDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
-                                            : "This Week"
-                                        const crew = project.crew || "Flight Crew 1"
-                                        const isPrinting = printingJobSheetId === project.id
+                                    {/* Project Cards */}
+                                    <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                                        {colProjects.map(project => {
+                                            const latestInvoice = project.invoices?.[0]
+                                            const totalWorth = latestInvoice?.total || 0
+                                            const poNumber = latestInvoice?.clientPoNumber || latestInvoice?.reference || null
+                                            const site = project.site || project.client?.address || "Site address on file"
+                                            const isPrinting = printingJobSheetId === project.id
+                                            const isRecurring = project.isRecurring || project.parentProjectId
 
-                                        return (
-                                            <div
-                                                key={project.id}
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, project.id)}
-                                                className="bg-[#0F0F1A] border border-white/10 p-3.5 rounded-xl shadow-lg hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing flex flex-col space-y-2.5"
-                                            >
-                                                {/* Card Title & Link */}
-                                                <div className="flex justify-between items-start gap-2">
-                                                    <Link href={`/projects/${project.id}`} className="hover:text-primary transition-colors flex-1">
-                                                        <h4 className="font-bold text-white text-xs leading-snug line-clamp-2">
-                                                            {project.name}
-                                                        </h4>
-                                                    </Link>
-
-                                                    {/* Quick Actions Dropdown */}
-                                                    <div className="relative shrink-0">
-                                                        <select
-                                                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
-                                                            value=""
-                                                            onChange={(e) => {
-                                                                const [field, val] = e.target.value.split(':')
-                                                                if (field && val) handleStatusChange(project.id, field as any, val)
-                                                            }}
-                                                        >
-                                                            <option value="" disabled>Move to...</option>
-                                                            <option value="status:SCHEDULED">Scheduled</option>
-                                                            <option value="status:IN_PROGRESS">In Progress</option>
-                                                            <option value="status:COMPLETED">Completed</option>
-                                                            <option value="status:INVOICED">Invoiced</option>
-                                                            <option value="status:PAID">Paid</option>
-                                                            <option value="commercialStatus:AWAITING_PO">⌛ Awaiting PO</option>
-                                                            <option value="commercialStatus:REACTIVE_WORK">⚡ Reactive Work</option>
-                                                        </select>
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6 p-0 hover:bg-white/10 text-gray-400">
-                                                            <MoreHorizontal className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Client Name */}
-                                                <div className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5 truncate">
-                                                    <User className="h-3 w-3 text-zinc-500 shrink-0" />
-                                                    <span className="truncate">{project.client?.name || "Client"}</span>
-                                                </div>
-
-                                                {/* Site Address */}
-                                                <div className="text-[10px] text-zinc-400 flex items-center gap-1.5 truncate">
-                                                    <MapPin className="h-3 w-3 text-zinc-500 shrink-0" />
-                                                    <span className="truncate">{site}</span>
-                                                </div>
-
-                                                {/* Date & Crew */}
-                                                <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-1 border-t border-white/5">
-                                                    <span>📅 {dateStr}</span>
-                                                    <span>🚁 {crew}</span>
-                                                </div>
-
-                                                {/* Value & PO Number */}
-                                                <div className="flex items-center justify-between pt-1 text-[11px]">
-                                                    <span className="text-zinc-500 font-mono">
-                                                        {poNumber ? `PO: ${poNumber}` : "No PO"}
-                                                    </span>
-                                                    <span className="font-bold text-emerald-400">
-                                                        {totalWorth > 0 ? formatCurrency(totalWorth) : "—"}
-                                                    </span>
-                                                </div>
-
-                                                {/* PART 5 REQUIREMENT: Print Job Sheet Button on Each Job */}
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => handlePrintJobSheet(project)}
-                                                    disabled={isPrinting}
-                                                    className="w-full h-7 rounded-lg text-[10px] font-bold bg-[#14141E] border border-white/10 text-white hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                                            return (
+                                                <div
+                                                    key={project.id}
+                                                    draggable
+                                                    onDragStart={(e) => handleDragStart(e, project.id)}
+                                                    className="bg-[#14141E] border border-white/10 hover:border-primary/50 rounded-xl p-3 shadow-lg hover:shadow-2xl transition-all cursor-grab active:cursor-grabbing space-y-2.5 group relative"
                                                 >
-                                                    {isPrinting ? (
-                                                        <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                                                    ) : (
-                                                        <Printer className="h-3 w-3 text-primary" />
-                                                    )}
-                                                    <span>Print Job Sheet</span>
-                                                </Button>
-                                            </div>
-                                        )
-                                    })}
+                                                    {/* Top row: Job Title & Quick Menu */}
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <Link
+                                                            href={`/projects/${project.id}`}
+                                                            className="font-black text-xs text-white group-hover:text-primary transition-colors flex items-center gap-1.5 flex-1"
+                                                        >
+                                                            <span className="line-clamp-2 leading-tight">{project.name}</span>
+                                                            {isRecurring && (
+                                                                <span title="Recurring Contract Visit"><Repeat className="h-3 w-3 text-teal-400 shrink-0" /></span>
+                                                            )}
+                                                        </Link>
 
-                                    {colProjects.length === 0 && (
-                                        <div className="flex-1 flex items-center justify-center border-2 border-dashed border-white/5 rounded-xl p-6 text-zinc-600 text-xs">
-                                            No jobs
-                                        </div>
-                                    )}
+                                                        {/* Quick Actions Dropdown */}
+                                                        <div className="relative shrink-0">
+                                                            <select
+                                                                className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
+                                                                value=""
+                                                                onChange={(e) => {
+                                                                    const [field, val] = e.target.value.split(':')
+                                                                    if (field && val) handleStatusChange(project.id, field as any, val)
+                                                                }}
+                                                            >
+                                                                <option value="" disabled>Move to...</option>
+                                                                <option value="status:SCHEDULED">Scheduled</option>
+                                                                <option value="status:IN_PROGRESS">In Progress</option>
+                                                                <option value="status:COMPLETED">Completed</option>
+                                                                <option value="status:INVOICED">Invoiced</option>
+                                                                <option value="status:PAID">Paid</option>
+                                                                <option value="commercialStatus:AWAITING_PO">⌛ Awaiting PO</option>
+                                                                {isReactiveEnabled && (
+                                                                    <option value="commercialStatus:REACTIVE_WORK">⚡ Reactive Work</option>
+                                                                )}
+                                                            </select>
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6 p-0 hover:bg-white/10 text-gray-400">
+                                                                <MoreHorizontal className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Client Name */}
+                                                    <div className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5 truncate">
+                                                        <User className="h-3 w-3 text-zinc-500 shrink-0" />
+                                                        <span className="truncate">{project.client?.name || "Client"}</span>
+                                                    </div>
+
+                                                    {/* Site Address */}
+                                                    <div className="text-[10px] text-zinc-400 flex items-center gap-1.5 truncate">
+                                                        <MapPin className="h-3 w-3 text-zinc-500 shrink-0" />
+                                                        <span className="truncate">{site}</span>
+                                                    </div>
+
+                                                    {/* Date & Crew */}
+                                                    <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-1 border-t border-white/5">
+                                                        <div className="flex items-center gap-1 text-zinc-300 font-medium">
+                                                            <Clock className="h-3 w-3 text-primary shrink-0" />
+                                                            <span>
+                                                                {project.startDate
+                                                                    ? new Date(project.startDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
+                                                                    : "Scheduled"}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-zinc-500 text-[9px] font-mono">
+                                                            {project.crew || "Flight Alpha"}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Value & PO Number */}
+                                                    <div className="flex items-center justify-between pt-1">
+                                                        {poNumber ? (
+                                                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 truncate max-w-[120px]">
+                                                                PO: {poNumber}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[9px] text-zinc-600 font-mono">PO Pending</span>
+                                                        )}
+
+                                                        <span className="text-xs font-black font-mono text-emerald-400">
+                                                            {totalWorth > 0 ? formatCurrency(totalWorth) : "—"}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Action Button: Print Job Sheet */}
+                                                    <Button
+                                                        type="button"
+                                                        onClick={() => handlePrintJobSheet(project)}
+                                                        disabled={isPrinting}
+                                                        className="w-full h-7 rounded-lg text-[10px] font-bold bg-[#14141E] border border-white/10 text-white hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                                                    >
+                                                        {isPrinting ? (
+                                                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                        ) : (
+                                                            <Printer className="h-3 w-3 text-primary" />
+                                                        )}
+                                                        <span>Print Job Sheet</span>
+                                                    </Button>
+                                                </div>
+                                            )
+                                        })}
+
+                                        {colProjects.length === 0 && (
+                                            <div className="flex-1 flex items-center justify-center border-2 border-dashed border-white/5 rounded-xl p-6 text-zinc-600 text-xs">
+                                                No jobs
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        )
-                    })}
+                            )
+                        })}
                     </div>
                 </div>
             )}
 
-            {/* LIST VIEW */}
+            {/* 4. LIST VIEW */}
             {view === 'LIST' && (
                 <div className="rounded-2xl border border-white/10 bg-[#14141E] overflow-hidden shadow-2xl">
                     <div className="overflow-x-auto">
@@ -463,8 +553,11 @@ export function ProjectDashboardClient({
                                         return (
                                             <tr key={p.id} className="hover:bg-white/[0.03] transition-colors">
                                                 <td className="p-3.5 pl-4 font-bold text-white">
-                                                    <Link href={`/projects/${p.id}`} className="hover:text-primary transition-colors">
-                                                        {p.name}
+                                                    <Link href={`/projects/${p.id}`} className="hover:text-primary transition-colors flex items-center gap-1.5">
+                                                        <span>{p.name}</span>
+                                                        {(p.isRecurring || p.parentProjectId) && (
+                                                            <Repeat className="h-3 w-3 text-teal-400 shrink-0" />
+                                                        )}
                                                     </Link>
                                                 </td>
                                                 <td className="p-3.5 text-zinc-300">{p.client?.name || "Client"}</td>
@@ -501,21 +594,48 @@ export function ProjectDashboardClient({
                 </div>
             )}
 
-            {/* PART 5 REQUIREMENT: Print Weekly Schedule Modal */}
+            {/* Print Schedule Modal (A4 Landscape, Range Selector, Prices Hidden by Default) */}
             <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>
                 <DialogContent className="max-w-md bg-[#14141E] border border-white/10 text-white rounded-3xl p-6 shadow-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-lg font-black uppercase text-white flex items-center gap-2">
                             <Printer className="h-5 w-5 text-primary" />
-                            Print Weekly Schedule
+                            Print Schedule (A4 Landscape)
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
-                            1-page A4 schedule for this week and next week with client, site, crew, and job status.
+                            Multi-week landscape operations schedule with client details, site locations and flight crews.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="py-4 space-y-4">
-                        <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3">
+                        {/* Horizon Selection */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-gray-300">Schedule Horizon</Label>
+                            <div className="grid grid-cols-4 gap-1.5 bg-black/40 p-1 rounded-xl border border-white/5">
+                                {[
+                                    { label: "2 Mo", val: 2 },
+                                    { label: "3 Mo", val: 3 },
+                                    { label: "6 Mo", val: 6 },
+                                    { label: "12 Mo", val: 12 },
+                                ].map(opt => (
+                                    <button
+                                        key={opt.val}
+                                        type="button"
+                                        onClick={() => setScheduleRangeMonths(opt.val)}
+                                        className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                            scheduleRangeMonths === opt.val
+                                                ? "bg-primary text-primary-foreground shadow"
+                                                : "text-gray-400 hover:text-white"
+                                        }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Prices Toggle (Hidden by default) */}
+                        <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2">
                             <div className="flex items-center space-x-3">
                                 <Checkbox
                                     id="schedulePrices"
@@ -528,12 +648,13 @@ export function ProjectDashboardClient({
                                 </Label>
                             </div>
                             <p className="text-[11px] text-zinc-500">
-                                When toggled OFF, operational sheets can be shared freely with site teams without revealing financial pricing.
+                                Prices are hidden by default so operational printouts can be distributed safely to site crew.
                             </p>
                         </div>
 
-                        <div className="text-xs text-zinc-400">
-                            Jobs to print: <strong>{displayedProjects.length}</strong>
+                        <div className="text-xs text-zinc-400 flex items-center justify-between">
+                            <span>Jobs to include:</span>
+                            <strong className="text-white">{displayedProjects.length}</strong>
                         </div>
                     </div>
 
@@ -546,16 +667,27 @@ export function ProjectDashboardClient({
                             Cancel
                         </Button>
                         <Button
-                            onClick={handlePrintWeeklySchedule}
+                            onClick={handlePrintSchedule}
                             disabled={isPrintingSchedule}
-                            className="bg-primary text-black font-bold text-xs flex items-center gap-1.5"
+                            className="bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5"
                         >
                             {isPrintingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
-                            Download 1-Page PDF
+                            Download A4 Landscape PDF
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Recurring Contract Creation Modal */}
+            <ProjectRecurrenceModal
+                open={recurrenceModalOpen}
+                onOpenChange={setRecurrenceModalOpen}
+                clients={clients}
+                onSuccess={() => {
+                    setRecurrenceModalOpen(false)
+                    router.refresh()
+                }}
+            />
         </div>
     )
 }

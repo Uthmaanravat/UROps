@@ -67,7 +67,8 @@ import {
     MessageSquare,
     Flame,
     ArrowUpRight,
-    HelpCircle
+    HelpCircle,
+    User
 } from "lucide-react"
 
 const CATEGORIES = ["Water Facing", "No Gondola", "Heritage", "Rooftop Solar", "Multiplier", "Niche"]
@@ -653,10 +654,12 @@ export function ProspectsClient({
                                     const phoneToDisplay = p.propertyManagerPhone?.trim() || p.companyMainPhone?.trim() || ""
 
                                     return (
+                                        <React.Fragment key={p.id}>
+                                            {/* DESKTOP VIEW (>= 1280px) */}
                                         <tr
-                                            key={p.id}
+                                            key={`${p.id}-desktop`}
                                             onClick={() => openProspect(p)}
-                                            className={`cursor-pointer transition-colors hover:bg-white/[0.03] ${selectedProspect?.id === p.id ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
+                                            className={`hidden xl:table-row cursor-pointer transition-colors hover:bg-white/[0.03] ${selectedProspect?.id === p.id ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
                                         >
                                             {/* Company Column */}
                                             <td className="p-3.5 pl-4 font-semibold text-white whitespace-nowrap">
@@ -664,7 +667,6 @@ export function ProspectsClient({
                                                     <span className="text-sm font-bold text-white hover:text-primary transition-colors">
                                                         {p.name}
                                                     </span>
-                                                    {/* Quiet grey category tag */}
                                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700/60">
                                                         {p.category}
                                                     </span>
@@ -745,6 +747,104 @@ export function ProspectsClient({
                                                 )}
                                             </td>
                                         </tr>
+
+                                        {/* COMPACT 2-LINE VIEW (< 1280px & MOBILE) */}
+                                        <tr
+                                            key={`${p.id}-compact`}
+                                            onClick={() => openProspect(p)}
+                                            className={`table-row xl:hidden cursor-pointer transition-colors hover:bg-white/[0.03] ${selectedProspect?.id === p.id ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
+                                        >
+                                            <td colSpan={6} className="p-3.5 pl-4">
+                                                {/* Line 1: Company + Category + Stage badge + Mobile Call & WhatsApp */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="text-sm font-bold text-white truncate hover:text-primary transition-colors">
+                                                            {p.name}
+                                                        </span>
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700/60 shrink-0">
+                                                            {p.category}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {/* Quick Call & WhatsApp on mobile/laptop */}
+                                                        {hasPhone && (
+                                                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                                <a
+                                                                    href={`tel:${phoneToDisplay}`}
+                                                                    className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center justify-center"
+                                                                    title={`Call ${phoneToDisplay}`}
+                                                                >
+                                                                    <Phone className="h-3.5 w-3.5" />
+                                                                </a>
+                                                                <a
+                                                                    href={`https://wa.me/${phoneToDisplay.replace(/[^0-9]/g, "")}`}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="p-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-all flex items-center justify-center"
+                                                                    title="WhatsApp"
+                                                                >
+                                                                    <MessageSquare className="h-3.5 w-3.5" />
+                                                                </a>
+                                                            </div>
+                                                        )}
+                                                        {renderStageBadge(p.status)}
+                                                    </div>
+                                                </div>
+
+                                                {/* Line 2: Contact person · Phone · Next follow-up */}
+                                                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-zinc-400 mt-2 font-medium">
+                                                    {/* Contact */}
+                                                    <div className="flex items-center gap-1">
+                                                        <User className="h-3 w-3 text-zinc-500" />
+                                                        {hasContact ? (
+                                                            <span className="text-zinc-200">{p.propertyManagerName}</span>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    openEditContact(p)
+                                                                }}
+                                                                className="text-[10px] text-amber-400 font-bold hover:underline"
+                                                            >
+                                                                + Add contact
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    <span className="text-zinc-600">·</span>
+
+                                                    {/* Phone */}
+                                                    <div className="flex items-center gap-1">
+                                                        <Phone className="h-3 w-3 text-zinc-500" />
+                                                        {hasPhone ? (
+                                                            <span className="text-zinc-300 font-mono">{phoneToDisplay}</span>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    openEditContact(p)
+                                                                }}
+                                                                className="text-[10px] text-amber-400 font-bold hover:underline"
+                                                            >
+                                                                + Add phone
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    <span className="text-zinc-600">·</span>
+
+                                                    {/* Next Follow-up */}
+                                                    <div className={`flex items-center gap-1 ${due ? "text-amber-400 font-bold" : "text-zinc-400"}`}>
+                                                        <Clock className="h-3 w-3" />
+                                                        <span>Follow-up: {p.nextFollowupDate ? fmtDate(p.nextFollowupDate) : "None"}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        </React.Fragment>
                                     )
                                 })
                             )}

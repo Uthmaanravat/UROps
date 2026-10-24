@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { CalendarView } from "@/components/calendar/CalendarView"
+import { ProjectCalendarView } from "@/components/projects/ProjectCalendarView"
 import { ensureAuth } from "@/lib/auth-actions"
 
 export const dynamic = 'force-dynamic'
@@ -9,19 +9,50 @@ export const dynamic = 'force-dynamic'
 export default async function CalendarPage() {
     const companyId = await ensureAuth()
 
-    const [meetings, projects, clients, prospects] = await Promise.all([
-        prisma.meeting.findMany({
-            where: { companyId },
-            include: { client: true, project: true }
+    const [company, projects, quotes, prospects] = await Promise.all([
+        prisma.company.findUnique({
+            where: { id: companyId },
+            include: { settings: true }
         }),
         prisma.project.findMany({
-            where: { endDate: { not: null }, companyId },
-            include: { client: true }
-        }),
-        prisma.client.findMany({
             where: { companyId },
-            orderBy: { name: 'asc' },
-            select: { id: true, name: true }
+            include: {
+                client: true,
+                invoices: {
+                    select: {
+                        id: true,
+                        total: true,
+                        clientPoNumber: true,
+                        reference: true
+                    }
+                }
+            },
+            orderBy: { startDate: 'asc' }
+        }).catch(() => prisma.project.findMany({
+            where: { companyId },
+            include: {
+                client: true,
+                invoices: {
+                    select: {
+                        id: true,
+                        total: true,
+                        clientPoNumber: true,
+                        reference: true
+                    }
+                }
+            },
+            orderBy: { startDate: 'asc' }
+        })),
+        prisma.invoice.findMany({
+            where: { companyId, type: 'QUOTE' },
+            select: {
+                id: true,
+                quoteNumber: true,
+                total: true,
+                date: true,
+                client: { select: { name: true } }
+            },
+            orderBy: { date: 'asc' }
         }),
         prisma.prospect.findMany({
             where: { companyId, nextFollowupDate: { not: null } },
@@ -33,34 +64,28 @@ export default async function CalendarPage() {
                 status: true,
                 propertyManagerName: true,
                 propertyManagerPhone: true
-            }
+            },
+            orderBy: { nextFollowupDate: 'asc' }
         })
     ])
 
-    // Include pipeline follow-up dates on calendar
-    const prospectFollowups = prospects
-        .filter(p => !meetings.some(m => m.title?.includes(p.name)))
-        .map(p => ({
-            id: `prospect-${p.id}`,
-            title: `Follow-up: ${p.name}`,
-            date: p.nextFollowupDate!,
-            duration: 30,
-            location: p.location || "Site / Phone",
-            notes: `Sales Pipeline Prospect: ${p.name}. Status: ${p.status.toUpperCase()}. Contact: ${p.propertyManagerName || 'N/A'} (${p.propertyManagerPhone || 'N/A'})`,
-            client: { name: p.name },
-            isProspect: true
-        }))
-
-    const combinedMeetings = [...meetings, ...prospectFollowups]
-
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-[1600px] mx-auto pb-20">
             <div>
-                <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic">Calendar</h1>
-                <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest opacity-50">Monitor site visits, meetings and scheduled follow-ups.</p>
+                <h1 className="text-3xl font-black text-white tracking-tighter uppercase">
+                    Flight Operations Calendar
+                </h1>
+                <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest opacity-60">
+                    Projected flight dates, recurring contract visits & sales follow-ups
+                </p>
             </div>
 
-            <CalendarView meetings={combinedMeetings} projects={projects} clients={clients} />
+            <ProjectCalendarView
+                projects={projects}
+                quotes={quotes}
+                prospects={prospects}
+                company={company}
+            />
         </div>
     )
 }

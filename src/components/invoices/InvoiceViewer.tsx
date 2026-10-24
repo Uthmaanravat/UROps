@@ -122,6 +122,7 @@ export function InvoiceViewer({
     const [date, setDate] = useState(new Date(invoice.date).toISOString().split('T')[0]);
     const [projectId, setProjectId] = useState(invoice.projectId || "");
     const [projectName, setProjectName] = useState(invoice.project?.name || "");
+    const isReactiveEnabled = (companySettings as any)?.reactiveEnabled === true || invoice?.companyId === "299c43ec-9578-4c45-91cb-a881a539e25d";
     const [commercialStatus, setCommercialStatus] = useState<any>(invoice.project?.commercialStatus || "AWAITING_PO");
     const [showStatusOnQuote, setShowStatusOnQuote] = useState(false);
     const [contactId, setContactId] = useState(invoice.contactId || "");
@@ -2641,7 +2642,7 @@ export function InvoiceViewer({
                                             <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
                                             <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
                                             <option value="EMERGENCY_WORK" className="bg-[#1E293B]">EMERGENCY WORK</option>
-                                            <option value="REACTIVE_WORK" className="bg-[#1E293B]">REACTIVE WORK</option>
+                                            {isReactiveEnabled && <option value="REACTIVE_WORK" className="bg-[#1E293B]">REACTIVE WORK</option>}
                                         </select>
                                     </div>
                                     <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20 mt-2">

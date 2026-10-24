@@ -114,6 +114,7 @@ model CompanySettings {
   lastCreditNoteNumber Int      @default(0)
   tendersEnabled       Boolean  @default(false)
   registrationNumber   String?
+  reactiveEnabled      Boolean  @default(false)
 }
 
 model Client {
@@ -178,6 +179,12 @@ model Project {
   reports          Report[]
   lead             Lead?
   creditNotes      CreditNote[]
+  parentProjectId  String?
+  parentProject    Project?               @relation("ProjectRecurrence", fields: [parentProjectId], references: [id], onDelete: SetNull)
+  recurringVisits  Project[]              @relation("ProjectRecurrence")
+  isRecurring      Boolean                @default(false)
+  recurrenceRule   Json?
+  jobSpecs         Json?
 }
 
 model ScopeOfWork {

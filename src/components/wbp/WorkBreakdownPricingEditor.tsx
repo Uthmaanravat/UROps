@@ -288,6 +288,7 @@ interface WorkBreakdownPricingEditorProps {
 export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakdownPricingEditorProps) {
     const { id: wbpId, items: initialItems, project } = wbp
     const { client } = project
+    const isReactiveEnabled = project?.companyId === "299c43ec-9578-4c45-91cb-a881a539e25d"
     const router = useRouter()
     const [items, setItems] = useState<any[]>(initialItems.map((i: any) => ({
         id: i.id || Math.random().toString(36).substr(2, 9),
@@ -962,7 +963,7 @@ export function WorkBreakdownPricingEditor({ wbp, aiEnabled = true }: WorkBreakd
                                     <option value="AWAITING_PO">AWAITING PO</option>
                                     <option value="PO_RECEIVED">PO RECEIVED</option>
                                     <option value="EMERGENCY_WORK">EMERGENCY WORK</option>
-                                    <option value="REACTIVE_WORK">REACTIVE WORK</option>
+                                    {isReactiveEnabled && <option value="REACTIVE_WORK">REACTIVE WORK</option>}
                                 </select>
                             </div>
                         </div>

@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Pencil, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, Pencil, ArrowUpRight, Repeat } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { ClientStatementButton } from "@/components/clients/ClientStatementButton";
 import { DeleteClientButton } from "@/components/clients/DeleteClientButton";
@@ -19,6 +20,14 @@ export default async function ClientPage({ params }: { params: { id: string } })
         where: { id: params.id, companyId },
         include: {
             projects: {
+                include: {
+                    recurringVisits: {
+                        orderBy: { startDate: 'asc' }
+                    },
+                    invoices: {
+                        select: { total: true }
+                    }
+                },
                 orderBy: { updatedAt: 'desc' }
             },
             invoices: {
@@ -160,6 +169,62 @@ export default async function ClientPage({ params }: { params: { id: string } })
                     <div className="text-sm font-medium text-muted-foreground">Outstanding Balance</div>
                     <div className="text-2xl font-bold text-red-600">{formatCurrency(outstanding)}</div>
                 </div>
+            </div>
+
+            {/* Active Service Contracts Section */}
+            <div className="rounded-2xl border border-white/10 bg-[#14141E] p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Repeat className="h-5 w-5 text-teal-400" />
+                        <h2 className="text-base font-black uppercase text-white tracking-tight">Active Service Contracts</h2>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                        {client.projects.filter((p: any) => p.isRecurring || p.parentProjectId).length} contracts on file
+                    </span>
+                </div>
+
+                {client.projects.filter((p: any) => p.isRecurring).length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-2">
+                        No recurring contracts active for this client.
+                    </p>
+                ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {client.projects.filter((p: any) => p.isRecurring).map((contract: any) => {
+                            const rule = (contract.recurrenceRule as any) || {}
+                            const freqLabel = rule.frequency ? rule.frequency.replace(/_/g, " ") : "Recurring"
+                            const nextVisit = contract.recurringVisits?.find((v: any) => v.startDate && new Date(v.startDate) >= new Date())?.startDate
+                            const visitValue = contract.invoices?.[0]?.total || 0
+                            const yearlyMultiplier = 
+                                rule.frequency === 'MONTHLY' ? 12 :
+                                rule.frequency === 'EVERY_2_MONTHS' ? 6 :
+                                rule.frequency === 'QUARTERLY' ? 4 :
+                                rule.frequency === 'TWICE_A_YEAR' ? 2 :
+                                rule.frequency === 'YEARLY' ? 1 :
+                                rule.frequency === 'EVERY_2_YEARS' ? 0.5 : 1
+                            const yearlyValue = visitValue * yearlyMultiplier
+
+                            return (
+                                <div key={contract.id} className="p-4 rounded-xl border border-teal-500/30 bg-teal-500/5 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-sm text-white truncate">{contract.name}</span>
+                                        <Badge className="bg-teal-950 text-teal-300 border-teal-800 text-[10px] uppercase font-bold">
+                                            {freqLabel}
+                                        </Badge>
+                                    </div>
+                                    <div className="text-xs text-zinc-400">
+                                        Next Visit: <strong className="text-white">{nextVisit ? new Date(nextVisit).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "Scheduled"}</strong>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-1 border-t border-white/5 text-xs">
+                                        <span className="text-zinc-500">Value / Year:</span>
+                                        <span className="font-mono font-bold text-emerald-400">
+                                            {yearlyValue > 0 ? formatCurrency(yearlyValue) : "—"}
+                                        </span>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
             </div>
 
             <ClientContactsList clientId={client.id} initialContacts={client.contacts as any} />

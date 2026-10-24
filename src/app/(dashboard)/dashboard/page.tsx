@@ -86,6 +86,31 @@ export default async function DashboardPage() {
             })
         ]);
 
+        
+        const now = new Date();
+        const in3Months = new Date();
+        in3Months.setMonth(in3Months.getMonth() + 3);
+
+        const bookedProjectsNext3Months = await prisma.project.findMany({
+            where: {
+                companyId,
+                startDate: {
+                    gte: now,
+                    lte: in3Months
+                },
+                status: { notIn: ['CANCELLED'] }
+            },
+            include: {
+                invoices: {
+                    select: { total: true }
+                }
+            }
+        });
+
+        const bookedWorkNext3Months = (bookedProjectsNext3Months || []).reduce((acc: number, p: any) => {
+            return acc + (p.invoices?.[0]?.total || 0);
+        }, 0);
+
         let unpaidTotal = 0;
         let unpaidInvoices: any[] = [];
         const clientOutstandingMap: Record<string, { clientId: string, clientName: string, outstanding: number, invoiceCount: number }> = {};

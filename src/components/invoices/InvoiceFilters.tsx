@@ -19,7 +19,7 @@ interface ClientOption {
     name: string
 }
 
-export function InvoiceFilters({ clients }: { clients: ClientOption[] }) {
+export function InvoiceFilters({ clients, reactiveEnabled = false }: { clients: ClientOption[], reactiveEnabled?: boolean }) {
     const router = useRouter()
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
@@ -72,7 +72,7 @@ export function InvoiceFilters({ clients }: { clients: ClientOption[] }) {
                 <option value="AWAITING_PO">Awaiting PO</option>
                 <option value="PO_RECEIVED">PO Received</option>
                 <option value="EMERGENCY_WORK">Emergency Work</option>
-                <option value="REACTIVE_WORK">Reactive Work</option>
+                {reactiveEnabled && <option value="REACTIVE_WORK">Reactive Work</option>}
             </select>
             <select
                 className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

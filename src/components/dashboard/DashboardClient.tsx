@@ -22,7 +22,7 @@ import {
     Briefcase, 
     Calendar, 
     Settings, 
-    TrendingUp, 
+    TrendingUp, CalendarDays, 
     TrendingDown, 
     ArrowUpRight, 
     Activity,
@@ -152,7 +152,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
             <DraftResumeBanner />
 
             {/* Quick Stats Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 <Card className="bg-[#14141E]/80 backdrop-blur-md border-white/5 shadow-2xl hover:border-emerald-500/30 transition-all group">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                         <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center">

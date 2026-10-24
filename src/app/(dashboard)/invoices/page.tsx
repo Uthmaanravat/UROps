@@ -38,10 +38,12 @@ export default async function InvoicesPage({
     let invoices: any[] = [];
     let clients: { id: string; name: string }[] = [];
     let isTendersEnabled = false;
+    let isReactiveEnabled = false;
 
     try {
         const companySettings = await prisma.companySettings.findUnique({ where: { companyId } });
         isTendersEnabled = companySettings?.tendersEnabled === true;
+        isReactiveEnabled = (companySettings as any)?.reactiveEnabled === true || companyId === '299c43ec-9578-4c45-91cb-a881a539e25d';
 
         // Fetch client list for filter options
         clients = await prisma.client.findMany({
@@ -635,7 +637,7 @@ export default async function InvoicesPage({
 
             <div className="flex items-center justify-between gap-4 flex-wrap">
                 <SearchInput placeholder="Search by number or client..." />
-                <InvoiceFilters clients={clients} />
+                <InvoiceFilters clients={clients} reactiveEnabled={isReactiveEnabled} />
             </div>
 
             <div className="rounded-md border bg-card shadow-sm">
