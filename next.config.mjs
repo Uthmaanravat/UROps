@@ -13,6 +13,15 @@ const nextConfig = {
             bodySizeLimit: "50mb",
         },
     },
+    async redirects() {
+        return [
+            {
+                source: "/drone",
+                destination: "/prospects",
+                permanent: false,
+            },
+        ];
+    },
 };
 
 export default nextConfig;

@@ -289,26 +289,27 @@ export function ProjectDashboardClient({
 
             {/* PART 5 REQUIREMENT: Clean board of jobs */}
             {view === 'KANBAN' && (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-2">
-                    {COLUMNS.map(col => {
-                        const colProjects = displayedProjects.filter(p => col.statuses.includes(p.status))
+                <div className="overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <div className="flex gap-4 min-w-full pt-2">
+                        {COLUMNS.map(col => {
+                            const colProjects = displayedProjects.filter(p => col.statuses.includes(p.status))
 
-                        return (
-                            <div
-                                key={col.id}
-                                onDragOver={handleDragOver}
-                                onDrop={(e) => handleDrop(e, col.id)}
-                                className={`border rounded-2xl p-3.5 flex flex-col min-h-[70vh] shadow-xl backdrop-blur-md ${col.color}`}
-                            >
-                                {/* Column Header */}
-                                <div className="flex items-center justify-between mb-3 px-1">
-                                    <h3 className="font-black text-xs uppercase tracking-wider text-white/90">
-                                        {col.title}
-                                    </h3>
-                                    <span className="bg-black/40 text-white/70 text-xs px-2 py-0.5 rounded-full font-bold border border-white/10">
-                                        {colProjects.length}
-                                    </span>
-                                </div>
+                            return (
+                                <div
+                                    key={col.id}
+                                    onDragOver={handleDragOver}
+                                    onDrop={(e) => handleDrop(e, col.id)}
+                                    className={`border rounded-2xl p-3.5 flex flex-col min-h-[70vh] w-[290px] min-w-[280px] sm:min-w-[290px] flex-1 shrink-0 shadow-xl backdrop-blur-md ${col.color}`}
+                                >
+                                    {/* Column Header */}
+                                    <div className="flex items-center justify-between gap-2 mb-3 px-1">
+                                        <h3 className="font-black text-xs uppercase tracking-wider text-white/90 whitespace-nowrap shrink-0">
+                                            {col.title}
+                                        </h3>
+                                        <span className="bg-black/40 text-white/70 text-xs px-2.5 py-0.5 rounded-full font-bold border border-white/10 shrink-0 ml-auto tabular-nums">
+                                            {colProjects.length}
+                                        </span>
+                                    </div>
 
                                 {/* Project Cards */}
                                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
@@ -418,6 +419,7 @@ export function ProjectDashboardClient({
                             </div>
                         )
                     })}
+                    </div>
                 </div>
             )}
 

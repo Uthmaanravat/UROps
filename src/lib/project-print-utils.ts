@@ -259,7 +259,7 @@ export async function generateJobSheetPdf(
     const siteAddress = project.site || project.client?.address || "Address on file"
     const contactName = project.client?.attentionTo || project.client?.contacts?.[0]?.name || "Site Representative"
     const contactPhone = project.client?.phone || project.client?.contacts?.[0]?.phone || "N/A"
-    const poNumber = project.invoices?.[0]?.clientPoNumber || project.invoices?.[0]?.reference || "PO Awaiting"
+    const poNumber = project.poNumber || project.clientPoNumber || project.invoices?.[0]?.clientPoNumber || project.invoices?.[0]?.reference || "PO-AWAITING"
     const jobDate = project.startDate ? new Date(project.startDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "Scheduled"
 
     doc.setFontSize(8)
@@ -289,10 +289,25 @@ export async function generateJobSheetPdf(
 
     doc.setFont("helvetica", "bold")
     doc.setTextColor(71, 85, 105)
-    doc.text("PO / Order #:", 18, y + 12 + siteOffset)
+    doc.text("Client PO / Order #:", 18, y + 12 + siteOffset)
+
+    // Highlighted PO box
+    doc.setFillColor(241, 245, 249)
+    doc.setDrawColor(primaryR, primaryG, primaryB)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(48, y + 12 + siteOffset - 3.8, 42, 5.2, 1, 1, "FD")
+    doc.setFontSize(7.5)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(primaryR, primaryG, primaryB)
+    doc.text(poNumber.toUpperCase(), 69, y + 12 + siteOffset - 0.2, { align: "center" })
+
+    doc.setFontSize(7.5)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(71, 85, 105)
+    doc.text("Job Date:", 95, y + 12 + siteOffset)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(15, 23, 42)
-    doc.text(`${poNumber}  ·  Date: ${jobDate}`, 42, y + 12 + siteOffset)
+    doc.text(jobDate, 110, y + 12 + siteOffset)
 
     // Embed QR Code on the right side
     if (qrDataUrl) {
@@ -317,11 +332,28 @@ export async function generateJobSheetPdf(
 
     y += 16
 
-    // Section 3 & 4: Access + Flight Operations side by side
+    // Section 3 & 4: Access + Flight Operations side by side with separate branded headers
     const colMid = 105
-    y = drawSectionHeader("3. Site Access & Logistics                        4. Flight Operations (Aviation Compliance)", y)
+
+    const drawSubHeader = (title: string, startX: number, width: number, currentY: number) => {
+        doc.setFillColor(248, 250, 252)
+        doc.setDrawColor(226, 232, 240)
+        doc.rect(startX, currentY, width, 5.5, "FD")
+        doc.setFillColor(primaryR, primaryG, primaryB)
+        doc.rect(startX, currentY, 2, 5.5, "F")
+        doc.setFontSize(7.5)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(primaryR, primaryG, primaryB)
+        doc.text(title.toUpperCase(), startX + 4, currentY + 3.8)
+    }
+
+    drawSubHeader("3. Site Access & Logistics", 14, 88, y)
+    drawSubHeader("4. Flight & ABEOD ROC Operations", colMid + 3, 89, y)
+
+    y += 7.5
 
     doc.setFontSize(7.5)
+    doc.setFont("helvetica", "normal")
     doc.setTextColor(30, 41, 59)
     // Left: Access
     doc.text("• Water point: External tap connection required", 18, y + 2)
@@ -329,11 +361,11 @@ export async function generateJobSheetPdf(
     doc.text("• Parking: Dedicated drone van staging space", 18, y + 11)
     doc.text("• Ground: 5m cordoned drop-zone beneath flight", 18, y + 15.5)
 
-    // Right: Flight
-    doc.text("• Pilot in Command (PIC): Flight Lead", colMid + 5, y + 2)
-    doc.text("• Aircraft: Industrial SoftWash Drone System", colMid + 5, y + 6.5)
-    doc.text("• ROC Operator: ABEOD Commercial Aviation ROC", colMid + 5, y + 11)
-    doc.text("• Airspace: VFR Daylight operations logged", colMid + 5, y + 15.5)
+    // Right: Flight & ABEOD ROC
+    doc.text("• Pilot in Command (PIC): Certified Drone Flight Lead", colMid + 6, y + 2)
+    doc.text("• Aircraft: SoftWash Drone System (AeroWash Fleet)", colMid + 6, y + 6.5)
+    doc.text("• ROC Operator: ABEOD Commercial Aviation ROC", colMid + 6, y + 11)
+    doc.text("• Airspace: VFR Daylight operations logged", colMid + 6, y + 15.5)
 
     y += 21
 

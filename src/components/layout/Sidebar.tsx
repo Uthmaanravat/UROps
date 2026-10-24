@@ -78,14 +78,14 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
                     ...group,
                     items: [
                         { title: "Command Center", href: "/dashboard" },
-                        { title: "Sales Pipeline", href: "/drone" },
+                        { title: "Sales Pipeline", href: "/prospects" },
                         ...group.items.filter(item => item.title !== "Command Center" && item.title !== "Drone Operations" && item.title !== "Sales Pipeline")
                     ]
                 };
             } else {
                 return {
                     ...group,
-                    items: group.items.map(item => item.title === "Drone Operations" ? { ...item, title: "Sales Pipeline" } : item)
+                    items: group.items.map(item => (item.title === "Drone Operations" || item.title === "Sales Pipeline") ? { ...item, title: "Sales Pipeline", href: "/prospects" } : (item.href === "/drone" ? { ...item, href: "/prospects" } : item))
                 };
             }
         }

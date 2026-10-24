@@ -16,6 +16,13 @@ const VALID_STATUSES = [
     "passed"
 ]
 
+function addSixMonths(startDate: Date): Date {
+    const result = new Date(startDate)
+    result.setMonth(result.getMonth() + 6)
+    result.setHours(9, 0, 0, 0)
+    return result
+}
+
 function addWorkingDays(startDate: Date, days: number): Date {
     const result = new Date(startDate)
     let added = 0
@@ -70,7 +77,7 @@ export async function updateProspectStatusAction(
                 nextFollowupDate: nextFollowupDate
                     ? new Date(nextFollowupDate)
                     : status === "not_interested"
-                        ? new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000)
+                        ? addSixMonths(now)
                         : status === "won" || status === "passed" || status === "lost"
                             ? null
                             : prospect.nextFollowupDate,
@@ -81,7 +88,7 @@ export async function updateProspectStatusAction(
             }
         })
 
-        revalidatePath("/drone")
+        revalidatePath("/drone"); revalidatePath("/prospects")
         return { success: true, data: JSON.parse(JSON.stringify(updated)) }
     } catch (error: any) {
         console.error("Error updating prospect status:", error)
@@ -113,7 +120,7 @@ export async function logProspectContactAction(
             }
         })
 
-        revalidatePath("/drone")
+        revalidatePath("/drone"); revalidatePath("/prospects")
         return { success: true, data: JSON.parse(JSON.stringify(updated)) }
     } catch (error: any) {
         console.error("Error logging prospect contact:", error)
@@ -150,7 +157,7 @@ export async function setProspectFollowupAction(prospectId: string, date: string
             }
         }
 
-        revalidatePath("/drone")
+        revalidatePath("/drone"); revalidatePath("/prospects")
         revalidatePath("/calendar")
         return { success: true, data: JSON.parse(JSON.stringify(updated)) }
     } catch (error: any) {
@@ -166,7 +173,7 @@ export async function saveProspectNotesAction(prospectId: string, notes: string)
             where: { id: prospectId },
             data: { notes }
         })
-        revalidatePath("/drone")
+        revalidatePath("/drone"); revalidatePath("/prospects")
         return { success: true, data: JSON.parse(JSON.stringify(updated)) }
     } catch (error: any) {
         console.error("Error saving prospect notes:", error)
@@ -224,7 +231,7 @@ export async function addProspectAction(input: ProspectInput) {
             }
         })
 
-        revalidatePath("/drone")
+        revalidatePath("/drone"); revalidatePath("/prospects")
         return { success: true, data: JSON.parse(JSON.stringify(created)) }
     } catch (error: any) {
         console.error("Error adding prospect:", error)
@@ -257,7 +264,7 @@ export async function updateProspectDetailsAction(prospectId: string, input: Pro
             }
         })
 
-        revalidatePath("/drone")
+        revalidatePath("/drone"); revalidatePath("/prospects")
         return { success: true, data: JSON.parse(JSON.stringify(updated)) }
     } catch (error: any) {
         console.error("Error updating prospect details:", error)
@@ -274,7 +281,7 @@ export async function deleteProspectAction(prospectId: string) {
 
         const { count } = await prisma.prospect.deleteMany({ where: { id: prospectId, companyId: prospect.companyId } })
         if (count === 0) return { success: false, error: 'Prospect not found or unauthorized' }
-        revalidatePath("/drone")
+        revalidatePath("/drone"); revalidatePath("/prospects")
         return { success: true }
     } catch (error: any) {
         console.error("Error deleting prospect:", error)
@@ -343,7 +350,7 @@ export async function markProspectInterestedAndCreateClientAction(prospectId: st
             }
         })
 
-        revalidatePath("/drone")
+        revalidatePath("/drone"); revalidatePath("/prospects")
         revalidatePath("/clients")
         revalidatePath(`/clients/${client.id}`)
         revalidatePath("/dashboard")
@@ -398,7 +405,7 @@ export async function logResultAction(
                 console.warn("Could not create meeting:", mErr)
             }
 
-            revalidatePath("/drone")
+            revalidatePath("/drone"); revalidatePath("/prospects")
             revalidatePath("/calendar")
             return { success: true, prospect: JSON.parse(JSON.stringify(updated)) }
         }
@@ -437,13 +444,13 @@ export async function logResultAction(
                 console.warn("Could not create meeting:", mErr)
             }
 
-            revalidatePath("/drone")
+            revalidatePath("/drone"); revalidatePath("/prospects")
             revalidatePath("/calendar")
             return { success: true, prospect: JSON.parse(JSON.stringify(updated)) }
         }
 
         if (result === 'not_interested') {
-            const sixMonths = new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000)
+            const sixMonths = addSixMonths(now)
             const reason = details?.reason?.trim() || "No specific reason provided"
             const updated = await prisma.prospect.update({
                 where: { id: prospectId },
@@ -459,7 +466,7 @@ export async function logResultAction(
                 }
             })
 
-            revalidatePath("/drone")
+            revalidatePath("/drone"); revalidatePath("/prospects")
             return { success: true, prospect: JSON.parse(JSON.stringify(updated)) }
         }
 
