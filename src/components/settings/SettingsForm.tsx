@@ -181,6 +181,8 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         taxId: initialSettings?.taxId || "",
         registrationNumber: initialSettings?.registrationNumber || "",
         tendersEnabled: initialSettings?.tendersEnabled ?? false,
+        surveyCameraEnabled: (initialSettings as any)?.surveyCameraEnabled ?? false,
+        thermalCameraEnabled: (initialSettings as any)?.thermalCameraEnabled ?? false,
         bankDetails: initialSettings?.bankDetails || "",
         paymentTerms: initialSettings?.paymentTerms || "",
         currency: initialSettings?.currency || "R",
@@ -763,6 +765,37 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                 />
                                 <Label htmlFor="tendersEnabled" className="text-sm font-medium cursor-pointer">Enable Tenders Management (Tender 152G)</Label>
                             </div>
+                    
+                            {(!formData.tendersEnabled || formData.theme === 'dark-orange') && (
+                                <>
+                                    <div className="space-y-2 col-span-1 md:col-span-2 pt-2 border-t border-white/5 flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            id="surveyCameraEnabled"
+                                            name="surveyCameraEnabled"
+                                            checked={formData.surveyCameraEnabled || false}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, surveyCameraEnabled: e.target.checked }))}
+                                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary bg-background"
+                                        />
+                                        <Label htmlFor="surveyCameraEnabled" className="text-sm font-medium cursor-pointer">
+                                            Survey camera enabled (Unlocks item 12: Facade Condition Survey in quote catalogue)
+                                        </Label>
+                                    </div>
+                                    <div className="space-y-2 col-span-1 md:col-span-2 pt-2 border-t border-white/5 flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            id="thermalCameraEnabled"
+                                            name="thermalCameraEnabled"
+                                            checked={formData.thermalCameraEnabled || false}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, thermalCameraEnabled: e.target.checked }))}
+                                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary bg-background"
+                                        />
+                                        <Label htmlFor="thermalCameraEnabled" className="text-sm font-medium cursor-pointer">
+                                            Thermal camera enabled (Unlocks item 13: Thermal Roof Survey in quote catalogue)
+                                        </Label>
+                                    </div>
+                                </>
+                            )}
                     </CardContent>
                 </Card>
 
@@ -776,7 +809,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                     <CardContent className="grid gap-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                         <div className="space-y-2">
-                                <Label htmlFor="taxId">Tax ID / VAT Number</Label>
+                                <Label htmlFor="taxId" className="flex items-center justify-between"><span>Tax ID / VAT Number</span><span className="text-[11px] text-gray-400 font-normal">Leave blank if not VAT-registered</span></Label>
                                 <Input
                                     id="taxId"
                                     name="taxId"

@@ -34,17 +34,34 @@ export async function updateCompanySettings(data: {
     layoutPreferences?: any
     registrationNumber?: string
     tendersEnabled?: boolean
+    surveyCameraEnabled?: boolean
+    thermalCameraEnabled?: boolean
 }) {
     try {
         const companyId = await ensureAuth()
-        const settings = await prisma.companySettings.upsert({
-            where: { companyId },
-            update: data,
-            create: {
-                ...data,
-                companyId
-            }
-        })
+        let settings;
+        try {
+            settings = await prisma.companySettings.upsert({
+                where: { companyId },
+                update: data,
+                create: {
+                    ...data,
+                    companyId
+                }
+            });
+        } catch (dbErr) {
+            const cleanData = { ...data };
+            delete cleanData.surveyCameraEnabled;
+            delete cleanData.thermalCameraEnabled;
+            settings = await prisma.companySettings.upsert({
+                where: { companyId },
+                update: cleanData,
+                create: {
+                    ...cleanData,
+                    companyId
+                }
+            });
+        }
 
         revalidatePath("/")
         return { success: true }

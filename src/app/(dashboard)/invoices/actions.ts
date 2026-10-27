@@ -11,7 +11,8 @@ export async function createInvoiceAction(data: {
     clientId: string
     projectId?: string
     date: string
-    items: { description: string; quantity: number; unitPrice: number; area?: string; unit?: string; reason?: string; code?: string; isLocked?: boolean; rateYear?: number }[]
+    items: { description: string; quantity: number; unitPrice: number; area?: string; unit?: string; reason?: string; code?: string; isLocked?: boolean; rateYear?: number; metadata?: any }[]
+    metadata?: any
     site?: string
     quoteNumber?: string
     reference?: string
@@ -244,8 +245,9 @@ export async function createInvoiceAction(data: {
     }
 
     const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
-    const taxRate = 0.15
-    const taxAmount = subtotal * taxRate
+    const isVatRegistered = Boolean(settings.taxId && settings.taxId.trim() !== '');
+    const taxRate = isVatRegistered ? 0.15 : 0;
+    const taxAmount = isVatRegistered ? (subtotal * taxRate) : 0;
     const total = subtotal + taxAmount
 
     const invoice = await prisma.invoice.create({

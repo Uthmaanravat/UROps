@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = 'force-dynamic';
 import { QuoteForm } from "@/components/invoices/QuoteForm";
 import { ensureAuth } from "@/lib/auth-actions";
+import { ensureAeroWashCatalogueAndTerms } from "@/lib/aerowash-catalogue-seed";
 
 export default async function NewQuotePage({
     searchParams
@@ -10,6 +11,7 @@ export default async function NewQuotePage({
     searchParams: { clientId?: string; projectId?: string; scope?: string; type?: string; tenderId?: string; site?: string; prospectId?: string }
 }) {
     const companyId = await ensureAuth();
+    await ensureAeroWashCatalogueAndTerms(companyId);
 
     const [clients, projects, settings, tenders, termsTemplates] = await Promise.all([
         prisma.client.findMany({
@@ -57,6 +59,10 @@ export default async function NewQuotePage({
                 initialSite={searchParams.site}
                 initialProspectId={searchParams.prospectId}
                 aiEnabled={aiEnabled}
+                isAeroWashWorkspace={companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || settings?.theme === 'dark-orange'}
+                surveyCameraEnabled={(settings as any)?.surveyCameraEnabled ?? false}
+                thermalCameraEnabled={(settings as any)?.thermalCameraEnabled ?? false}
+                hasVatRegistration={!!settings?.taxId && settings.taxId.trim() !== ''}
             />
         </div>
     )

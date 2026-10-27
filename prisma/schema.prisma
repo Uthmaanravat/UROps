@@ -39,6 +39,7 @@ model Company {
   termsTemplates TermsTemplate[]
   invitations    Invitation[]
   auditLogs      CompanyAuditLog[]
+  catalogueItems CatalogueItem[]
 }
 
 model Invitation {
@@ -115,6 +116,8 @@ model CompanySettings {
   tendersEnabled       Boolean  @default(false)
   registrationNumber   String?
   reactiveEnabled      Boolean  @default(false)
+  surveyCameraEnabled  Boolean  @default(false)
+  thermalCameraEnabled Boolean  @default(false)
 }
 
 model Client {
@@ -318,6 +321,7 @@ model Invoice {
   unlockLogs             UnlockLog[]
   creditNotes            CreditNote[]
   terms                  QuoteTerm[]
+  metadata               Json?
 }
 
 model Statement {
@@ -349,6 +353,7 @@ model InvoiceItem {
   isLocked    Boolean @default(false)
   rateYear    Int?
   position    Int     @default(0)
+  metadata    Json?
   invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
@@ -801,4 +806,23 @@ model QuoteTerm {
   template     TermsTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@map("quote_terms")
+}
+
+
+model CatalogueItem {
+  id                String   @id @default(uuid())
+  companyId         String
+  itemNumber        Int
+  name              String
+  clientDescription String   @db.Text
+  category          String
+  pricingMethod     String
+  internalNotes     String?  @db.Text
+  isActive          Boolean  @default(true)
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, category])
 }

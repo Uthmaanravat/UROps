@@ -24,6 +24,7 @@ import { InfoTooltip } from "@/components/ui/InfoTooltip"
 import { saveDraft, getDraft, clearDraft } from "@/lib/drafts"
 import { EditorDraftBanner, AutoSaveIndicator } from "@/components/drafts/EditorDraftBanner"
 import { LineItemEditor, LineItem } from "@/components/invoices/LineItemEditor"
+import { AeroWashQuoteBuilder } from "@/components/invoices/AeroWashQuoteBuilder"
 import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
 import { calculateTenderRateYear } from "@/lib/tender-utils"
 
@@ -63,6 +64,10 @@ interface QuoteFormProps {
     tendersEnabled?: boolean
     aiEnabled?: boolean
     isAdmin?: boolean
+    isAeroWashWorkspace?: boolean
+    surveyCameraEnabled?: boolean
+    thermalCameraEnabled?: boolean
+    hasVatRegistration?: boolean
 }
 
 export function QuoteForm({
@@ -79,11 +84,22 @@ export function QuoteForm({
     initialProspectId,
     tendersEnabled = false,
     aiEnabled = true,
-    isAdmin = true
+    isAdmin = true,
+    isAeroWashWorkspace = false,
+    surveyCameraEnabled = false,
+    thermalCameraEnabled = false,
+    hasVatRegistration = false
 }: QuoteFormProps) {
     const isTendersEnabled = tendersEnabled
     const router = useRouter()
     const docType = initialType
+    const [aeroWashPayload, setAeroWashPayload] = useState<{
+        items: any[];
+        metadata: any;
+        subtotal: number;
+        total: number;
+        validationErrors: string[];
+    } | null>(null);
     const STORAGE_KEY = `urops_draft_${docType.toLowerCase()}_new`
     const isRestoring = useRef(false)
     const initialLoaded = useRef(false)
@@ -477,9 +493,9 @@ export function QuoteForm({
     }
 
     // Calculations
-    const subtotal = items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0)
-    const tax = subtotal * 0.15
-    const total = subtotal + tax
+    const subtotal = isAeroWashWorkspace && aeroWashPayload ? aeroWashPayload.subtotal : items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0)
+    const tax = hasVatRegistration ? subtotal * 0.15 : 0
+    const total = isAeroWashWorkspace && aeroWashPayload ? aeroWashPayload.total : (subtotal + tax)
 
     const selectedClient = clients.find(c => c.id === clientId)
     const clientContacts = selectedClient?.contacts || []
@@ -509,23 +525,44 @@ export function QuoteForm({
         }
 
         try {
-            const formattedItems = items.map(i => ({
-                code: i.code || undefined,
-                description: i.description,
-                quantity: i.quantity || 1,
-                unit: i.unit || "each",
-                unitPrice: i.unitPrice || 0,
-                area: i.area,
-                reason: i.reason,
-                isLocked: Boolean(i.isLocked),
-                rateYear: i.rateYear || (workType === "TENDER" ? effectiveRateYear : undefined)
-            }))
+            if (isAeroWashWorkspace && aeroWashPayload?.validationErrors && aeroWashPayload.validationErrors.length > 0) {
+                alert("Please resolve compliance errors before creating quote:\n" + aeroWashPayload.validationErrors.join("\n"));
+                setLoading(false);
+                return;
+            }
+
+            const formattedItems = isAeroWashWorkspace && aeroWashPayload
+                ? aeroWashPayload.items.map(i => ({
+                    code: undefined,
+                    description: i.description,
+                    quantity: 1,
+                    unit: "LOT",
+                    unitPrice: i.unitPrice,
+                    area: i.area,
+                    reason: undefined,
+                    isLocked: false,
+                    rateYear: 1,
+                    metadata: i.metadata
+                }))
+                : items.map(i => ({
+                    code: i.code || undefined,
+                    description: i.description,
+                    quantity: i.quantity || 1,
+                    unit: i.unit || "each",
+                    unitPrice: i.unitPrice || 0,
+                    area: i.area,
+                    reason: i.reason,
+                    isLocked: Boolean(i.isLocked),
+                    rateYear: i.rateYear || (workType === "TENDER" ? effectiveRateYear : undefined),
+                    metadata: undefined
+                }));
 
             const invoiceId = await createInvoiceAction({
                 clientId,
                 projectId: projectId || undefined,
                 date,
                 items: formattedItems,
+                metadata: isAeroWashWorkspace && aeroWashPayload ? aeroWashPayload.metadata : undefined,
                 site,
                 quoteNumber,
                 reference,
@@ -848,16 +885,27 @@ export function QuoteForm({
                             </div>
                         </div>
 
-                        {/* Unified LineItemEditor (Shared Component) */}
-                        <LineItemEditor
-                            items={items}
-                            onChange={setItems}
-                            catalog={activeCatalog}
-                            workType={workType}
-                            rateYear={effectiveRateYear}
-                            isAdmin={isAdmin}
-                            highlightIndex={highlightIndex}
-                        />
+                        {/* AeroWash Catalogue & Elevation Quote Builder OR Standard LineItemEditor */}
+                        {isAeroWashWorkspace && docType === 'QUOTE' ? (
+                            <AeroWashQuoteBuilder
+                                currencySymbol={selectedClient?.codePrefix ? "R" : "R"}
+                                surveyCameraEnabled={surveyCameraEnabled}
+                                thermalCameraEnabled={thermalCameraEnabled}
+                                hasVatRegistration={hasVatRegistration}
+                                termsTemplates={termsTemplates}
+                                onChange={setAeroWashPayload}
+                            />
+                        ) : (
+                            <LineItemEditor
+                                items={items}
+                                onChange={setItems}
+                                catalog={activeCatalog}
+                                workType={workType}
+                                rateYear={effectiveRateYear}
+                                isAdmin={isAdmin}
+                                highlightIndex={highlightIndex}
+                            />
+                        )}
                     </div>
 
                     {/* Quotation Terms & Conditions Section (Quotes only) */}
@@ -1034,10 +1082,12 @@ export function QuoteForm({
                                 <span>Subtotal:</span>
                                 <span className="font-mono font-bold text-white">{formatCurrency(subtotal)}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-gray-400">
-                                <span>VAT (15%):</span>
-                                <span className="font-mono font-bold">{formatCurrency(tax)}</span>
-                            </div>
+                            {hasVatRegistration && (
+                                <div className="flex justify-between text-sm text-gray-400">
+                                    <span>VAT (15%):</span>
+                                    <span className="font-mono font-bold">{formatCurrency(tax)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-lg font-black text-white pt-2 border-t border-white/10">
                                 <span>Total:</span>
                                 <span className="font-mono text-primary text-xl">{formatCurrency(total)}</span>

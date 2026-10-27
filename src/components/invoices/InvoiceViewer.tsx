@@ -986,6 +986,7 @@ export function InvoiceViewer({
         const doc = new jsPDF();
         const currencySymbol = companySettings?.currency || "R";
         const [themeR, themeG, themeB] = getThemePrimaryRGB(companySettings?.theme);
+        const isAeroWashQuote = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9') && invoice.type === 'QUOTE';
 
         // 1. Header Bar (Shared)
         const numberLabel = quoteNumber
@@ -1188,46 +1189,61 @@ export function InvoiceViewer({
                     globalStartIndex += sequentialGroups[i].items.length;
                 }
 
-                if (group.area) {
+                if (isAeroWashQuote && group.area) {
+                    tableBody.push([{ content: group.area.toUpperCase(), colSpan: 3, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 8, halign: 'left', cellPadding: 2.5 } }]);
+                } else if (!isAeroWashQuote && group.area) {
                     tableBody.push([{ content: group.area.toUpperCase(), colSpan: isTender ? 7 : 6, styles: { fillColor: [248, 250, 252], textColor: [20, 20, 30], fontStyle: 'bold', fontSize: 7.5, halign: 'left', cellPadding: 1.5 } }]);
                 }
                 group.items.forEach((item: any, iIdx: number) => {
                     let desc = item.description;
-                    if (item.reason && !isReasonAlreadyInDescription(item.description, item.reason)) {
-                        desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
-                    }
-                    if (item.notes) {
-                        const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
-                        const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
-                        if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
-                            // Omit redundant notes
-                        } else {
-                            desc = `${desc}\n(Notes: ${item.notes})`;
+                    if (isAeroWashQuote) {
+                        // Hard client rule: clean item name + client description only
+                        tableBody.push([
+                            globalStartIndex + iIdx + 1,
+                            desc,
+                            item.unitPrice === 0 ? 'No charge' : formatCurrency(item.quantity * item.unitPrice, currencySymbol)
+                        ]);
+                    } else {
+                        if (item.reason && !isReasonAlreadyInDescription(item.description, item.reason)) {
+                            desc = `${desc}\n(Due to: ${item.reason.replace(/^due to:?\s*/i, '')})`;
                         }
+                        if (item.notes) {
+                            const cleanNote = item.notes.replace(/^Reference Quote:\s*/i, '').trim();
+                            const cleanDesc = item.description.replace(/^As per quotation\s*/i, '').trim();
+                            if (cleanNote && cleanDesc && (item.description.toLowerCase().includes(cleanNote.toLowerCase()) || cleanNote.toLowerCase().includes(cleanDesc.toLowerCase()))) {
+                                // Omit redundant notes
+                            } else {
+                                desc = `${desc}\n(Notes: ${item.notes})`;
+                            }
+                        }
+                        tableBody.push(isTender ? [
+                            globalStartIndex + iIdx + 1,
+                            item.code || '-',
+                            desc,
+                            item.quantity,
+                            item.unit || '',
+                            formatCurrency(item.unitPrice, currencySymbol),
+                            formatCurrency(item.quantity * item.unitPrice, currencySymbol)
+                        ] : [
+                            globalStartIndex + iIdx + 1,
+                            desc,
+                            item.quantity,
+                            item.unit || '',
+                            formatCurrency(item.unitPrice, currencySymbol),
+                            formatCurrency(item.quantity * item.unitPrice, currencySymbol)
+                        ]);
                     }
-                    tableBody.push(isTender ? [
-                        globalStartIndex + iIdx + 1,
-                        item.code || '-',
-                        desc,
-                        item.quantity,
-                        item.unit || '',
-                        formatCurrency(item.unitPrice, currencySymbol),
-                        formatCurrency(item.quantity * item.unitPrice, currencySymbol)
-                    ] : [
-                        globalStartIndex + iIdx + 1,
-                        desc,
-                        item.quantity,
-                        item.unit || '',
-                        formatCurrency(item.unitPrice, currencySymbol),
-                        formatCurrency(item.quantity * item.unitPrice, currencySymbol)
-                    ]);
                 });
             });
         }
 
         autoTable(doc, {
             margin: { left: 14, right: 14 },
-            head: isTender ? [[
+            head: isAeroWashQuote ? [[
+                { content: '#', styles: { halign: 'center' } },
+                { content: 'ITEM & DESCRIPTION', styles: { halign: 'left' } },
+                { content: 'AMOUNT', styles: { halign: 'right' } }
+            ]] : (isTender ? [[
                 { content: '#', styles: { halign: 'center' } },
                 { content: 'CODE', styles: { halign: 'center' } },
                 { content: 'DESCRIPTION', styles: { halign: 'left' } },
@@ -1242,7 +1258,7 @@ export function InvoiceViewer({
                 { content: 'UNIT', styles: { halign: 'center' } },
                 { content: 'PRICE', styles: { halign: 'right' } },
                 { content: 'TOTAL', styles: { halign: 'right' } }
-            ]],
+            ]]),
             body: tableBody,
             startY: startTableY,
             theme: 'striped',
@@ -1258,7 +1274,11 @@ export function InvoiceViewer({
                 textColor: [20, 20, 30],
                 cellPadding: 2
             },
-            columnStyles: isTender ? {
+            columnStyles: isAeroWashQuote ? {
+                0: { cellWidth: 10, halign: 'center' },
+                1: { cellWidth: 135, halign: 'left' },
+                2: { cellWidth: 37, halign: 'right', fontStyle: 'bold' }
+            } : (isTender ? {
                 0: { cellWidth: 8, halign: 'center' },
                 1: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
                 2: { cellWidth: 74, halign: 'left' },
@@ -1273,7 +1293,7 @@ export function InvoiceViewer({
                 3: { cellWidth: 16, halign: 'center' },
                 4: { cellWidth: 26, halign: 'right' },
                 5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
-            },
+            }),
             alternateRowStyles: {
                 fillColor: [252, 254, 255]
             },
@@ -1284,7 +1304,15 @@ export function InvoiceViewer({
                     return;
                 }
                 // Enforce column alignments unconditionally across head and body
-                if (isTender) {
+                if (isAeroWashQuote) {
+                    if (data.column.index === 0) {
+                        data.cell.styles.halign = 'center';
+                    } else if (data.column.index === 1) {
+                        data.cell.styles.halign = 'left';
+                    } else if (data.column.index === 2) {
+                        data.cell.styles.halign = 'right';
+                    }
+                } else if (isTender) {
                     if (data.column.index === 0) {
                         data.cell.styles.halign = 'center';
                     } else if (data.column.index === 1) {
@@ -1366,14 +1394,34 @@ export function InvoiceViewer({
         doc.text(`Subtotal:`, 140, currentY);
         doc.text(formatCurrency(subtotal, currencySymbol), 196, currentY, { align: 'right' });
 
-        doc.text(`VAT (15%):`, 140, currentY + 6);
-        doc.text(formatCurrency(taxAmount, currencySymbol), 196, currentY + 6, { align: 'right' });
+        const isVatRegistered = Boolean(company.vatNumber && company.vatNumber.trim() !== '') && taxAmount > 0;
+        let totalDueY = currentY + 8;
+        if (isVatRegistered) {
+            doc.text(`VAT (15%):`, 140, currentY + 6);
+            doc.text(formatCurrency(taxAmount, currencySymbol), 196, currentY + 6, { align: 'right' });
+            totalDueY = currentY + 14;
+        }
 
         doc.setFontSize(11);
         doc.setTextColor(20, 20, 30);
         doc.setFont("helvetica", "bold");
-        doc.text(`TOTAL DUE:`, 140, currentY + 14);
-        doc.text(formatCurrency(total, currencySymbol), 196, currentY + 14, { align: 'right' });
+        doc.text(`TOTAL DUE:`, 140, totalDueY);
+        doc.text(formatCurrency(total, currencySymbol), 196, totalDueY, { align: 'right' });
+        currentY = totalDueY;
+
+        // Contract programme display on PDF (visiting frequency & visits per year, NO percentages)
+        const progMeta = (invoice as any)?.metadata?.programmeInfo;
+        if (progMeta && progMeta.id !== 'ONCE_OFF') {
+            currentY += 8;
+            doc.setFontSize(8.5);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(themeR, themeG, themeB);
+            doc.text(progMeta.name, 14, currentY);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(71, 85, 105);
+            doc.text(`Visits per year: ${progMeta.visitsPerYear} | Price per visit: ${formatCurrency(total, currencySymbol)} | Annual Total: ${formatCurrency(total * progMeta.visitsPerYear, currencySymbol)}`, 14, currentY + 4.5);
+            currentY += 8;
+        }
 
         let currentPct: number | undefined = undefined;
         if (firstPaymentOption === "20") currentPct = 20;
@@ -3072,10 +3120,12 @@ export function InvoiceViewer({
                                 <span className="text-gray-500 font-bold">Document Subtotal</span>
                                 <span className="font-bold text-white">{formatCurrency(subtotal, currencySymbol)}</span>
                             </div>
-                            <div className="flex justify-between items-center text-sm md:text-base">
-                                <span className="text-gray-500 font-bold">VAT (15%)</span>
-                                <span className="font-bold text-white">{formatCurrency(taxAmount, currencySymbol)}</span>
-                            </div>
+                            {Boolean(companySettings?.taxId && companySettings.taxId.trim() !== '') && taxAmount > 0 && (
+                                <div className="flex justify-between items-center text-sm md:text-base">
+                                    <span className="text-gray-500 font-bold">VAT (15%)</span>
+                                    <span className="font-bold text-white">{formatCurrency(taxAmount, currencySymbol)}</span>
+                                </div>
+                            )}
                             <div className="h-px bg-white/10 my-3" />
                             <div className="flex justify-between items-center">
                                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Total Amount</span>
