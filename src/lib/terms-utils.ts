@@ -20,17 +20,18 @@ export interface NumberedClause {
 export function parseClauses(text: string | null | undefined): string[] {
     if (!text || !text.trim()) return [];
 
-    // Split by double newline (paragraphs) or lines
-    const rawLines = text
-        .split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(l => l.length > 0);
+    // Split by double newline (paragraphs) if present, otherwise single lines
+    const trimmed = text.trim();
+    const hasParagraphs = /\r?\n\s*\r?\n/.test(trimmed);
+    const rawBlocks = hasParagraphs
+        ? trimmed.split(/\r?\n\s*\r?\n/).map(b => b.trim()).filter(b => b.length > 0)
+        : trimmed.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
 
     const clauses: string[] = [];
 
-    for (const line of rawLines) {
+    for (const block of rawBlocks) {
         // Strip leading numbering or bullet markers if user typed them manually
-        const cleaned = line.replace(/^(?:(?:\d+[\.\)]|\-|\*|•|Clause\s+\d+[:\.]?)\s*)/i, '').trim();
+        const cleaned = block.replace(/^(?:(?:\d+[\.\)]|\-|\*|•|Clause\s+\d+[:\.]?)\s*)/i, '').trim();
         if (cleaned.length > 0) {
             clauses.push(cleaned);
         }

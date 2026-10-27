@@ -92,6 +92,8 @@ export function QuoteForm({
 }: QuoteFormProps) {
     const isTendersEnabled = tendersEnabled
     const router = useRouter()
+    const [isMounted, setIsMounted] = useState(false)
+    useEffect(() => { setIsMounted(true) }, [])
     const docType = initialType
     const [aeroWashPayload, setAeroWashPayload] = useState<{
         items: any[];
@@ -509,8 +511,8 @@ export function QuoteForm({
     const hasMultipleContacts = clientContacts.length > 0 || attentionToNames.length > 0
 
     // Submit handler
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
+    const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+        if (e) e.preventDefault()
         setLoading(true)
 
         let finalFirstPaymentPercentage: number | undefined = undefined
@@ -594,10 +596,19 @@ export function QuoteForm({
         }
     }
 
+    if (!isMounted) {
+        return (
+            <div className="p-12 text-center text-gray-400 font-sans flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                <span>Loading quotation builder...</span>
+            </div>
+        )
+    }
+
     return (
         <div className="flex flex-col lg:flex-row gap-6 items-start">
             <div className="flex-1 w-full space-y-6">
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} action="#" className="space-y-6">
                     {/* WORK TYPE SELECTOR BAR (Requirement 1 & 2) - Only if tendersEnabled */}
                     {isTendersEnabled && (
                     <div className="p-4 rounded-2xl bg-[#14141E] border border-white/10 shadow-lg space-y-3">
@@ -1106,8 +1117,9 @@ export function QuoteForm({
                                     Cancel
                                 </Button>
                                 <Button
-                                    type="submit"
-                                    disabled={loading || items.length === 0}
+                                    type="button"
+                                    onClick={handleSubmit}
+                                    disabled={loading || (isAeroWashWorkspace ? (!aeroWashPayload || aeroWashPayload.items.length === 0) : items.length === 0)}
                                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs px-6"
                                 >
                                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

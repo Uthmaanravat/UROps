@@ -58,8 +58,10 @@ export function getBandFromHeight(height: number): BandInfo {
 }
 
 export function roundToNearest50(amount: number): number {
-    return Math.round(amount / 50) * 50;
+    if (amount <= 0) return 0;
+    return Math.ceil(amount / 50) * 50;
 }
+export const roundToNext50 = roundToNearest50;
 
 export interface CatalogueItemDef {
     itemNumber: number;
@@ -297,19 +299,29 @@ export const MINIMUM_JOB_AMOUNT = 7500;
 export const MINIMUM_FLOOR_RATE_PER_M2 = 12.0;
 
 // AEROWASH STANDARD TERMS
-export const AEROWASH_STANDARD_TERMS_NAME = 'AeroWash Standard Quotation Terms (Rate Card Rev 13)';
+export const AEROWASH_STANDARD_TERMS_NAME = 'AeroWash Standard Quotation Terms';
 
-export const AEROWASH_STANDARD_TERMS_BODY = `1. Service Area
+export const AEROWASH_STANDARD_TERMS_BODY = `1. Scope and Fixed Price
+Quotations are fixed price based on the scope, elevations and dimensions agreed at the time of quotation. Any variation or additional works requested will be quoted separately before execution.
+
+2. Service Area
 The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.
 
-2. Weather
+3. Weather
 Work is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.
 
-3. Client Responsibilities
+4. Client Responsibilities
 The client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.
 
-4. Standby and Return Attendance
+5. Standby and Return Attendance
 Where work cannot start, continue or be completed for reasons outside AeroWash's control, including site access not being available or work being stopped at the client's request, a standby or return attendance charge applies, agreed with you before it is invoiced.
 
-5. Pre-existing Conditions
-Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.`;
+6. Pre-existing Conditions
+Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.
+
+7. SACAA and Daylight Operations Only
+All flight operations are conducted in accordance with South African Civil Aviation Authority (SACAA) regulations during approved daylight hours only.
+
+8. Payment Terms and Validity
+Payment terms: 
+Quote validity: `;

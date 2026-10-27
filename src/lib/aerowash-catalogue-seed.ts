@@ -58,7 +58,7 @@ export async function ensureAeroWashCatalogueAndTerms(companyId: string) {
         const existingTemplate = await prisma.termsTemplate.findFirst({
             where: {
                 companyId,
-                name: AEROWASH_STANDARD_TERMS_NAME
+                name: { in: [AEROWASH_STANDARD_TERMS_NAME, 'AeroWash Standard Quotation Terms (Rate Card Rev 13)'] }
             }
         });
 
@@ -77,6 +77,15 @@ export async function ensureAeroWashCatalogueAndTerms(companyId: string) {
                             body: AEROWASH_STANDARD_TERMS_BODY
                         }
                     }
+                }
+            });
+        } else {
+            await prisma.termsTemplate.update({
+                where: { id: existingTemplate.id },
+                data: {
+                    name: AEROWASH_STANDARD_TERMS_NAME,
+                    body: AEROWASH_STANDARD_TERMS_BODY,
+                    isDefault: true
                 }
             });
         }

@@ -325,10 +325,10 @@ export async function generateAeroWashQuotePdf({
         doc.setFontSize(11);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(20, 20, 30);
-        doc.text("TERMS AND CONDITIONS", 14, termsY);
+        doc.text("AEROWASH STANDARD QUOTATION TERMS", 14, termsY);
         doc.setDrawColor(themeR, themeG, themeB);
         doc.setLineWidth(0.5);
-        doc.line(14, termsY + 2, 60, termsY + 2);
+        doc.line(14, termsY + 2, 85, termsY + 2);
         termsY += 10;
 
         for (const term of invoice.terms) {

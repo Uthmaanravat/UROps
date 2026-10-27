@@ -936,8 +936,8 @@ export function InvoiceViewer({
 
     // Default company details if not set
     const company = {
-        name: companySettings?.name || "Company",
-        address: companySettings?.address || "15 Culemborg Street, Avondale, Parow, Cape Town, 7500",
+        name: companySettings?.name || "",
+        address: companySettings?.address || "",
         email: companySettings?.email || "",
         phone: companySettings?.phone || "",
         logoUrl: companySettings?.logoUrl || "",
@@ -945,7 +945,8 @@ export function InvoiceViewer({
         registrationNumber: companySettings?.registrationNumber || "",
         paymentTerms: companySettings?.paymentTerms || "",
         bankDetails: companySettings?.bankDetails || "",
-        layoutPreferences: companySettings?.layoutPreferences
+        layoutPreferences: companySettings?.layoutPreferences,
+        theme: companySettings?.theme
     };
 
     const handleSendEmail = async () => {
@@ -1475,13 +1476,26 @@ export function InvoiceViewer({
                 currentY = 25;
             }
 
-            doc.setFontSize(8.5);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(20, 20, 30);
-            doc.text("TERMS AND CONDITIONS", 14, currentY);
-            doc.setDrawColor(themeR, themeG, themeB); // Lime separator
-            doc.line(14, currentY + 2, 55, currentY + 2);
-            currentY += 8;
+            if (isAeroWashQuote) {
+                doc.addPage();
+                currentY = 25;
+                doc.setFontSize(10.5);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(20, 20, 30);
+                doc.text("AEROWASH STANDARD QUOTATION TERMS", 14, currentY);
+                doc.setDrawColor(themeR, themeG, themeB);
+                doc.setLineWidth(0.5);
+                doc.line(14, currentY + 2, 85, currentY + 2);
+                currentY += 8;
+            } else {
+                doc.setFontSize(8.5);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(20, 20, 30);
+                doc.text("TERMS AND CONDITIONS", 14, currentY);
+                doc.setDrawColor(themeR, themeG, themeB); // Lime separator
+                doc.line(14, currentY + 2, 55, currentY + 2);
+                currentY += 8;
+            }
 
             doc.setFontSize(8);
 
@@ -1995,7 +2009,8 @@ export function InvoiceViewer({
 
     // Recalculate totals from local items
     const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
-    const taxAmount = subtotal * 0.15;
+    const isVatRegistered = Boolean(companySettings?.taxId && companySettings.taxId.trim() !== '');
+    const taxAmount = isVatRegistered ? (subtotal * 0.15) : 0;
     const total = subtotal + taxAmount;
 
     return (
