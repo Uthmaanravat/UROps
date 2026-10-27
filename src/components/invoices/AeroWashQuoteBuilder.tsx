@@ -93,6 +93,7 @@ export interface AeroWashQuoteBuilderProps {
     surveyCameraEnabled?: boolean;
     thermalCameraEnabled?: boolean;
     hasVatRegistration?: boolean;
+    vatRate?: number;
     termsTemplates?: any[];
     initialData?: any;
     onChange: (payload: {
@@ -110,6 +111,7 @@ export function AeroWashQuoteBuilder({
     surveyCameraEnabled = false,
     thermalCameraEnabled = false,
     hasVatRegistration = false,
+    vatRate = 15,
     termsTemplates = [],
     initialData,
     onChange
@@ -653,8 +655,9 @@ export function AeroWashQuoteBuilder({
         }
 
         // VAT rule: No VAT line (AeroWash is not VAT-registered) until a VAT number is saved in Settings
-        const taxRate = hasVatRegistration ? 0.15 : 0;
-        const taxAmount = hasVatRegistration ? roundToNearest50(finalSubtotal * 0.15) : 0;
+        const rateFraction = (vatRate || 15) / 100;
+        const taxRate = hasVatRegistration ? rateFraction : 0;
+        const taxAmount = hasVatRegistration ? roundToNearest50(finalSubtotal * rateFraction) : 0;
         const finalTotal = finalSubtotal + taxAmount;
 
         return {
@@ -670,7 +673,7 @@ export function AeroWashQuoteBuilder({
             errors,
             warnings
         };
-    }, [elevations, siteProvisions, programme, isLandmark, siteVisitDone, contractorSpecReceived, surveyCameraEnabled, thermalCameraEnabled, hasVatRegistration]);
+    }, [elevations, siteProvisions, programme, isLandmark, siteVisitDone, contractorSpecReceived, surveyCameraEnabled, thermalCameraEnabled, hasVatRegistration, vatRate]);
 
     // Send payload up to parent
     useEffect(() => {
@@ -1568,7 +1571,7 @@ export function AeroWashQuoteBuilder({
                             {/* VAT Line ONLY if VAT registered */}
                             {hasVatRegistration ? (
                                 <div className="flex justify-between text-sm text-gray-400">
-                                    <span>VAT (15%)</span>
+                                    <span>VAT ({vatRate}%)</span>
                                     <span className="font-mono text-white">{formatCurrency(calculation.taxAmount, currencySymbol)}</span>
                                 </div>
                             ) : null}

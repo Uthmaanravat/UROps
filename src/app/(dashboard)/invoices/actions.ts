@@ -1,5 +1,6 @@
 "use server"
 
+import { isVatEffective, getVatRate, calculateVatAndTotal } from "@/lib/vat-utils"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -245,10 +246,9 @@ export async function createInvoiceAction(data: {
     }
 
     const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
-    const isVatRegistered = Boolean(settings.taxId && settings.taxId.trim() !== '');
-    const taxRate = isVatRegistered ? 0.15 : 0;
-    const taxAmount = isVatRegistered ? (subtotal * taxRate) : 0;
-    const total = subtotal + taxAmount
+    const vatEffective = isVatEffective(data.date, settings);
+    const vatRate = getVatRate(settings);
+    const { taxRate, taxAmount, total } = calculateVatAndTotal(subtotal, vatEffective, vatRate);
 
     const invoice = await prisma.invoice.create({
         data: {
@@ -756,7 +756,14 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
         }
     }
 
-    // 4. Create the NEW separate Invoice record
+    // 4. Determine VAT eligibility for newly issued invoice
+    const invoiceDate = new Date();
+    const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+    const vatEffective = isVatEffective(invoiceDate, settings);
+    const vatRate = getVatRate(settings);
+    const { taxRate: newTaxRate, taxAmount: newTaxAmount, total: newTotal } = calculateVatAndTotal(quote.subtotal, vatEffective, vatRate);
+
+    // 5. Create the NEW separate Invoice record
     const invoice = await prisma.invoice.create({
         data: {
             companyId: quote.companyId,
@@ -772,9 +779,9 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             status: 'DRAFT',
             number: nextInvoiceNumber,
             subtotal: quote.subtotal,
-            taxRate: quote.taxRate,
-            taxAmount: quote.taxAmount,
-            total: quote.total,
+            taxRate: newTaxRate,
+            taxAmount: newTaxAmount,
+            total: newTotal,
             site: quote.site,
             quoteNumber: formattedInvoiceNumber, // This is the label for the NEW invoice
             reference: quote.quoteNumber || quote.reference || null,

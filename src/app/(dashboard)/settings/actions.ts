@@ -36,23 +36,38 @@ export async function updateCompanySettings(data: {
     tendersEnabled?: boolean
     surveyCameraEnabled?: boolean
     thermalCameraEnabled?: boolean
+    vatRegistrationDate?: Date | string | null
+    vatRate?: number | string | null
 }) {
     try {
         const companyId = await ensureAuth()
+        const parsedData: any = { ...data };
+        if (data.vatRegistrationDate !== undefined) {
+            parsedData.vatRegistrationDate = data.vatRegistrationDate
+                ? new Date(data.vatRegistrationDate)
+                : null;
+        }
+        if (data.vatRate !== undefined) {
+            parsedData.vatRate = data.vatRate !== null && data.vatRate !== ''
+                ? Number(data.vatRate)
+                : 15.0;
+        }
         let settings;
         try {
             settings = await prisma.companySettings.upsert({
                 where: { companyId },
-                update: data,
+                update: parsedData,
                 create: {
-                    ...data,
+                    ...parsedData,
                     companyId
                 }
             });
         } catch (dbErr) {
-            const cleanData = { ...data };
+            const cleanData = { ...parsedData };
             delete cleanData.surveyCameraEnabled;
             delete cleanData.thermalCameraEnabled;
+            delete cleanData.vatRegistrationDate;
+            delete cleanData.vatRate;
             settings = await prisma.companySettings.upsert({
                 where: { companyId },
                 update: cleanData,

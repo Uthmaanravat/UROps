@@ -1,3 +1,4 @@
+import { isVatEffective } from "@/lib/vat-utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { drawPdfHeader, getThemePrimaryRGB } from "@/lib/pdf-utils"
@@ -41,6 +42,8 @@ export interface AeroWashQuotePdfOptions {
         logoUrl?: string | null;
         vatNumber?: string | null;
         registrationNumber?: string | null;
+        vatRegistrationDate?: Date | string | null;
+        vatRate?: number | string | null;
     };
     companySettings?: {
         theme?: string;
@@ -130,6 +133,11 @@ export async function generateAeroWashQuotePdf({
         clientLegalY += addrLines.length * 4.5;
     }
 
+    if (invoice.client.vatNumber) {
+        doc.text(`VAT: ${invoice.client.vatNumber}`, 85, clientLegalY);
+        clientLegalY += 4.5;
+    }
+
     // Column 3: From (AeroWash)
     doc.setTextColor(themeR, themeG, themeB);
     doc.setFontSize(8);
@@ -151,7 +159,8 @@ export async function generateAeroWashQuotePdf({
         fromY += 4.5;
     }
 
-    if (company.vatNumber) {
+    const isVatActive = isVatEffective(invoice.date, { taxId: company.vatNumber, vatRegistrationDate: company.vatRegistrationDate });
+    if (company.vatNumber && isVatActive) {
         doc.text(`VAT: ${company.vatNumber}`, 196, fromY, { align: 'right' });
         fromY += 4.5;
     }
@@ -278,10 +287,11 @@ export async function generateAeroWashQuotePdf({
     doc.text(`Subtotal:`, 140, currentY);
     doc.text(formatCurrency(invoice.subtotal, currencySymbol), 196, currentY, { align: 'right' });
 
-    const isVatRegistered = Boolean(company.vatNumber && company.vatNumber.trim() !== '') && invoice.taxAmount > 0;
+    const vatRate = (company as any).vatRate ?? 15;
+    const isVatRegistered = isVatActive && invoice.taxAmount > 0;
     let totalDueY = currentY + 8;
     if (isVatRegistered) {
-        doc.text(`VAT (15%):`, 140, currentY + 6);
+        doc.text(`VAT (${vatRate}%):`, 140, currentY + 6);
         doc.text(formatCurrency(invoice.taxAmount, currencySymbol), 196, currentY + 6, { align: 'right' });
         totalDueY = currentY + 14;
     }

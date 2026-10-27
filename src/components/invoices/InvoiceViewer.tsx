@@ -1,4 +1,6 @@
 "use client"
+
+import { isVatEffective, getVatRate, getDocumentHeading } from "@/lib/vat-utils"
 import React from 'react'
 
 import { Button } from "@/components/ui/button"
@@ -995,7 +997,9 @@ export function InvoiceViewer({
             : (invoice.type === 'QUOTE' ? `Q-${new Date(date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
         
         const badge = invoice.status === 'CHECKED' ? '✓ VERIFIED / CHECKED' : undefined;
-        const nextY = await drawPdfHeader(doc, company, invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE', numberLabel, badge);
+        const isVatActive = isVatEffective(date, companySettings);
+        const docTitle = getDocumentHeading(invoice.type, isVatActive);
+        const nextY = await drawPdfHeader(doc, company, docTitle, numberLabel, badge);
 
         // 2. Metadata Section (3-Column Layout)
         const gridY = nextY + 5; // e.g., 53
@@ -1112,7 +1116,7 @@ export function InvoiceViewer({
         doc.setFontSize(9);
         doc.setTextColor(100, 116, 139);
 
-        if (company.vatNumber) {
+        if (company.vatNumber && isVatActive) {
             doc.text(`VAT: ${company.vatNumber}`, 196, fromY, { align: 'right' });
             fromY += 4.5;
         }
@@ -1395,10 +1399,11 @@ export function InvoiceViewer({
         doc.text(`Subtotal:`, 140, currentY);
         doc.text(formatCurrency(subtotal, currencySymbol), 196, currentY, { align: 'right' });
 
-        const isVatRegistered = Boolean(company.vatNumber && company.vatNumber.trim() !== '') && taxAmount > 0;
+        const pdfVatRate = getVatRate(companySettings);
+        const isVatRegistered = isVatActive && taxAmount > 0;
         let totalDueY = currentY + 8;
         if (isVatRegistered) {
-            doc.text(`VAT (15%):`, 140, currentY + 6);
+            doc.text(`VAT (${pdfVatRate}%):`, 140, currentY + 6);
             doc.text(formatCurrency(taxAmount, currencySymbol), 196, currentY + 6, { align: 'right' });
             totalDueY = currentY + 14;
         }
@@ -1633,7 +1638,7 @@ export function InvoiceViewer({
 
             worksheet.mergeCells('F4:G4');
             const titleCell = worksheet.getCell('F4');
-            titleCell.value = invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE';
+            titleCell.value = getDocumentHeading(invoice.type, isVatEffective(invoice.date, companySettings));
             titleCell.font = { name: 'Arial', bold: true, size: 20, color: { argb: 'FF14141E' } };
             titleCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -1824,7 +1829,7 @@ export function InvoiceViewer({
             worksheet.getCell(`G${currentRow}`).numFmt = '"R"#,##0.00';
             worksheet.getCell(`G${currentRow}`).alignment = { horizontal: 'right' };
             currentRow++;
-            worksheet.getCell(`F${currentRow}`).value = 'VAT (15%)';
+            worksheet.getCell(`F${currentRow}`).value = `VAT (${getVatRate(companySettings)}%)`;
             worksheet.getCell(`F${currentRow}`).alignment = { horizontal: 'right' };
             worksheet.getCell(`G${currentRow}`).value = taxAmount;
             worksheet.getCell(`G${currentRow}`).numFmt = '"R"#,##0.00';
@@ -2009,8 +2014,9 @@ export function InvoiceViewer({
 
     // Recalculate totals from local items
     const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
-    const isVatRegistered = Boolean(companySettings?.taxId && companySettings.taxId.trim() !== '');
-    const taxAmount = isVatRegistered ? (subtotal * 0.15) : 0;
+    const isVatRegistered = isVatEffective(invoice.date, companySettings);
+    const vatRate = getVatRate(companySettings);
+    const taxAmount = isVatRegistered ? (subtotal * (vatRate / 100)) : 0;
     const total = subtotal + taxAmount;
 
     return (
@@ -2500,7 +2506,7 @@ export function InvoiceViewer({
                                     </div>
                                 );
                             })()}
-                            <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-[#1E293B]">{invoice.type === 'QUOTE' ? 'QUOTATION' : 'TAX INVOICE'}</h2>
+                            <h2 className="text-lg md:text-3xl font-black uppercase tracking-[0.2em] text-[#1E293B]">{getDocumentHeading(invoice.type, isVatRegistered)}</h2>
                         </div>
                         <div className="flex items-center justify-center md:justify-end gap-1 md:gap-2 mt-1">
                             <span className="text-primary font-mono text-xs md:text-base font-black">#</span>
@@ -2824,7 +2830,7 @@ export function InvoiceViewer({
                         <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] text-center md:text-right">From</h3>
                         <div className="md:text-right space-y-1">
                             <div className="text-lg md:text-xl font-black text-white">{company.name}</div>
-                            {company.vatNumber && (
+                            {company.vatNumber && isVatRegistered && (
                                 <div className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">VAT: {company.vatNumber}</div>
                             )}
                             {company.registrationNumber && (
@@ -3135,9 +3141,9 @@ export function InvoiceViewer({
                                 <span className="text-gray-500 font-bold">Document Subtotal</span>
                                 <span className="font-bold text-white">{formatCurrency(subtotal, currencySymbol)}</span>
                             </div>
-                            {Boolean(companySettings?.taxId && companySettings.taxId.trim() !== '') && taxAmount > 0 && (
+                            {isVatRegistered && taxAmount > 0 && (
                                 <div className="flex justify-between items-center text-sm md:text-base">
-                                    <span className="text-gray-500 font-bold">VAT (15%)</span>
+                                    <span className="text-gray-500 font-bold">VAT ({vatRate}%)</span>
                                     <span className="font-bold text-white">{formatCurrency(taxAmount, currencySymbol)}</span>
                                 </div>
                             )}

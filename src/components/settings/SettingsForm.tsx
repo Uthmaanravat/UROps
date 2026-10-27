@@ -179,6 +179,8 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         slogan: initialSettings?.slogan || "",
         logoUrl: initialSettings?.logoUrl || "",
         taxId: initialSettings?.taxId || "",
+        vatRegistrationDate: (initialSettings as any)?.vatRegistrationDate ? new Date((initialSettings as any).vatRegistrationDate).toISOString().split('T')[0] : "",
+        vatRate: (initialSettings as any)?.vatRate !== undefined && (initialSettings as any)?.vatRate !== null ? String((initialSettings as any).vatRate) : "15",
         registrationNumber: initialSettings?.registrationNumber || "",
         tendersEnabled: initialSettings?.tendersEnabled ?? false,
         surveyCameraEnabled: (initialSettings as any)?.surveyCameraEnabled ?? false,
@@ -815,6 +817,31 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                     name="taxId"
                                     value={formData.taxId}
                                     onChange={handleChange}
+                                    placeholder="e.g. 4990123456"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="vatRegistrationDate" className="flex items-center justify-between"><span>VAT Registration Date</span><span className="text-[11px] text-gray-400 font-normal">VAT applies on/after this date</span></Label>
+                                <Input
+                                    id="vatRegistrationDate"
+                                    name="vatRegistrationDate"
+                                    type="date"
+                                    value={formData.vatRegistrationDate}
+                                    onChange={handleChange}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="vatRate">VAT Rate (%)</Label>
+                                <Input
+                                    id="vatRate"
+                                    name="vatRate"
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    max="100"
+                                    value={formData.vatRate}
+                                    onChange={handleChange}
+                                    placeholder="15"
                                 />
                             </div>
                             <div className="space-y-2">

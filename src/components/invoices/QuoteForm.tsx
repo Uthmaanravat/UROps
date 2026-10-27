@@ -1,5 +1,7 @@
 "use client"
 
+import { isVatEffective, getVatRate } from "@/lib/vat-utils"
+
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -67,6 +69,7 @@ interface QuoteFormProps {
     isAeroWashWorkspace?: boolean
     surveyCameraEnabled?: boolean
     thermalCameraEnabled?: boolean
+    companySettings?: any
     hasVatRegistration?: boolean
 }
 
@@ -88,6 +91,7 @@ export function QuoteForm({
     isAeroWashWorkspace = false,
     surveyCameraEnabled = false,
     thermalCameraEnabled = false,
+    companySettings,
     hasVatRegistration = false
 }: QuoteFormProps) {
     const isTendersEnabled = tendersEnabled
@@ -100,6 +104,7 @@ export function QuoteForm({
         metadata: any;
         subtotal: number;
         total: number;
+        taxAmount?: number;
         validationErrors: string[];
     } | null>(null);
     const STORAGE_KEY = `urops_draft_${docType.toLowerCase()}_new`
@@ -495,9 +500,11 @@ export function QuoteForm({
     }
 
     // Calculations
+    const effectiveVatRegistration = companySettings ? isVatEffective(date, companySettings) : hasVatRegistration;
+    const vatRate = getVatRate(companySettings);
     const subtotal = isAeroWashWorkspace && aeroWashPayload ? aeroWashPayload.subtotal : items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0)
-    const tax = hasVatRegistration ? subtotal * 0.15 : 0
-    const total = isAeroWashWorkspace && aeroWashPayload ? aeroWashPayload.total : (subtotal + tax)
+    const tax = (isAeroWashWorkspace && aeroWashPayload ? aeroWashPayload.taxAmount : (effectiveVatRegistration ? subtotal * (vatRate / 100) : 0)) || 0;
+    const total = isAeroWashWorkspace && aeroWashPayload ? aeroWashPayload.total : (subtotal + tax);
 
     const selectedClient = clients.find(c => c.id === clientId)
     const clientContacts = selectedClient?.contacts || []
@@ -902,7 +909,8 @@ export function QuoteForm({
                                 currencySymbol={selectedClient?.codePrefix ? "R" : "R"}
                                 surveyCameraEnabled={surveyCameraEnabled}
                                 thermalCameraEnabled={thermalCameraEnabled}
-                                hasVatRegistration={hasVatRegistration}
+                                hasVatRegistration={effectiveVatRegistration}
+                                vatRate={vatRate}
                                 termsTemplates={termsTemplates}
                                 onChange={setAeroWashPayload}
                             />
@@ -1093,9 +1101,9 @@ export function QuoteForm({
                                 <span>Subtotal:</span>
                                 <span className="font-mono font-bold text-white">{formatCurrency(subtotal)}</span>
                             </div>
-                            {hasVatRegistration && (
+                            {effectiveVatRegistration && (
                                 <div className="flex justify-between text-sm text-gray-400">
-                                    <span>VAT (15%):</span>
+                                    <span>VAT ({vatRate}%):</span>
                                     <span className="font-mono font-bold">{formatCurrency(tax)}</span>
                                 </div>
                             )}

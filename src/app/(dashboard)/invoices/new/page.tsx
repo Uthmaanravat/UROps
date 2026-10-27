@@ -62,6 +62,7 @@ export default async function NewQuotePage({
                 isAeroWashWorkspace={companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || settings?.theme === 'dark-orange'}
                 surveyCameraEnabled={(settings as any)?.surveyCameraEnabled ?? false}
                 thermalCameraEnabled={(settings as any)?.thermalCameraEnabled ?? false}
+                companySettings={settings}
                 hasVatRegistration={!!settings?.taxId && settings.taxId.trim() !== ''}
             />
         </div>
