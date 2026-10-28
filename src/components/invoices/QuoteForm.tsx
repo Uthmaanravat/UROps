@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Wand2, Loader2, FileText, ClipboardPaste, Sparkles, Building2, Briefcase, FileCheck, CheckCircle2, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle } from "lucide-react"
+import { Wand2, Loader2, FileText, ClipboardPaste, Sparkles, Building2, Briefcase, FileCheck, CheckCircle2, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, AlertCircle } from "lucide-react"
 import { createInvoiceAction, getQuoteSequenceAction, getInvoiceSequenceAction, getWorkspaceCatalogAction } from "@/app/(dashboard)/invoices/actions"
 import { getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { formatCurrency, cn } from "@/lib/utils"
@@ -183,10 +183,17 @@ export function QuoteForm({
     }
 
     // Client & Project selection
+    const [saveError, setSaveError] = useState<string | null>(null)
     const [clientId, setClientId] = useState(
         initialClientId || (initialTenderId && activeTender?.clientId ? activeTender.clientId : (clients.length > 0 ? clients[0].id : ""))
     )
     const [projectId, setProjectId] = useState(initialProjectId || "")
+
+    useEffect(() => {
+        if (!clientId && clients.length > 0) {
+            setClientId(clients[0].id)
+        }
+    }, [clients, clientId])
 
     // Line items
     const [items, setItems] = useState<LineItem[]>(
@@ -521,6 +528,33 @@ export function QuoteForm({
     // Submit handler
     const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
         if (e) e.preventDefault()
+        setSaveError(null)
+
+        // Pre-submission validation
+        if (!clientId || clientId.trim() === "") {
+            setSaveError("Please select a client before saving the quotation.")
+            setLoading(false)
+            return
+        }
+
+        if (isAeroWashWorkspace && aeroWashPayload?.validationErrors && aeroWashPayload.validationErrors.length > 0) {
+            setSaveError("Please resolve compliance errors before creating quote:\n" + aeroWashPayload.validationErrors.join("\n"))
+            setLoading(false)
+            return
+        }
+
+        if (isAeroWashWorkspace && (!aeroWashPayload || !aeroWashPayload.items || aeroWashPayload.items.length === 0)) {
+            setSaveError("No quotation lines configured. Please configure at least one elevation or site provision before saving.")
+            setLoading(false)
+            return
+        }
+
+        if (!isAeroWashWorkspace && (items.length === 0 || !items.some(i => i.description && i.description.trim()))) {
+            setSaveError("Please add at least one line item before saving.")
+            setLoading(false)
+            return
+        }
+
         setLoading(true)
 
         let finalFirstPaymentPercentage: number | undefined = undefined
@@ -535,12 +569,6 @@ export function QuoteForm({
         }
 
         try {
-            if (isAeroWashWorkspace && aeroWashPayload?.validationErrors && aeroWashPayload.validationErrors.length > 0) {
-                alert("Please resolve compliance errors before creating quote:\n" + aeroWashPayload.validationErrors.join("\n"));
-                setLoading(false);
-                return;
-            }
-
             const formattedItems = isAeroWashWorkspace && aeroWashPayload
                 ? aeroWashPayload.items.map(i => ({
                     code: undefined,
@@ -590,6 +618,10 @@ export function QuoteForm({
                 prospectId: initialProspectId || undefined
             })
 
+            if (!invoiceId || typeof invoiceId !== 'string') {
+                throw new Error("Server failed to return quotation ID. The quotation was not created.");
+            }
+
             clearDraft(STORAGE_KEY)
             clearDraft('quote-form-draft')
             isDiscardedRef.current = true
@@ -598,8 +630,9 @@ export function QuoteForm({
             setLastInvoiceId(invoiceId)
             router.push(`/invoices/${invoiceId}`)
         } catch (error) {
-            console.error(error)
-            alert(error instanceof Error ? error.message : "Failed to create document")
+            console.error("Save Quotation Error:", error)
+            const errorMsg = error instanceof Error ? error.message : "Failed to create document"
+            setSaveError(errorMsg)
             setLoading(false)
         }
     }
@@ -617,6 +650,23 @@ export function QuoteForm({
         <div className="flex flex-col lg:flex-row gap-6 items-start">
             <div className="flex-1 w-full space-y-6">
                 <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} action="#" className="space-y-6">
+                    {saveError && (
+                        <div className="p-4 rounded-xl bg-red-500/20 border-2 border-red-500/50 text-red-200 text-sm font-bold flex items-start justify-between gap-3 animate-in fade-in">
+                            <div className="flex items-start gap-2">
+                                <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                                <span className="whitespace-pre-line">{saveError}</span>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSaveError(null)}
+                                className="text-red-300 hover:text-white h-6 px-2 text-xs"
+                            >
+                                Dismiss
+                            </Button>
+                        </div>
+                    )}
                     {/* WORK TYPE SELECTOR BAR (Requirement 1 & 2) - Only if tendersEnabled */}
                     {isTendersEnabled && (
                     <div className="p-4 rounded-2xl bg-[#14141E] border border-white/10 shadow-lg space-y-3">
@@ -701,6 +751,7 @@ export function QuoteForm({
                                     Client <span className="text-primary">*</span>
                                 </Label>
                                 <select
+                                    id="client-select"
                                     className="flex h-9 w-full rounded-md border border-input bg-[#0F0F1A] px-3 py-1 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                     value={clientId}
                                     onChange={(e) => {
@@ -1084,7 +1135,13 @@ export function QuoteForm({
                     {/* Totals & Submit */}
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 p-6 rounded-2xl bg-[#14141E] border border-white/5">
                         <div className="space-y-2 text-xs text-muted-foreground">
-                            <p>All prices exclude 15% VAT until total.</p>
+                            <p>
+                                {effectiveVatRegistration
+                                    ? `All prices exclude ${vatRate}% VAT until total.`
+                                    : (isAeroWashWorkspace
+                                        ? "AeroWash is not VAT-registered. No VAT charged."
+                                        : "Not VAT-registered. No VAT charged.")}
+                            </p>
                             <div className="flex items-center gap-3">
                                 <AutoSaveIndicator isSavingDraft={isSavingDraft} lastSavedTimestamp={lastSavedTimestamp} />
                                 {lastSavedTimestamp && (
@@ -1114,6 +1171,24 @@ export function QuoteForm({
                                 <span>Total:</span>
                                 <span className="font-mono text-primary text-xl">{formatCurrency(total)}</span>
                             </div>
+
+                            {saveError && (
+                                <div className="p-4 rounded-xl bg-red-500/20 border-2 border-red-500/50 text-red-200 text-sm font-bold flex items-start justify-between gap-3 animate-in fade-in my-3">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                                        <span className="whitespace-pre-line">{saveError}</span>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setSaveError(null)}
+                                        className="text-red-300 hover:text-white h-5 px-1.5 text-[10px]"
+                                    >
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
 
                             <div className="pt-4 flex justify-end gap-2">
                                 <Button

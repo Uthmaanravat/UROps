@@ -40,10 +40,13 @@ export async function createInvoiceAction(data: {
     const isTendersEnabled = settings.tendersEnabled === true;
     const isTender = isTendersEnabled && data.workType === 'TENDER';
 
+    if (!data.clientId || typeof data.clientId !== 'string') {
+        throw new Error("A valid client must be selected before saving.");
+    }
     const clientObj = await prisma.client.findFirst({
         where: { id: data.clientId, companyId }
     });
-    if (!clientObj) throw new Error("Client not found");
+    if (!clientObj) throw new Error("Client not found for this workspace. Please select or add a client.");
 
     // Fetch tender if workType is TENDER
     const tender = isTender

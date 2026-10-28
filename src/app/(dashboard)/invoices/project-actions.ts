@@ -31,7 +31,7 @@ export async function updateInvoiceProjectAction(invoiceId: string, projectId: s
     revalidatePath(`/invoices/${invoiceId}`)
     revalidatePath("/projects")
 }
-export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string, firstPaymentPercentage?: number | null, contactId?: string | null, attentionTo?: string | null, projectName?: string, workType?: 'GENERAL' | 'TENDER', tenderId?: string | null, rateYear?: number, paymentNotes?: string | null }) {
+export async function updateInvoiceDetailsAction(invoiceId: string, data: { site?: string, reference?: string, quoteNumber?: string, date?: string, firstPaymentPercentage?: number | null, contactId?: string | null, attentionTo?: string | null, projectName?: string, workType?: 'GENERAL' | 'TENDER', tenderId?: string | null, rateYear?: number, paymentNotes?: string | null, metadata?: any }) {
     const companyId = await ensureAuth()
 
     const invoiceRecord = await prisma.invoice.findUnique({
@@ -103,7 +103,8 @@ export async function updateInvoiceDetailsAction(invoiceId: string, data: { site
             attentionTo: data.attentionTo !== undefined ? data.attentionTo : undefined,
             workType: data.workType !== undefined ? data.workType : undefined,
             tenderId: data.tenderId !== undefined ? data.tenderId : undefined,
-            rateYear: data.rateYear !== undefined ? data.rateYear : undefined
+            rateYear: data.rateYear !== undefined ? data.rateYear : undefined,
+            metadata: data.metadata !== undefined ? data.metadata : undefined
         },
         include: { project: true }
     })

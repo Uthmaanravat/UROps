@@ -44,6 +44,13 @@ import {
 } from "@/lib/aerowash-catalogue"
 import { formatCurrency } from "@/lib/utils"
 
+function parseDecimalInput(val: string): number {
+    if (!val) return 0;
+    const clean = val.replace(',', '.').replace(/[^0-9.]/g, '');
+    const num = parseFloat(clean);
+    return isNaN(num) ? 0 : num;
+}
+
 export interface ElevationState {
     id: string;
     name: string;
@@ -138,7 +145,7 @@ export function AeroWashQuoteBuilder({
                 name: 'Front Elevation',
                 width: 36.36,
                 height: 51.0,
-                polygonArea: 1848,
+                polygonArea: undefined,
                 band: 'D',
                 condition: 'Sound',
                 selectedCleaning: 'FULL_FACADE',
@@ -930,7 +937,8 @@ export function AeroWashQuoteBuilder({
                 contractorSpecReceived,
                 totalCalculatedArea: calculation.totalCalculatedArea,
                 minimumJobRaised: calculation.minimumJobRaised,
-                programmeInfo: calculation.programmeInfo
+                programmeInfo: calculation.programmeInfo,
+                clientViewLines: calculation.clientItems
             },
             subtotal: calculation.subtotal,
             total: calculation.total,
@@ -1081,10 +1089,10 @@ export function AeroWashQuoteBuilder({
                                                 <div>
                                                     <Label className="text-[11px] text-gray-400">Width (m)</Label>
                                                     <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={elev.width || ''}
-                                                        onChange={e => updateElevation(elev.id, { width: parseFloat(e.target.value) || 0 })}
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={elev.width ?? ''}
+                                                        onChange={e => updateElevation(elev.id, { width: parseDecimalInput(e.target.value) })}
                                                         className="h-9 text-sm font-mono mt-1"
                                                     />
                                                 </div>
@@ -1092,10 +1100,10 @@ export function AeroWashQuoteBuilder({
                                                 <div>
                                                     <Label className="text-[11px] text-gray-400">Height (m)</Label>
                                                     <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={elev.height || ''}
-                                                        onChange={e => updateElevation(elev.id, { height: parseFloat(e.target.value) || 0 })}
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={elev.height ?? ''}
+                                                        onChange={e => updateElevation(elev.id, { height: parseDecimalInput(e.target.value) })}
                                                         className="h-9 text-sm font-mono mt-1"
                                                     />
                                                 </div>
@@ -1132,15 +1140,39 @@ export function AeroWashQuoteBuilder({
                                                 </div>
 
                                                 <div>
-                                                    <Label className="text-[11px] text-gray-400">Polygon Area (Cross-check m²)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="Optional m²"
-                                                        value={elev.polygonArea || ''}
-                                                        onChange={e => updateElevation(elev.id, { polygonArea: parseFloat(e.target.value) || undefined })}
-                                                        className="h-9 text-sm font-mono mt-1"
-                                                    />
+                                                    <Label className="text-[11px] text-gray-400">Area (m²)</Label>
+                                                    <div className="h-9 px-3 flex items-center justify-between rounded-md border border-primary/40 bg-primary/10 text-sm font-mono font-black text-primary mt-1">
+                                                        <span>{nominalArea.toFixed(1)} m²</span>
+                                                        <span className="text-[10px] text-gray-400 font-normal">Auto</span>
+                                                    </div>
                                                 </div>
+                                            </div>
+
+                                            {/* Optional Polygon Cross-Check */}
+                                            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                                                <span className="text-gray-400 text-[11px]">Polygon cross-check (optional):</span>
+                                                <Input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder="Optional m²"
+                                                    value={elev.polygonArea ?? ''}
+                                                    onChange={e => updateElevation(elev.id, { polygonArea: e.target.value.trim() ? parseDecimalInput(e.target.value) : undefined })}
+                                                    className="h-7 w-32 text-xs font-mono bg-background/50 border-white/10"
+                                                />
+                                                {elev.polygonArea && elev.polygonArea > 0 ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[11px] text-amber-300 font-mono">
+                                                            Using measured {elev.polygonArea} m² ({Math.abs(elev.polygonArea - nominalArea) > 0 ? `${((Math.abs(elev.polygonArea - nominalArea) / (nominalArea || 1)) * 100).toFixed(1)}% diff` : 'match'})
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateElevation(elev.id, { polygonArea: undefined })}
+                                                            className="text-[10px] text-gray-400 hover:text-white underline"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    </div>
+                                                ) : null}
                                             </div>
 
                                             {/* Edge Warning or Condition Heavy Warning */}
@@ -2176,7 +2208,7 @@ export function AeroWashQuoteBuilder({
                                 <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 space-y-1 text-[11px] text-gray-400 font-mono">
                                     <div>Floor Rule: R{MINIMUM_FLOOR_RATE_PER_M2.toFixed(2)}/m² minimum effective rate</div>
                                     <div>Minimum Job: R{MINIMUM_JOB_AMOUNT.toLocaleString()} (Auto-raised if lower)</div>
-                                    <div>Rounding: All line totals rounded to nearest R50</div>
+                                    <div>Rounding: All line totals rounded up to the next R50</div>
                                 </div>
                             </CardContent>
                         </Card>

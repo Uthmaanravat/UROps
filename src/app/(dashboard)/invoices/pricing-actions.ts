@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { updateProjectStatus } from "../projects/actions"
 import { ensureAuth } from "@/lib/auth-actions"
 import { convertToInvoiceAction } from "./actions"
+import { isVatEffective, getVatRate, calculateVatAndTotal } from "@/lib/vat-utils"
 
 import { randomUUID } from "crypto"
 
@@ -44,9 +45,12 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
     });
 
     // 2. Compute updated subtotal and tax amounts
+    const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+    const invoiceRecord = await prisma.invoice.findUnique({ where: { id: invoiceId, companyId }, select: { date: true } });
+    const vatEffective = isVatEffective(invoiceRecord?.date || new Date(), settings);
+    const vatRate = getVatRate(settings);
     const newSubtotal = formattedItems.reduce((acc, item) => acc + item.total, 0);
-    const tax = newSubtotal * 0.15;
-    const total = newSubtotal + tax;
+    const { taxRate, taxAmount, total } = calculateVatAndTotal(newSubtotal, vatEffective, vatRate);
 
     // 3. Perform atomic batch replacement: clean removal, instant multi-row insert, and totals update
     const txOperations: any[] = [
@@ -68,7 +72,8 @@ export async function updateInvoiceItemsAction(invoiceId: string, items: { id: s
             where: { id: invoiceId, companyId },
             data: {
                 subtotal: newSubtotal,
-                taxAmount: tax,
+                taxRate: taxRate,
+                taxAmount: taxAmount,
                 total: total
             }
         })
