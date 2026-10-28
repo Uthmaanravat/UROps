@@ -13,7 +13,7 @@ export default async function NewQuotePage({
     const companyId = await ensureAuth();
     await ensureAeroWashCatalogueAndTerms(companyId);
 
-    const [clients, projects, settings, tenders, termsTemplates] = await Promise.all([
+    const [clients, projects, settings, tenders, termsTemplates, catalogueItems] = await Promise.all([
         prisma.client.findMany({
             where: { companyId },
             include: { contacts: true, defaultTermsTemplate: true },
@@ -35,15 +35,20 @@ export default async function NewQuotePage({
                 { isDefault: 'desc' },
                 { name: 'asc' }
             ]
-        })
+        }),
+        (prisma as any).catalogueItem.findMany({
+            where: { companyId },
+            orderBy: { itemNumber: 'asc' }
+        }).catch(() => [])
     ]);
 
     const isTendersEnabled = settings?.tendersEnabled === true;
     const aiEnabled = settings?.aiEnabled ?? true;
     const isInvoice = searchParams.type === 'INVOICE';
+    const isAeroWashWorkspace = companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || settings?.theme === 'dark-orange';
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6">
+        <div className={isAeroWashWorkspace ? "w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-6" : "max-w-7xl mx-auto space-y-6"}>
             <h1 className="text-2xl font-bold">{isInvoice ? 'Create New Invoice' : 'Create New Quote'}</h1>
             <QuoteForm
                 clients={clients as any}
@@ -59,11 +64,12 @@ export default async function NewQuotePage({
                 initialSite={searchParams.site}
                 initialProspectId={searchParams.prospectId}
                 aiEnabled={aiEnabled}
-                isAeroWashWorkspace={companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || settings?.theme === 'dark-orange'}
+                isAeroWashWorkspace={isAeroWashWorkspace}
                 surveyCameraEnabled={(settings as any)?.surveyCameraEnabled ?? false}
                 thermalCameraEnabled={(settings as any)?.thermalCameraEnabled ?? false}
                 companySettings={settings}
                 hasVatRegistration={!!settings?.taxId && settings.taxId.trim() !== ''}
+                catalogueItems={catalogueItems}
             />
         </div>
     )

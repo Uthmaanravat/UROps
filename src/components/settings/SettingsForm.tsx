@@ -294,6 +294,17 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 // Also update local state so the preview is updated
                 setFormData(finalFormData);
             }
+            if (finalFormData.layoutPreferences?.darkHeaderLogoUrl && finalFormData.layoutPreferences.darkHeaderLogoUrl.startsWith('data:image/') && finalFormData.layoutPreferences.darkHeaderLogoUrl.length > 100000) {
+                const smallDark = await downscaleBase64Image(finalFormData.layoutPreferences.darkHeaderLogoUrl);
+                finalFormData = {
+                    ...finalFormData,
+                    layoutPreferences: {
+                        ...finalFormData.layoutPreferences,
+                        darkHeaderLogoUrl: smallDark
+                    }
+                };
+                setFormData(finalFormData);
+            }
 
             const result = await updateCompanySettings(finalFormData)
             if (result.success) {
@@ -453,6 +464,72 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                 onChange={handleChange}
                                 placeholder="https://example.com/logo.png"
                             />
+                        </div>
+
+                        {/* Document header logo (for dark header) */}
+                        <div className="space-y-4 pt-3 border-t border-border/50">
+                            <div>
+                                <Label className="text-sm font-semibold">Document header logo (for dark header)</Label>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    Used on dark header bands (e.g. AeroWash quotation &amp; invoice PDFs). If not set, the Company Logo above is used.
+                                </p>
+                            </div>
+                            <div className="flex items-start gap-4">
+                                {formData.layoutPreferences?.darkHeaderLogoUrl && (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <div className="relative h-20 w-28 rounded-md border border-white/20 overflow-hidden bg-[#0A0A0A] p-2 flex items-center justify-center">
+                                            <img
+                                                src={formData.layoutPreferences.darkHeaderLogoUrl}
+                                                alt="Dark Header Logo Preview"
+                                                className="max-h-full max-w-full object-contain"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex-1 space-y-2">
+                                    <Input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const reader = new FileReader();
+                                                reader.onloadend = async () => {
+                                                    const res = reader.result as string;
+                                                    const downscaled = await downscaleBase64Image(res);
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        layoutPreferences: {
+                                                            ...prev.layoutPreferences,
+                                                            darkHeaderLogoUrl: downscaled
+                                                        }
+                                                    }));
+                                                };
+                                                reader.readAsDataURL(file);
+                                            }
+                                        }}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">Upload dark background or transparent header logo (PNG, JPG, e.g. aerowash_header_logo.png).</p>
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="darkHeaderLogoUrl" className="text-xs">Or Dark Header Logo URL</Label>
+                                <Input
+                                    id="darkHeaderLogoUrl"
+                                    value={formData.layoutPreferences?.darkHeaderLogoUrl || ""}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            layoutPreferences: {
+                                                ...prev.layoutPreferences,
+                                                darkHeaderLogoUrl: val
+                                            }
+                                        }));
+                                    }}
+                                    placeholder="/aerowash_header_logo.png or https://example.com/dark-logo.png"
+                                />
+                            </div>
                         </div>
 
                         <div className="space-y-2">

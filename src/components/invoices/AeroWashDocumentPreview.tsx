@@ -121,25 +121,19 @@ export function AeroWashDocumentPreview({
             <div className="rounded-2xl shadow-2xl overflow-hidden border border-white/10 bg-white text-zinc-900 font-sans">
                 {/* 1. Black Header Band */}
                 <div className="bg-[#0A0A0A] text-white p-6 sm:p-8 border-b-[2px] border-[#D05E00] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-                    {/* Brand */}
-                    <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 flex items-center justify-center relative">
-                            {/* SVG stylised AW mark */}
-                            <svg viewBox="0 0 40 40" className="h-10 w-10">
-                                <polygon points="6,34 14,8 20,34" fill="#D05E00" />
-                                <polygon points="20,34 26,14 32,34" fill="#D05E00" />
-                                <polygon points="10,34 14,24 18,34" fill="#0A0A0A" />
-                                <polygon points="24,34 26,26 28,34" fill="#0A0A0A" />
-                            </svg>
-                        </div>
-                        <div>
-                            <div className="text-sm font-black tracking-[0.25em] text-white">
-                                A E R O W A S H
+                    {/* Brand Logo */}
+                    <div className="flex items-center">
+                        {((companySettings?.layoutPreferences as any)?.darkHeaderLogoUrl || companySettings?.logoUrl || company?.logoUrl || "/aerowash_header_logo.png") ? (
+                            <img
+                                src={(companySettings?.layoutPreferences as any)?.darkHeaderLogoUrl || companySettings?.logoUrl || company?.logoUrl || "/aerowash_header_logo.png"}
+                                alt={company?.name || "AeroWash"}
+                                className="h-14 sm:h-16 w-auto max-w-[240px] object-contain"
+                            />
+                        ) : (
+                            <div className="text-xl font-black tracking-[0.2em] text-white">
+                                {company?.name || "AEROWASH"}
                             </div>
-                            <div className="text-[9px] font-black tracking-[0.2em] text-[#D05E00] mt-0.5">
-                                DRONE CLEANING SOLUTIONS
-                            </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Document Title & Meta */}
@@ -437,26 +431,178 @@ export function AeroWashDocumentPreview({
                     )}
 
                     {/* TERMS AND CONDITIONS (Page 2 style) */}
-                    <div className="border-t-[2px] border-gray-300 pt-8 mt-12 space-y-4">
-                        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-                            <span className="font-black text-xs uppercase tracking-[0.2em] text-[#D05E00]">
-                                Standard Terms & Conditions
-                            </span>
-                            <span className="text-[10px] font-mono text-gray-400">
-                                {parsedClauses.length} Clauses
-                            </span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-gray-600 leading-relaxed">
-                            {parsedClauses.map((clause, idx) => (
-                                <div key={idx} className="bg-gray-50/70 p-3 rounded-lg border border-gray-100 space-y-1">
-                                    <div className="font-bold text-zinc-900">
-                                        Clause {idx + 1}
-                                    </div>
-                                    <div className="whitespace-pre-line">
-                                        {clause}
-                                    </div>
+                    <div className="border-t-[2px] border-gray-300 pt-8 mt-12 space-y-6">
+                        {/* 1. INCLUDED & EXCLUDED */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* INCLUDED */}
+                            <div className="space-y-3">
+                                <div className="border-b border-gray-200 pb-1.5">
+                                    <span className="font-black text-xs uppercase tracking-[0.2em] text-[#D05E00]">
+                                        INCLUDED
+                                    </span>
                                 </div>
-                            ))}
+                                <ul className="space-y-1.5 text-xs text-gray-700">
+                                    {Array.from(new Set(items.map(i => i.description.split('\n')[0].trim()))).map((name, i) => (
+                                        <li key={i} className="flex items-start gap-2">
+                                            <span className="text-[#D05E00] font-bold">•</span>
+                                            <span>{name}</span>
+                                        </li>
+                                    ))}
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Pre- and post-clean photographic record</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>All labour, equipment and remote pilot crew</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            {/* EXCLUDED */}
+                            <div className="space-y-3">
+                                <div className="border-b border-gray-200 pb-1.5">
+                                    <span className="font-black text-xs uppercase tracking-[0.2em] text-[#D05E00]">
+                                        EXCLUDED
+                                    </span>
+                                </div>
+                                <ul className="space-y-1.5 text-xs text-gray-700">
+                                    {(invoice.metadata?.elevations || []).map((e: any, idx: number) => e.exclusions ? (
+                                        <li key={`elev-ex-${idx}`} className="flex items-start gap-2 font-bold text-zinc-900">
+                                            <span className="text-[#D05E00]">•</span>
+                                            <span>{e.name ? `${e.name}: ` : ''}{e.exclusions}</span>
+                                        </li>
+                                    ) : null)}
+                                    {(invoice.metadata?.conditionFlags || invoice.conditionFlags || []).map((f: any, idx: number) => (
+                                        <li key={`flag-ex-${idx}`} className="flex items-start gap-2 font-bold text-zinc-900">
+                                            <span className="text-[#D05E00]">•</span>
+                                            <span>{f.elevation || 'Elevation'} ({f.location || 'defect area'}) — existing {(f.conditionType || 'defect').replace(/_/g, ' ').toLowerCase()} excluded from warranty</span>
+                                        </li>
+                                    ))}
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Internal faces of glass, unless separately agreed</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Hardened cement, paint and adhesive residue</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Repair of existing damage, failed sealant or penetrated staining</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* 2. CONDITIONS OF ACCESS */}
+                        <div className="space-y-3">
+                            <div className="border-b border-gray-200 pb-1.5">
+                                <span className="font-black text-xs uppercase tracking-[0.2em] text-[#D05E00]">
+                                    CONDITIONS OF ACCESS
+                                </span>
+                            </div>
+                            <ul className="space-y-1.5 text-xs text-gray-700">
+                                <li className="flex items-start gap-2">
+                                    <span className="text-[#D05E00] font-bold">•</span>
+                                    <span>The client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-[#D05E00] font-bold">•</span>
+                                    <span>All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-[#D05E00] font-bold">•</span>
+                                    <span>Work is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-[#D05E00] font-bold">•</span>
+                                    <span>The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* 3. COMMERCIAL TERMS */}
+                        <div className="space-y-3">
+                            <div className="border-b border-gray-200 pb-1.5">
+                                <span className="font-black text-xs uppercase tracking-[0.2em] text-[#D05E00]">
+                                    COMMERCIAL TERMS
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-xs text-gray-700">
+                                <ul className="space-y-1.5">
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Quotations are fixed price for the scope and elevations stated.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>A 60% deposit is payable on acceptance to secure the booking.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>The balance is payable on completion.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>This quotation is valid for 45 days from the date of issue.</span>
+                                    </li>
+                                </ul>
+                                <ul className="space-y-1.5">
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Any variation or additional work is quoted separately before it is carried out.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Where work cannot start, continue or be completed for reasons outside AeroWash&apos;s control, including site access not being available or work being stopped at the client&apos;s request, a standby or return attendance charge applies, agreed with you before it is invoiced.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-[#D05E00] font-bold">•</span>
+                                        <span>Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* 4. NOTE BOX (grey, only shown when quote has included/waived item or allowance line) */}
+                        {(() => {
+                            const allowanceAmt = invoice.metadata?.allowanceAmount || 0;
+                            const waived = items.filter(i => i.unitPrice === 0 || i.isIncluded || (i.metadata && (i.metadata.label === 'No charge' || i.metadata.label === 'Included')));
+                            if (allowanceAmt === 0 && waived.length === 0) return null;
+                            const waivedNames = waived.map(i => i.description.split('\n')[0].trim()).join(' and ') || invoice.metadata?.allowanceName || "Introductory scope items";
+                            return (
+                                <div className="p-3.5 bg-gray-50 border-l-4 border-gray-400 rounded-r-lg text-xs text-gray-700 leading-relaxed">
+                                    <strong className="text-zinc-900 font-semibold">Note on the introductory allowance.</strong> {waivedNames} are shown above at their standard value and are included at no charge on this first engagement only, as an introduction to our service. They will be quoted at standard rates on subsequent works.
+                                </div>
+                            );
+                        })()}
+
+                        {/* 5. ACCEPTANCE */}
+                        <div className="space-y-4 pt-2">
+                            <div className="border-b border-gray-200 pb-1.5">
+                                <span className="font-black text-xs uppercase tracking-[0.2em] text-[#D05E00]">
+                                    ACCEPTANCE
+                                </span>
+                            </div>
+                            <p className="text-xs text-gray-600">
+                                To proceed, sign below and return, or confirm by email to info@aerowash.co.za.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-4">
+                                <div className="space-y-2 border-t border-gray-300 pt-2">
+                                    <div className="text-[11px] text-gray-500 font-medium">Client signature · Name, position, date</div>
+                                </div>
+                                <div className="space-y-2 border-t border-gray-300 pt-2">
+                                    <div className="text-[11px] text-gray-500 font-medium">For AeroWash (Pty) Ltd · Date</div>
+                                </div>
+                            </div>
+                            <div className="pt-2 text-xs text-gray-500">
+                                Purchase order no. (if applicable): <span className="border-b border-gray-300 inline-block w-48">&nbsp;</span>
+                            </div>
                         </div>
                     </div>
 

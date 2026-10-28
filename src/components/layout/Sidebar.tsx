@@ -95,6 +95,19 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
                 items: group.items.filter(item => item.href !== "/tenders")
             };
         }
+        if (group.title === "System") {
+            const isAeroWash = isDroneEnabled || settings?.theme === "dark-orange" || settings?.companyId === "70af7281-072d-4ed5-9f2e-af4d93e99ea9";
+            if (isAeroWash && !group.items.some(item => item.title === "AeroWash Catalogue")) {
+                return {
+                    ...group,
+                    items: [
+                        { title: "Settings", href: "/settings" },
+                        { title: "Quotation Terms", href: "/settings/terms" },
+                        { title: "AeroWash Catalogue", href: "/settings/catalogue" }
+                    ]
+                };
+            }
+        }
         return group;
     });
 

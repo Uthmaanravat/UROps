@@ -68,6 +68,38 @@ export interface AeroWashQuotePdfOptions {
     };
 }
 
+
+async function resolveImageBase64(src?: string | null): Promise<string | null> {
+    if (!src) return null;
+    if (src.startsWith('data:image/')) return src;
+    try {
+        if (typeof window === 'undefined') {
+            const fs = await import('fs');
+            const path = await import('path');
+            const cleanPath = src.startsWith('/') ? src.slice(1) : src;
+            const fullPath = path.join(process.cwd(), 'public', cleanPath);
+            if (fs.existsSync(fullPath)) {
+                const buf = fs.readFileSync(fullPath);
+                const ext = path.extname(cleanPath).toLowerCase();
+                const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+                return `data:${mime};base64,${buf.toString('base64')}`;
+            }
+        } else {
+            const res = await fetch(src);
+            const blob = await res.blob();
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(blob);
+            });
+        }
+    } catch (err) {
+        console.warn('Failed to resolve image to base64:', err);
+    }
+    return null;
+}
+
 export async function generateAeroWashQuotePdf({
     invoice,
     company,
@@ -96,6 +128,14 @@ export async function generateAeroWashQuotePdf({
         taxId: company.vatNumber,
         vatRegistrationDate: company.vatRegistrationDate
     });
+        const rawLogo =
+        (companySettings as any)?.layoutPreferences?.darkHeaderLogoUrl ||
+        (companySettings as any)?.logoUrl ||
+        company.logoUrl;
+    const headerLogoBase64 =
+        (await resolveImageBase64(rawLogo)) ||
+        (await resolveImageBase64('/aerowash_header_logo.png'));
+
     const docHeading = isInvoice
         ? (isVatActive ? 'T A X   I N V O I C E' : 'I N V O I C E')
         : 'Q U O T A T I O N';
@@ -113,6 +153,7 @@ export async function generateAeroWashQuotePdf({
     const attentionName = invoice.client.attentionTo || invoice.client.name;
     const siteRaw = invoice.site || invoice.reference || 'Site address as agreed';
     const siteText = siteRaw.startsWith('Site:') ? siteRaw : `Site: ${siteRaw}`;
+    const shortSite = siteRaw.split(',')[0].replace(/^Site:\s*/i, '');
 
     // Colors
     const orangeRGB: [number, number, number] = [208, 94, 0]; // #D05E00
@@ -128,29 +169,25 @@ export async function generateAeroWashQuotePdf({
     doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
     doc.rect(0, 0, 210, 36, 'F');
 
-    // Left: AeroWash Logo / Wordmark
-    // Stylized orange AW mark
-    doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    // Left stroke
-    doc.triangle(14, 25, 20, 10, 24, 25, 'F');
-    // Middle chevron
-    doc.triangle(24, 25, 28, 14, 32, 25, 'F');
-    // Right stroke
-    doc.triangle(32, 25, 36, 10, 42, 25, 'F');
-    // Cutout center
-    doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
-    doc.triangle(18, 25, 20, 19, 22, 25, 'F');
-    doc.triangle(34, 25, 36, 19, 38, 25, 'F');
-
-    // Brand text
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(255, 255, 255);
-    doc.text("A E R O W A S H", 46, 18);
-
-    doc.setFontSize(6.5);
-    doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    doc.text("D R O N E   C L E A N I N G   S O L U T I O N S", 46, 23);
+    // Left: Real Logo from Settings (Never draw invented triangles or duplicate text)
+    if (headerLogoBase64) {
+        try {
+            const imgProps = doc.getImageProperties(headerLogoBase64);
+            const maxH = 26;
+            const aspect = imgProps.width / imgProps.height;
+            const renderW = Math.min(maxH * aspect, 65);
+            const renderH = renderW / aspect;
+            const renderY = 5 + (maxH - renderH) / 2;
+            doc.addImage(headerLogoBase64, 'PNG', 14, renderY, renderW, renderH);
+        } catch {
+            doc.addImage(headerLogoBase64, 'PNG', 14, 5, 26, 26);
+        }
+    } else {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.setTextColor(255, 255, 255);
+        doc.text("A E R O W A S H", 14, 20);
+    }
 
     // Right: Document Title & Metadata
     doc.setFont("helvetica", "bold");
@@ -633,111 +670,193 @@ export async function generateAeroWashQuotePdf({
     }
 
     // ==========================================
-    // 8. ACCEPTANCE BLOCK (Quotes only)
-    // ==========================================
-    if (!isInvoice) {
-        if (currentY + 30 > pageHeight - 25) {
-            doc.addPage();
-            currentY = 20;
-        }
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(darkGreyRGB[0], darkGreyRGB[1], darkGreyRGB[2]);
-        doc.text(`Accepted on behalf of ${clientName}:`, 14, currentY);
-        currentY += 6;
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7.5);
-        doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
-        doc.text("Name: ____________________________________          Signature: ____________________________________", 14, currentY);
-        currentY += 6;
-        doc.text("Date:   ____________________________________          PO number: ____________________________________", 14, currentY);
-        currentY += 5;
-
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(7);
-        doc.text("Please sign and return, or reply to accept by email.", 14, currentY);
-    }
-
-    // ==========================================
-    // 9. PAGE 2: TERMS AND CONDITIONS
+    // 9. PAGE 2: TERMS AND CONDITIONS & ACCEPTANCE
     // ==========================================
     doc.addPage();
 
-    // Black header on Terms page
+    // Top thin black/orange strip
     doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
-    doc.rect(0, 0, 210, 28, 'F');
-
-    // AW Logo mark
+    doc.rect(0, 0, 210, 8, 'F');
     doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    doc.triangle(14, 20, 18, 9, 21, 20, 'F');
-    doc.triangle(21, 20, 24, 12, 27, 20, 'F');
-    doc.triangle(27, 20, 30, 9, 34, 20, 'F');
-    doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
-    doc.triangle(16, 20, 18, 15, 20, 20, 'F');
-    doc.triangle(28, 20, 30, 15, 32, 20, 'F');
+    doc.rect(0, 8, 210, 1.2, 'F');
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text("A E R O W A S H", 38, 16);
+    let p2Y = 18;
 
-    // Right: TERMS heading & doc reference
-    doc.setFontSize(12);
-    doc.text("T E R M S", 196, 12, { align: "right" });
+    // Helper: Draw orange spaced heading with underline
+    const drawSpacedHeading = (title: string, x: number, y: number, width: number) => {
+        const spaced = title.split('').join(' ');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+        doc.text(spaced, x, y);
+        doc.setDrawColor(lightLineRGB[0], lightLineRGB[1], lightLineRGB[2]);
+        doc.setLineWidth(0.3);
+        doc.line(x, y + 2, x + width, y + 2);
+        return y + 6;
+    };
 
-    doc.setFontSize(7.5);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    doc.text(`Quote No. ${numberLabel}`, 196, 18, { align: "right" });
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(255, 255, 255);
-    const shortSite = siteClean.split(',')[0];
-    doc.text(shortSite, 196, 23, { align: "right" });
-
-    // Thin orange rule
-    doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    doc.rect(0, 28, 210, 1.2, 'F');
-
-    // Terms body clauses
-    let termsY = 36;
-    const termsBody = invoice.terms && invoice.terms.length > 0
-        ? invoice.terms.map(t => t.bodySnapshot).join('\n\n')
-        : AEROWASH_STANDARD_TERMS_BODY;
-
-    const parsedClauses = parseClauses(termsBody);
-    parsedClauses.forEach((clauseText, cIdx) => {
-        if (termsY + 16 > pageHeight - 20) {
-            doc.addPage();
-            termsY = 20;
-        }
-
-        const lines = clauseText.split('\n');
-        if (lines.length > 1 && lines[0].length < 60) {
-            const title = lines[0].trim();
-            const body = lines.slice(1).join(' ').trim();
+    // Helper: Draw bullet list
+    const drawBullets = (bullets: Array<{ text: string; isBold?: boolean }>, x: number, startY: number, width: number): number => {
+        let curY = startY;
+        bullets.forEach(b => {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(8);
-            doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
-            doc.text(`${cIdx + 1}.  ${title}`, 14, termsY);
-            termsY += 4.2;
+            doc.setFontSize(7.5);
+            doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+            doc.text("•", x, curY);
 
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(7.5);
-            const bodyLines = doc.splitTextToSize(body, 182);
-            doc.text(bodyLines, 14, termsY);
-            termsY += (bodyLines.length * 3.8) + 3.5;
-        } else {
-            const clauseLines = doc.splitTextToSize(`${cIdx + 1}.  ${clauseText}`, 182);
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(7.5);
-            doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
-            doc.text(clauseLines, 14, termsY);
-            termsY += (clauseLines.length * 3.8) + 3;
+            doc.setFont("helvetica", b.isBold ? "bold" : "normal");
+            doc.setTextColor(darkGreyRGB[0], darkGreyRGB[1], darkGreyRGB[2]);
+            const lines = doc.splitTextToSize(b.text, width - 4.5);
+            doc.text(lines, x + 3.5, curY);
+            curY += (lines.length * 3.7) + 1.8;
+        });
+        return curY;
+    };
+
+    // 1. INCLUDED & EXCLUDED (Two Columns)
+    const colW = 86;
+    const col1X = 14;
+    const col2X = 110;
+
+    // Headings
+    drawSpacedHeading("INCLUDED", col1X, p2Y, colW);
+    drawSpacedHeading("EXCLUDED", col2X, p2Y, colW);
+    p2Y += 6;
+
+    // Included Bullets
+    const itemNames = invoice.items.map(i => i.description.split('\n')[0].trim());
+    const uniqueItems = Array.from(new Set(itemNames));
+    const includedList: Array<{ text: string; isBold?: boolean }> = uniqueItems.map(name => ({ text: name, isBold: false }));
+    includedList.push(
+        { text: "Pre- and post-clean photographic record", isBold: false },
+        { text: "All labour, equipment and remote pilot crew", isBold: false }
+    );
+
+    // Excluded Bullets
+    const excludedList: Array<{ text: string; isBold?: boolean }> = [];
+    // Bold: Exclusions from elevations
+    const elevs = invoice.metadata?.elevations || [];
+    elevs.forEach((e: any) => {
+        if (e.exclusions && typeof e.exclusions === 'string' && e.exclusions.trim().length > 0) {
+            excludedList.push({
+                text: `${e.name ? `${e.name}: ` : ''}${e.exclusions.trim()}`,
+                isBold: true
+            });
         }
     });
+    // Bold: Cracked/damaged condition flags
+    const flags = invoice.metadata?.conditionFlags || invoice.conditionFlags || [];
+    flags.forEach((f: any) => {
+        const loc = f.location || 'specific panels';
+        const elev = f.elevation || 'Elevation';
+        const cond = (f.conditionType || 'Defect').replace(/_/g, ' ').toLowerCase();
+        excludedList.push({
+            text: `${elev} (${loc}) — existing ${cond} excluded from cleaning/restoration warranty`,
+            isBold: true
+        });
+    });
+    // Standard Exclusions
+    excludedList.push(
+        { text: "Internal faces of glass, unless separately agreed", isBold: false },
+        { text: "Hardened cement, paint and adhesive residue", isBold: false },
+        { text: "Repair of existing damage, failed sealant or penetrated staining", isBold: false }
+    );
+
+    const endY1 = drawBullets(includedList, col1X, p2Y, colW);
+    const endY2 = drawBullets(excludedList, col2X, p2Y, colW);
+    p2Y = Math.max(endY1, endY2) + 5;
+
+    // 2. CONDITIONS OF ACCESS (Full Width)
+    drawSpacedHeading("CONDITIONS OF ACCESS", col1X, p2Y, 182);
+    p2Y += 6;
+
+    const accessBullets = [
+        { text: "The client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.", isBold: false },
+        { text: "All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.", isBold: false },
+        { text: "Work is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.", isBold: false },
+        { text: "The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.", isBold: false }
+    ];
+    p2Y = drawBullets(accessBullets, col1X, p2Y, 182) + 5;
+
+    // 3. COMMERCIAL TERMS (Two Columns)
+    drawSpacedHeading("COMMERCIAL TERMS", col1X, p2Y, 182);
+    p2Y += 6;
+
+    const commercialLeft = [
+        { text: "Quotations are fixed price for the scope and elevations stated.", isBold: false },
+        { text: "A 60% deposit is payable on acceptance to secure the booking.", isBold: false },
+        { text: "The balance is payable on completion.", isBold: false },
+        { text: "This quotation is valid for 45 days from the date of issue.", isBold: false }
+    ];
+    const commercialRight = [
+        { text: "Any variation or additional work is quoted separately before it is carried out.", isBold: false },
+        { text: "Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.", isBold: false },
+        { text: "Where work cannot start, continue or be completed for reasons outside AeroWash's control, including site access not being available or work being stopped at the client's request, a standby or return attendance charge applies, agreed with you before it is invoiced.", isBold: false },
+        { text: "Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.", isBold: false }
+    ];
+
+    const cEndY1 = drawBullets(commercialLeft, col1X, p2Y, colW);
+    const cEndY2 = drawBullets(commercialRight, col2X, p2Y, colW);
+    p2Y = Math.max(cEndY1, cEndY2) + 5;
+
+    // 4. NOTE BOX (grey, only shown when quote has included/waived item or allowance line)
+    const allowanceAmountVal = invoice.metadata?.allowanceAmount || 0;
+    const waivedLines = invoice.items.filter(i => i.unitPrice === 0 || i.isIncluded || (i.metadata && (i.metadata.label === 'No charge' || i.metadata.label === 'Included')));
+    const showNoteBox = allowanceAmountVal > 0 || waivedLines.length > 0;
+
+    if (showNoteBox) {
+        let waivedNames = waivedLines.map(i => i.description.split('\n')[0].trim()).join(' and ');
+        if (!waivedNames && allowanceAmountVal > 0) {
+            waivedNames = invoice.metadata?.allowanceName || "Introductory scope allowance";
+        }
+        if (!waivedNames) waivedNames = "Site Visit & Facade Assessment";
+
+        const noteText = `Note on the introductory allowance. ${waivedNames} are shown above at their standard value and are included at no charge on this first engagement only, as an introduction to our service. They will be quoted at standard rates on subsequent works.`;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        const noteLines = doc.splitTextToSize(noteText, 174);
+        const boxH = (noteLines.length * 3.8) + 6;
+
+        // Background #F3F4F6
+        doc.setFillColor(243, 244, 246);
+        doc.rect(col1X, p2Y, 182, boxH, 'F');
+        // Left border #9CA3AF
+        doc.setFillColor(156, 163, 175);
+        doc.rect(col1X, p2Y, 1.2, boxH, 'F');
+
+        doc.setTextColor(55, 65, 81);
+        doc.text(noteLines, col1X + 4, p2Y + 4.5);
+        p2Y += boxH + 6;
+    }
+
+    // 5. ACCEPTANCE
+    drawSpacedHeading("ACCEPTANCE", col1X, p2Y, 182);
+    p2Y += 5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
+    doc.text("To proceed, sign below and return, or confirm by email to info@aerowash.co.za.", col1X, p2Y);
+    p2Y += 10;
+
+    // Signature lines
+    const sigLineW = 82;
+    doc.setDrawColor(lightLineRGB[0], lightLineRGB[1], lightLineRGB[2]);
+    doc.setLineWidth(0.4);
+    // Left line
+    doc.line(col1X, p2Y, col1X + sigLineW, p2Y);
+    // Right line
+    doc.line(col2X, p2Y, col2X + sigLineW, p2Y);
+
+    doc.setFontSize(7);
+    doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
+    doc.text("Client signature · Name, position, date", col1X, p2Y + 3.8);
+    doc.text("For AeroWash (Pty) Ltd · Date", col2X, p2Y + 3.8);
+    p2Y += 10;
+
+    doc.setFontSize(7);
+    doc.text("Purchase order no. (if applicable): ____________________________________", col1X, p2Y);
 
     // ==========================================
     // 9b. APPENDIX: SITE INSPECTION PHOTOGRAPHS
@@ -750,19 +869,25 @@ export async function generateAeroWashQuotePdf({
         doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
         doc.rect(0, 0, 210, 28, 'F');
 
-        // AW Logo mark
-        doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-        doc.triangle(14, 20, 18, 9, 21, 20, 'F');
-        doc.triangle(21, 20, 24, 12, 27, 20, 'F');
-        doc.triangle(27, 20, 30, 9, 34, 20, 'F');
-        doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
-        doc.triangle(16, 20, 18, 15, 20, 20, 'F');
-        doc.triangle(28, 20, 30, 15, 32, 20, 'F');
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(255, 255, 255);
-        doc.text("A E R O W A S H", 38, 16);
+        // Logo from Settings (no invented triangles)
+        if (headerLogoBase64) {
+            try {
+                const imgProps = doc.getImageProperties(headerLogoBase64);
+                const maxH = 20;
+                const aspect = imgProps.width / imgProps.height;
+                const renderW = Math.min(maxH * aspect, 50);
+                const renderH = renderW / aspect;
+                const renderY = 4 + (maxH - renderH) / 2;
+                doc.addImage(headerLogoBase64, 'PNG', 14, renderY, renderW, renderH);
+            } catch {
+                doc.addImage(headerLogoBase64, 'PNG', 14, 4, 20, 20);
+            }
+        } else {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.setTextColor(255, 255, 255);
+            doc.text("A E R O W A S H", 14, 16);
+        }
 
         // Right: APPENDIX heading & doc reference
         doc.setFontSize(11);

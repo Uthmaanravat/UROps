@@ -31,7 +31,18 @@ export async function createInvoiceAction(data: {
     prospectId?: string
 }) {
     const companyId = await ensureAuth()
-    const year = new Date().getFullYear();
+    console.log('[createInvoiceAction] Initiating invoice/quote creation:', {
+        companyId,
+        clientId: data.clientId,
+        type: data.type,
+        workType: data.workType,
+        site: data.site,
+        itemsCount: data.items?.length,
+        hasMetadata: !!data.metadata
+    });
+
+    try {
+        const year = new Date().getFullYear();
     let nextNumber = 0;
     let formattedQuoteNumber = data.quoteNumber;
     const isInvoice = data.type === 'INVOICE';
@@ -296,6 +307,40 @@ export async function createInvoiceAction(data: {
         }
     })
 
+    // Upload site inspection photos to private Supabase Storage bucket (companyId/quoteId/)
+    if (data.metadata?.siteVisitPhotos && Array.isArray(data.metadata.siteVisitPhotos) && data.metadata.siteVisitPhotos.length > 0) {
+        try {
+            const { uploadQuotePhoto } = await import("@/lib/supabase-storage");
+            let photosChanged = false;
+            const uploadedPhotos = await Promise.all(
+                data.metadata.siteVisitPhotos.map(async (photo: any, pIdx: number) => {
+                    if (photo.url && photo.url.startsWith('data:')) {
+                        try {
+                            const filename = `photo-${photo.photoNumber || (pIdx + 1).toString().padStart(2, '0')}.jpg`;
+                            const storagePath = await uploadQuotePhoto(companyId, invoice.id, filename, photo.url);
+                            photosChanged = true;
+                            return { ...photo, url: storagePath };
+                        } catch (uErr) {
+                            console.error(`[createInvoiceAction] Failed to upload photo ${pIdx + 1} to storage:`, uErr);
+                            return photo;
+                        }
+                    }
+                    return photo;
+                })
+            );
+
+            if (photosChanged) {
+                const updatedMeta = { ...data.metadata, siteVisitPhotos: uploadedPhotos };
+                await prisma.invoice.update({
+                    where: { id: invoice.id },
+                    data: { metadata: updatedMeta }
+                });
+            }
+        } catch (storageErr) {
+            console.error('[createInvoiceAction] Supabase storage upload error:', storageErr);
+        }
+    }
+
     // Snapshot Quotation Terms and Conditions
     if (invoice.type === 'QUOTE') {
         let position = 0;
@@ -406,7 +451,21 @@ export async function createInvoiceAction(data: {
     if (effectiveProjectId) {
         revalidatePath(`/projects/${effectiveProjectId}`);
     }
+
+    console.log('[createInvoiceAction] Invoice created successfully with ID:', invoice.id, 'Number:', formattedQuoteNumber);
     return invoice.id;
+    } catch (err: any) {
+        console.error('[createInvoiceAction] FATAL ERROR:', {
+            name: err?.name,
+            message: err?.message,
+            code: err?.code,
+            meta: err?.meta,
+            stack: err?.stack,
+            companyId,
+            clientId: data.clientId
+        });
+        throw new Error(err?.message || "Failed to save quotation on server.");
+    }
 }
 
 export async function markAssociatedQuotesAsPaid(invoiceId: string, companyId: string) {

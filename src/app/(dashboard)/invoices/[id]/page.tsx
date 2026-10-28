@@ -71,6 +71,11 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         notFound();
     }
 
+    if ((invoice as any).metadata?.siteVisitPhotos && Array.isArray((invoice as any).metadata.siteVisitPhotos)) {
+        const { resolvePhotoUrls } = await import("@/lib/supabase-storage");
+        (invoice as any).metadata.siteVisitPhotos = await resolvePhotoUrls((invoice as any).metadata.siteVisitPhotos);
+    }
+
     const isTendersEnabled = companySettings?.tendersEnabled === true;
 
     const prospectId = ((invoice as any)?.client?.customFields as any)?.prospectId;

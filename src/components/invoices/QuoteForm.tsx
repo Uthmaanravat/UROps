@@ -71,6 +71,7 @@ interface QuoteFormProps {
     thermalCameraEnabled?: boolean
     companySettings?: any
     hasVatRegistration?: boolean
+    catalogueItems?: any[]
 }
 
 export function QuoteForm({
@@ -92,7 +93,8 @@ export function QuoteForm({
     surveyCameraEnabled = false,
     thermalCameraEnabled = false,
     companySettings,
-    hasVatRegistration = false
+    hasVatRegistration = false,
+    catalogueItems = []
 }: QuoteFormProps) {
     const isTendersEnabled = tendersEnabled
     const router = useRouter()
@@ -647,8 +649,8 @@ export function QuoteForm({
     }
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
-            <div className="flex-1 w-full space-y-6">
+        <div className={cn("w-full items-start", !isAeroWashWorkspace && "flex flex-col lg:flex-row gap-6")}>
+            <div className={cn("w-full space-y-6", !isAeroWashWorkspace && "flex-1")}>
                 <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} action="#" className="space-y-6">
                     {saveError && (
                         <div className="p-4 rounded-xl bg-red-500/20 border-2 border-red-500/50 text-red-200 text-sm font-bold flex items-start justify-between gap-3 animate-in fade-in">
@@ -965,6 +967,7 @@ export function QuoteForm({
                                 hasVatRegistration={effectiveVatRegistration}
                                 vatRate={vatRate}
                                 termsTemplates={termsTemplates}
+                                catalogueItems={catalogueItems}
                                 onChange={setAeroWashPayload}
                             />
                         ) : (
@@ -1217,7 +1220,8 @@ export function QuoteForm({
                 </form>
             </div>
 
-            {/* Catalog Side Panel (Shared Component) */}
+            {/* Catalog Side Panel (LR Builders only) */}
+            {!isAeroWashWorkspace && (
             <CatalogSidePanel
                 catalog={activeCatalog}
                 items={items}
@@ -1227,6 +1231,7 @@ export function QuoteForm({
                 clientName={selectedClient?.name}
                 rateYear={effectiveRateYear}
             />
+            )}
 
             <BulkItemImportDialog
                 open={isBulkImportOpen}

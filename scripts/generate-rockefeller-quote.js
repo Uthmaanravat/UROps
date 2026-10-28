@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
 const { generateAeroWashQuotePdf } = require('../src/lib/aerowash-quote-pdf');
-const { generateConditionFlagWording, formatPhotoRefs } = require('../src/lib/aerowash-catalogue');
+const { generateConditionFlagWording } = require('../src/lib/aerowash-catalogue');
 
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const ARTIFACT_DIR = 'C:\\Users\\uthma\\.gemini\\antigravity\\brain\\5f53d62e-19db-40c8-8193-7eef56e18105';
@@ -98,7 +98,6 @@ async function generateInspectionPhotos() {
                     position: relative;
                     overflow: hidden;
                 }
-                /* Simulated facade grid background */
                 .facade-grid {
                     position: absolute;
                     inset: 0;
@@ -107,7 +106,6 @@ async function generateInspectionPhotos() {
                         linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px);
                     background-size: 80px 80px;
                 }
-                /* Etched glass cloud effect overlay */
                 .etch-cloud {
                     position: absolute;
                     width: 380px;
@@ -248,7 +246,7 @@ async function main() {
         email: 'info@aerowash.co.za',
         website: 'www.aerowash.co.za',
         registrationNumber: '2026/475172/07',
-        vatNumber: null, // Pre-VAT registration as per today
+        vatNumber: null,
         vatRegistrationDate: null,
         vatRate: 15
     };
@@ -256,12 +254,15 @@ async function main() {
     const settingsData = {
         theme: 'dark-orange',
         currency: 'R',
-        validityDays: 45, // 45 days validity as requested
+        validityDays: 45,
         preparedByName: 'Uthmaan Ravat',
-        preparedByPhone: '067 829 3350'
+        preparedByPhone: '067 829 3350',
+        layoutPreferences: {
+            darkHeaderLogoUrl: '/aerowash_header_logo.png'
+        }
     };
 
-    // Auto-generated wording using exact helper
+    // Auto-generated condition flag wording
     const flagWording = generateConditionFlagWording({
         date: '12 Nov 2026',
         condition: 'existing surface etching to the glass',
@@ -281,9 +282,9 @@ async function main() {
         type: 'QUOTE',
         site: 'The Rockefeller, 12 Christiaan Barnard St, Foreshore, Cape Town',
         reference: 'The Rockefeller Facade Maintenance Clean',
-        subtotal: 111300,
+        subtotal: 112750,
         taxAmount: 0,
-        total: 111300,
+        total: 112750,
         client: {
             name: 'Newmark Hotels',
             companyName: 'The Rockefeller Hotel (Pty) Ltd',
@@ -308,6 +309,24 @@ async function main() {
                 quantity: 1,
                 unitPrice: 59550,
                 total: 59550
+            },
+            {
+                id: '3',
+                area: 'Site Provisions',
+                description: 'Extended Travel\nTravel provision for sites located outside the standard Cape Town metropolitan service area (Parow 50 km radius).',
+                quantity: 1,
+                unitPrice: 1450, // Manual price on quote: strictly unrounded!
+                total: 1450
+            },
+            {
+                id: '4',
+                area: 'Site Provisions',
+                description: 'Site Visit & Facade Assessment\nInitial drone inspection and assessment to verify site access, water supply and facade condition prior to commencing operations.',
+                quantity: 1,
+                unitPrice: 0,
+                total: 0,
+                isIncluded: true,
+                metadata: { label: 'No charge' }
             }
         ],
         metadata: {
@@ -315,6 +334,12 @@ async function main() {
             siteVisitDate: '2026-11-12',
             siteVisitAttendedBy: 'Flight Operations Team',
             siteVisitPhotos: photos,
+            elevations: [
+                {
+                    name: 'Front Elevation',
+                    exclusions: 'Main warehouse roof and private balconies excluded from drone wash'
+                }
+            ],
             conditionFlags: [
                 {
                     id: 'flag-01',
@@ -373,7 +398,7 @@ async function main() {
     }
 
     await browser.close();
-    console.log('\nDone!');
+    console.log('\nAll done!');
 }
 
 main().catch(err => {
