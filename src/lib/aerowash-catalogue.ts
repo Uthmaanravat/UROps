@@ -250,7 +250,8 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Water supplied to site by AeroWash where no suitable point of supply is available within reach of the work area.',
         category: 'SITE CONDITIONS',
-        pricingMethod: 'PRICE_ON_QUOTE'
+        pricingMethod: 'PRICE_ON_QUOTE',
+        internalNotes: 'Price on quote, NOT R0 default.'
     },
     {
         itemNumber: 19,
@@ -259,7 +260,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
             'Additional water treatment for a spot-free finish where local water is high in dissolved solids.',
         category: 'SITE CONDITIONS',
         pricingMethod: 'REGIONAL_WATER_PER_LITRE',
-        internalNotes: 'Per litre: Atlantis R0.30/L; Simon\'s Town & desalination zones R0.85/L. Builder asks estimated litres.'
+        internalNotes: 'Internal: Atlantis R0.30/L, Simon\'s Town & desalination zones R0.85/L.'
     },
     {
         itemNumber: 20,
@@ -320,7 +321,7 @@ export const MINIMUM_FLOOR_RATE_PER_M2 = 12.0;
 export const AEROWASH_STANDARD_TERMS_NAME = 'AeroWash Standard Quotation Terms';
 
 export const AEROWASH_STANDARD_TERMS_BODY = `1. Scope and Fixed Price
-Quotations are fixed price based on the scope, elevations and dimensions agreed at the time of quotation. Any variation or additional works requested will be quoted separately before execution. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
+Quotations are fixed price for the scope and elevations stated. Any variation or additional work is quoted separately before it is carried out. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
 
 2. Service Area
 The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.
@@ -337,12 +338,11 @@ Where work cannot start, continue or be completed for reasons outside AeroWash's
 6. Pre-existing Conditions
 Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.
 
-7. SACAA and Daylight Operations Only
-All flight operations are conducted in accordance with South African Civil Aviation Authority (SACAA) regulations during approved daylight hours only.
+7. SACAA and Daylight Operations
+All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: 
-Quote validity: `;
+Payment terms: [to be completed]. This quotation is valid until the date shown.`;
 
 
 /**

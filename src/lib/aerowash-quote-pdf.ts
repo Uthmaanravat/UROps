@@ -3,6 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatCurrency } from "@/lib/utils";
 import { parseClauses } from "@/lib/terms-utils";
+import { AEROWASH_STANDARD_TERMS_BODY } from "@/lib/aerowash-catalogue";
 
 export interface AeroWashQuotePdfOptions {
     invoice: {
@@ -652,30 +653,7 @@ export async function generateAeroWashQuotePdf({
     let termsY = 36;
     const termsBody = invoice.terms && invoice.terms.length > 0
         ? invoice.terms.map(t => t.bodySnapshot).join('\n\n')
-        : `1. Scope and Fixed Price
-Quotations are fixed price based on the scope, elevations and dimensions agreed at the time of quotation. Any variation or additional works requested will be quoted separately before execution. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
-
-2. Service Area
-The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.
-
-3. Weather
-Work is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.
-
-4. Client Responsibilities
-The client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.
-
-5. Standby and Return Attendance
-Where work cannot start, continue or be completed for reasons outside AeroWash's control, including site access not being available or work being stopped at the client's request, a standby or return attendance charge applies, agreed with you before it is invoiced.
-
-6. Pre-existing Conditions
-Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.
-
-7. SACAA and Daylight Operations Only
-All flight operations are conducted in accordance with South African Civil Aviation Authority (SACAA) regulations during approved daylight hours only.
-
-8. Payment Terms and Validity
-Payment terms: 
-Quote validity: `;
+        : AEROWASH_STANDARD_TERMS_BODY;
 
     const parsedClauses = parseClauses(termsBody);
     parsedClauses.forEach((clauseText, cIdx) => {
@@ -684,12 +662,29 @@ Quote validity: `;
             termsY = 20;
         }
 
-        const clauseLines = doc.splitTextToSize(`${cIdx + 1}.  ${clauseText}`, 182);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7.5);
-        doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
-        doc.text(clauseLines, 14, termsY);
-        termsY += (clauseLines.length * 3.8) + 3;
+        const lines = clauseText.split('\n');
+        if (lines.length > 1 && lines[0].length < 60) {
+            const title = lines[0].trim();
+            const body = lines.slice(1).join(' ').trim();
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8);
+            doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
+            doc.text(`${cIdx + 1}.  ${title}`, 14, termsY);
+            termsY += 4.2;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            const bodyLines = doc.splitTextToSize(body, 182);
+            doc.text(bodyLines, 14, termsY);
+            termsY += (bodyLines.length * 3.8) + 3.5;
+        } else {
+            const clauseLines = doc.splitTextToSize(`${cIdx + 1}.  ${clauseText}`, 182);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
+            doc.text(clauseLines, 14, termsY);
+            termsY += (clauseLines.length * 3.8) + 3;
+        }
     });
 
     // ==========================================

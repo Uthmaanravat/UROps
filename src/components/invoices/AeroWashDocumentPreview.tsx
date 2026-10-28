@@ -5,6 +5,7 @@ import { formatCurrency, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Edit3, Check, FileText } from "lucide-react";
 import { parseClauses } from "@/lib/terms-utils";
+import { AEROWASH_STANDARD_TERMS_BODY } from "@/lib/aerowash-catalogue";
 
 interface AeroWashDocumentPreviewProps {
     invoice: any;
@@ -91,7 +92,7 @@ export function AeroWashDocumentPreview({
     // Numbered terms clauses
     const termsBody = invoice.terms && invoice.terms.length > 0
         ? invoice.terms.map((t: any) => t.bodySnapshot || t.template?.body).join('\n\n')
-        : `1. Scope and Fixed Price\nQuotations are fixed price based on the scope, elevations and dimensions agreed at the time of quotation. Any variation or additional works requested will be quoted separately before execution. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.\n\n2. Service Area\nThe standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.\n\n3. Weather\nWork is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.\n\n4. Client Responsibilities\nThe client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.\n\n5. Standby and Return Attendance\nWhere work cannot start, continue or be completed for reasons outside AeroWash's control, including site access not being available or work being stopped at the client's request, a standby or return attendance charge applies, agreed with you before it is invoiced.\n\n6. Pre-existing Conditions\nExisting damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.\n\n7. SACAA and Daylight Operations Only\nAll flight operations are conducted in accordance with South African Civil Aviation Authority (SACAA) regulations during approved daylight hours only.\n\n8. Payment Terms and Validity\nPayment terms: \nQuote validity: `;
+        : AEROWASH_STANDARD_TERMS_BODY;
 
     const parsedClauses = parseClauses(termsBody);
 

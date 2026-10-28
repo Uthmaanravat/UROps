@@ -312,7 +312,7 @@ ON CONFLICT ("companyId", "itemNumber") DO UPDATE SET
 INSERT INTO "public"."CatalogueItem" (
     "id", "companyId", "itemNumber", "name", "clientDescription", "category", "pricingMethod", "internalNotes", "isActive", "updatedAt"
 ) VALUES (
-    'cwk_cat_aw_18', '70af7281-072d-4ed5-9f2e-af4d93e99ea9', 18, 'Water Supply – Site Provision', 'Water supplied to site by AeroWash where no suitable point of supply is available within reach of the work area.', 'SITE CONDITIONS', 'PRICE_ON_QUOTE', NULL, true, CURRENT_TIMESTAMP
+    'cwk_cat_aw_18', '70af7281-072d-4ed5-9f2e-af4d93e99ea9', 18, 'Water Supply – Site Provision', 'Water supplied to site by AeroWash where no suitable point of supply is available within reach of the work area.', 'SITE CONDITIONS', 'PRICE_ON_QUOTE', 'Price on quote, NOT R0 default.', true, CURRENT_TIMESTAMP
 )
 ON CONFLICT ("companyId", "itemNumber") DO UPDATE SET
     "name" = EXCLUDED."name",
@@ -326,7 +326,7 @@ ON CONFLICT ("companyId", "itemNumber") DO UPDATE SET
 INSERT INTO "public"."CatalogueItem" (
     "id", "companyId", "itemNumber", "name", "clientDescription", "category", "pricingMethod", "internalNotes", "isActive", "updatedAt"
 ) VALUES (
-    'cwk_cat_aw_19', '70af7281-072d-4ed5-9f2e-af4d93e99ea9', 19, 'Regional Water Provision', 'Additional water treatment for a spot-free finish where local water is high in dissolved solids.', 'SITE CONDITIONS', 'REGIONAL_WATER_PER_LITRE', 'Per litre: Atlantis R0.30/L; Simon''s Town & desalination zones R0.85/L. Builder asks estimated litres.', true, CURRENT_TIMESTAMP
+    'cwk_cat_aw_19', '70af7281-072d-4ed5-9f2e-af4d93e99ea9', 19, 'Regional Water Provision', 'Additional water treatment for a spot-free finish where local water is high in dissolved solids.', 'SITE CONDITIONS', 'REGIONAL_WATER_PER_LITRE', 'Internal: Atlantis R0.30/L, Simon''s Town & desalination zones R0.85/L.', true, CURRENT_TIMESTAMP
 )
 ON CONFLICT ("companyId", "itemNumber") DO UPDATE SET
     "name" = EXCLUDED."name",
@@ -385,11 +385,11 @@ DECLARE
     v_template_id TEXT;
     v_version_num INTEGER;
 BEGIN
-    -- Check if AeroWash Standard Terms template exists
+    -- Check if AeroWash terms template exists
     SELECT "id" INTO v_template_id
     FROM "public"."terms_templates"
     WHERE "business_id" = '70af7281-072d-4ed5-9f2e-af4d93e99ea9'
-      AND "name" = 'AeroWash Standard Quotation Terms'
+    ORDER BY "is_default" DESC, "updated_at" DESC
     LIMIT 1;
 
     IF v_template_id IS NULL THEN
@@ -399,58 +399,58 @@ BEGIN
         ) VALUES (
             v_template_id, '70af7281-072d-4ed5-9f2e-af4d93e99ea9', 'AeroWash Standard Quotation Terms',
             '1. Scope and Fixed Price
-Work is strictly limited to the elevations and scope items specified on the quotation. All quotations are fixed price. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
+Quotations are fixed price for the scope and elevations stated. Any variation or additional work is quoted separately before it is carried out. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
 
 2. Service Area
 The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.
 
-3. Weather and Environmental Conditions
-Work is weather-dependent. High winds, heavy rain, lightning, or turbulence may require suspension or rescheduling for safety. AeroWash monitors conditions continuously and will notify the client promptly.
+3. Weather
+Work is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.
 
 4. Client Responsibilities
-The client must provide safe boundary access, ensure water points are operational at specified pressures, advise building occupants of scheduled cleaning dates, and keep windows securely closed during operations.
+The client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.
 
 5. Standby and Return Attendance
-Where operations are suspended due to site conditions outside AeroWash''s control, standby or return attendance provisions apply as scheduled.
+Where work cannot start, continue or be completed for reasons outside AeroWash''s control, including site access not being available or work being stopped at the client''s request, a standby or return attendance charge applies, agreed with you before it is invoiced.
 
-6. Pre-existing Facade and Glazing Conditions
-AeroWash is not liable for pre-existing scratching, acid etching, calcification, seal degradation, or loose substrate. Surface defects will be noted during the initial site visit or photo documentation.
+6. Pre-existing Conditions
+Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.
 
-7. SACAA and Daylight Operations Only
-All flight operations are conducted under South African Civil Aviation Authority (SACAA) regulations and strictly during daylight hours. No night flights are permitted.
+7. SACAA and Daylight Operations
+All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [Payment Terms Placeholder]. Quotation validity: [Quotation Validity Placeholder]. Work commences upon receipt of written acceptance and official purchase order.',
+Payment terms: [to be completed]. This quotation is valid until the date shown.',
             true, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         );
 
         INSERT INTO "public"."terms_template_versions" (
             "id", "template_id", "version", "name", "body", "created_at"
         ) VALUES (
-            'cwk_terms_ver_aw_std_1', v_template_id, 1, 'AeroWash Standard Quotation Terms',
+            'cwk_terms_ver_aw_1', v_template_id, 1, 'AeroWash Standard Quotation Terms',
             '1. Scope and Fixed Price
-Work is strictly limited to the elevations and scope items specified on the quotation. All quotations are fixed price. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
+Quotations are fixed price for the scope and elevations stated. Any variation or additional work is quoted separately before it is carried out. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
 
 2. Service Area
 The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.
 
-3. Weather and Environmental Conditions
-Work is weather-dependent. High winds, heavy rain, lightning, or turbulence may require suspension or rescheduling for safety. AeroWash monitors conditions continuously and will notify the client promptly.
+3. Weather
+Work is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.
 
 4. Client Responsibilities
-The client must provide safe boundary access, ensure water points are operational at specified pressures, advise building occupants of scheduled cleaning dates, and keep windows securely closed during operations.
+The client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.
 
 5. Standby and Return Attendance
-Where operations are suspended due to site conditions outside AeroWash''s control, standby or return attendance provisions apply as scheduled.
+Where work cannot start, continue or be completed for reasons outside AeroWash''s control, including site access not being available or work being stopped at the client''s request, a standby or return attendance charge applies, agreed with you before it is invoiced.
 
-6. Pre-existing Facade and Glazing Conditions
-AeroWash is not liable for pre-existing scratching, acid etching, calcification, seal degradation, or loose substrate. Surface defects will be noted during the initial site visit or photo documentation.
+6. Pre-existing Conditions
+Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.
 
-7. SACAA and Daylight Operations Only
-All flight operations are conducted under South African Civil Aviation Authority (SACAA) regulations and strictly during daylight hours. No night flights are permitted.
+7. SACAA and Daylight Operations
+All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [Payment Terms Placeholder]. Quotation validity: [Quotation Validity Placeholder]. Work commences upon receipt of written acceptance and official purchase order.',
+Payment terms: [to be completed]. This quotation is valid until the date shown.',
             CURRENT_TIMESTAMP
         );
     ELSE
@@ -459,29 +459,30 @@ Payment terms: [Payment Terms Placeholder]. Quotation validity: [Quotation Valid
         WHERE "template_id" = v_template_id;
 
         UPDATE "public"."terms_templates"
-        SET "body" = '1. Scope and Fixed Price
-Work is strictly limited to the elevations and scope items specified on the quotation. All quotations are fixed price. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
+        SET "name" = 'AeroWash Standard Quotation Terms',
+            "body" = '1. Scope and Fixed Price
+Quotations are fixed price for the scope and elevations stated. Any variation or additional work is quoted separately before it is carried out. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
 
 2. Service Area
 The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.
 
-3. Weather and Environmental Conditions
-Work is weather-dependent. High winds, heavy rain, lightning, or turbulence may require suspension or rescheduling for safety. AeroWash monitors conditions continuously and will notify the client promptly.
+3. Weather
+Work is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.
 
 4. Client Responsibilities
-The client must provide safe boundary access, ensure water points are operational at specified pressures, advise building occupants of scheduled cleaning dates, and keep windows securely closed during operations.
+The client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.
 
 5. Standby and Return Attendance
-Where operations are suspended due to site conditions outside AeroWash''s control, standby or return attendance provisions apply as scheduled.
+Where work cannot start, continue or be completed for reasons outside AeroWash''s control, including site access not being available or work being stopped at the client''s request, a standby or return attendance charge applies, agreed with you before it is invoiced.
 
-6. Pre-existing Facade and Glazing Conditions
-AeroWash is not liable for pre-existing scratching, acid etching, calcification, seal degradation, or loose substrate. Surface defects will be noted during the initial site visit or photo documentation.
+6. Pre-existing Conditions
+Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.
 
-7. SACAA and Daylight Operations Only
-All flight operations are conducted under South African Civil Aviation Authority (SACAA) regulations and strictly during daylight hours. No night flights are permitted.
+7. SACAA and Daylight Operations
+All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [Payment Terms Placeholder]. Quotation validity: [Quotation Validity Placeholder]. Work commences upon receipt of written acceptance and official purchase order.',
+Payment terms: [to be completed]. This quotation is valid until the date shown.',
             "version" = v_version_num,
             "is_default" = true,
             "updated_at" = CURRENT_TIMESTAMP
@@ -492,28 +493,28 @@ Payment terms: [Payment Terms Placeholder]. Quotation validity: [Quotation Valid
         ) VALUES (
             'cwk_terms_ver_aw_' || v_version_num, v_template_id, v_version_num, 'AeroWash Standard Quotation Terms',
             '1. Scope and Fixed Price
-Work is strictly limited to the elevations and scope items specified on the quotation. All quotations are fixed price. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
+Quotations are fixed price for the scope and elevations stated. Any variation or additional work is quoted separately before it is carried out. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
 
 2. Service Area
 The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.
 
-3. Weather and Environmental Conditions
-Work is weather-dependent. High winds, heavy rain, lightning, or turbulence may require suspension or rescheduling for safety. AeroWash monitors conditions continuously and will notify the client promptly.
+3. Weather
+Work is weather-dependent. Where wind, rain or visibility make flying unsafe, AeroWash will reschedule at no charge to the next available date.
 
 4. Client Responsibilities
-The client must provide safe boundary access, ensure water points are operational at specified pressures, advise building occupants of scheduled cleaning dates, and keep windows securely closed during operations.
+The client provides access to the work area and a water supply point within reach of it (unless Water Supply – Site Provision is quoted), and notifies tenants where required.
 
 5. Standby and Return Attendance
-Where operations are suspended due to site conditions outside AeroWash''s control, standby or return attendance provisions apply as scheduled.
+Where work cannot start, continue or be completed for reasons outside AeroWash''s control, including site access not being available or work being stopped at the client''s request, a standby or return attendance charge applies, agreed with you before it is invoiced.
 
-6. Pre-existing Facade and Glazing Conditions
-AeroWash is not liable for pre-existing scratching, acid etching, calcification, seal degradation, or loose substrate. Surface defects will be noted during the initial site visit or photo documentation.
+6. Pre-existing Conditions
+Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.
 
-7. SACAA and Daylight Operations Only
-All flight operations are conducted under South African Civil Aviation Authority (SACAA) regulations and strictly during daylight hours. No night flights are permitted.
+7. SACAA and Daylight Operations
+All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [Payment Terms Placeholder]. Quotation validity: [Quotation Validity Placeholder]. Work commences upon receipt of written acceptance and official purchase order.',
+Payment terms: [to be completed]. This quotation is valid until the date shown.',
             CURRENT_TIMESTAMP
         );
     END IF;
