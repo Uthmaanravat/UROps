@@ -115,7 +115,11 @@ export function CatalogSidePanel({
                             </span>
                         )}
                         <span className="text-[10px] font-mono text-muted-foreground uppercase">
-                            {formatCurrency(price, currencySymbol)} / {item.unit || "ea"}
+                            {item.rateNote ? (
+                                <span className="text-amber-400 font-semibold">{item.rateNote}</span>
+                            ) : (
+                                `${formatCurrency(price, currencySymbol)} / ${item.unit || "ea"}`
+                            )}
                         </span>
                     </div>
 
@@ -140,9 +144,16 @@ export function CatalogSidePanel({
                 </div>
 
                 {/* Full Description with wrapping */}
-                <p className="text-gray-200 font-medium text-[12px] leading-relaxed break-words">
-                    {item.description}
-                </p>
+                <div className="space-y-0.5">
+                    {item.isCatalogueItem && item.name && (
+                        <p className="text-white font-bold text-[12px] leading-snug">
+                            {item.name}
+                        </p>
+                    )}
+                    <p className="text-gray-300 font-normal text-[11px] leading-relaxed break-words">
+                        {item.clientDescription || item.description}
+                    </p>
+                </div>
             </div>
         )
     }

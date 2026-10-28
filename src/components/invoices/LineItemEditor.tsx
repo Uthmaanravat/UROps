@@ -36,6 +36,7 @@ interface LineItemEditorProps {
     onLogUnlock?: (data: { itemId?: string; itemCode?: string; reason: string }) => Promise<void>
     highlightIndex?: number | null
     isInvoice?: boolean
+    justificationEnabled?: boolean
 }
 
 // Auto-resizing textarea component for line item descriptions
@@ -101,7 +102,8 @@ export function LineItemEditor({
     isAdmin = true,
     onLogUnlock,
     highlightIndex = null,
-    isInvoice = false
+    isInvoice = false,
+    justificationEnabled = true
 }: LineItemEditorProps) {
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -581,7 +583,7 @@ export function LineItemEditor({
                                             )}
                                         </div>
                                     ) : null
-                                ) : !isInvoice ? (
+                                ) : (!isInvoice && justificationEnabled !== false) ? (
                                     <div className="flex items-center gap-2">
                                         <span className="text-[9px] uppercase font-black text-amber-400/80 tracking-widest">Justification:</span>
                                         <select

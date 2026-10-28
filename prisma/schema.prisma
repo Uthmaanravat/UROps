@@ -120,6 +120,7 @@ model CompanySettings {
   thermalCameraEnabled Boolean  @default(false)
   vatRegistrationDate  DateTime?
   vatRate              Float?   @default(15.0)
+  justificationEnabled Boolean  @default(true)
 }
 
 model Client {

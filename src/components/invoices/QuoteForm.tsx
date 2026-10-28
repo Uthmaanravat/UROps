@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Wand2, Loader2, FileText, ClipboardPaste, Sparkles, Building2, Briefcase, FileCheck, CheckCircle2, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle } from "lucide-react"
-import { createInvoiceAction, getQuoteSequenceAction, getInvoiceSequenceAction } from "@/app/(dashboard)/invoices/actions"
+import { createInvoiceAction, getQuoteSequenceAction, getInvoiceSequenceAction, getWorkspaceCatalogAction } from "@/app/(dashboard)/invoices/actions"
 import { getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { formatCurrency, cn } from "@/lib/utils"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
@@ -245,7 +245,7 @@ export function QuoteForm({
     useEffect(() => {
         const loadCatalog = async () => {
             try {
-                const data = await getFixedPriceItemsAction()
+                const data = await getWorkspaceCatalogAction()
                 setRawCatalog(data)
             } catch (err) {
                 console.error("Failed to load catalog", err)
@@ -254,15 +254,16 @@ export function QuoteForm({
         loadCatalog()
     }, [])
 
-    // Filter catalog strictly based on workType
-    // Tender: ONLY that tender's items
-    // General: ONLY general items (no tenderId), global + this client's general items
+    // Filter catalog strictly based on workspace and workType
     const activeCatalog = useMemo(() => {
+        if (isAeroWashWorkspace) {
+            return rawCatalog
+        }
         if (workType === "TENDER") {
             return rawCatalog.filter((item: any) => item.tenderId === selectedTenderId)
         }
         return rawCatalog.filter((item: any) => !item.tenderId && (!item.clientId || item.clientId === clientId))
-    }, [rawCatalog, workType, selectedTenderId, clientId])
+    }, [rawCatalog, workType, selectedTenderId, clientId, isAeroWashWorkspace])
 
     const isDiscardedRef = useRef(false)
     const hasUserEditedRef = useRef(false)
@@ -906,6 +907,7 @@ export function QuoteForm({
                         {/* AeroWash Catalogue & Elevation Quote Builder OR Standard LineItemEditor */}
                         {isAeroWashWorkspace && docType === 'QUOTE' ? (
                             <AeroWashQuoteBuilder
+                                siteName={site}
                                 currencySymbol={selectedClient?.codePrefix ? "R" : "R"}
                                 surveyCameraEnabled={surveyCameraEnabled}
                                 thermalCameraEnabled={thermalCameraEnabled}
@@ -923,6 +925,7 @@ export function QuoteForm({
                                 rateYear={effectiveRateYear}
                                 isAdmin={isAdmin}
                                 highlightIndex={highlightIndex}
+                                justificationEnabled={companySettings?.justificationEnabled !== false && !isAeroWashWorkspace}
                             />
                         )}
                     </div>

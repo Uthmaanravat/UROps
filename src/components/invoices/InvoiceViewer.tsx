@@ -36,6 +36,8 @@ import { ItemPositionInput } from "@/components/invoices/ItemPositionInput"
 import { CreateCreditNoteModal } from "@/components/credit-notes/CreateCreditNoteModal"
 import { parseClauses, buildNumberedClauses } from "@/lib/terms-utils"
 import { saveQuoteTermsAction, saveCustomTermsAsTemplateAction } from "@/app/(dashboard)/settings/terms/actions"
+import { AeroWashDocumentPreview } from "./AeroWashDocumentPreview"
+import { generateAeroWashQuotePdf } from "@/lib/aerowash-quote-pdf"
 
 export function InvoiceViewer({ 
     invoice, 
@@ -65,6 +67,7 @@ export function InvoiceViewer({
     const [savedCount, setSavedCount] = useState<number>(0);
 
     const updateItems = useCallback((newItems: any[]) => {
+        hasUserEditedRef.current = true;
         itemsRef.current = newItems;
         setItems(newItems);
     }, []);
@@ -530,6 +533,8 @@ export function InvoiceViewer({
     const [isSavingDraft, setIsSavingDraft] = useState(false);
     const isRestoring = useRef(false);
     const initialLoaded = useRef(false);
+    const hasUserEditedRef = useRef(false);
+    const justSavedRef = useRef(false);
 
     // Pricing Intelligence state
     const [pricingSuggestions, setPricingSuggestions] = useState<Record<string, { typicalPrice: number; source: string }>>({});
@@ -640,6 +645,8 @@ export function InvoiceViewer({
 
             if (hasItemDiff || hasSiteDiff || hasRefDiff || hasQuoteNumDiff || hasNoteDiff || hasDateDiff) {
                 setPendingDraft(saved);
+            } else {
+                clearDraft(DRAFT_KEY);
             }
         }
         setTimeout(() => {
@@ -672,6 +679,7 @@ export function InvoiceViewer({
 
     const handleDiscardDraft = () => {
         isDiscardedRef.current = true;
+        hasUserEditedRef.current = false;
         clearDraft(DRAFT_KEY);
         setPendingDraft(null);
         setLastSavedTimestamp(null);
@@ -686,7 +694,7 @@ export function InvoiceViewer({
 
     // Debounced Auto-Save to localStorage (safe: no synchronous setState in effect body)
     useEffect(() => {
-        if (!initialLoaded.current || isRestoring.current || loading || pendingDraft || isDiscardedRef.current) return;
+        if (!initialLoaded.current || isRestoring.current || loading || pendingDraft || isDiscardedRef.current || !hasUserEditedRef.current || justSavedRef.current) return;
 
         if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
         draftTimeoutRef.current = setTimeout(() => {
@@ -869,6 +877,9 @@ export function InvoiceViewer({
             setPendingDraft(null);
             setLastSavedTimestamp(null);
             setSaveError(null);
+            hasUserEditedRef.current = false;
+            justSavedRef.current = true;
+            setTimeout(() => { justSavedRef.current = false; }, 3000);
         } catch (error: any) {
             console.error("Error saving changes:", error);
             const msg = error?.message || "Failed to save changes. Please try again.";
@@ -948,8 +959,11 @@ export function InvoiceViewer({
         paymentTerms: companySettings?.paymentTerms || "",
         bankDetails: companySettings?.bankDetails || "",
         layoutPreferences: companySettings?.layoutPreferences,
-        theme: companySettings?.theme
+        theme: companySettings?.theme,
+        website: (companySettings as any)?.website || "www.aerowash.co.za"
     };
+
+    const isAeroWashDocument = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash'));
 
     const handleSendEmail = async () => {
         if (!recipientEmails) {
@@ -989,13 +1003,68 @@ export function InvoiceViewer({
         const doc = new jsPDF();
         const currencySymbol = companySettings?.currency || "R";
         const [themeR, themeG, themeB] = getThemePrimaryRGB(companySettings?.theme);
-        const isAeroWashQuote = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9') && invoice.type === 'QUOTE';
 
-        // 1. Header Bar (Shared)
         const numberLabel = quoteNumber
             ? quoteNumber
             : (invoice.type === 'QUOTE' ? `Q-${new Date(date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}` : `INV-${new Date(date).getFullYear()}-${invoice.number.toString().padStart(3, '0')}`);
-        
+
+        if (isAeroWashDocument) {
+            const aeroDoc = await generateAeroWashQuotePdf({
+                invoice: {
+                    ...invoice,
+                    number: invoice.number,
+                    quoteNumber,
+                    date,
+                    type: invoice.type,
+                    site,
+                    reference,
+                    notes: note,
+                    subtotal,
+                    taxAmount,
+                    total,
+                    items: items.map(i => ({
+                        ...i,
+                        total: i.total !== undefined ? i.total : ((i.quantity || 1) * (i.unitPrice || 0))
+                    })),
+                    client: {
+                        name: invoice.client?.name || "",
+                        companyName: invoice.client?.companyName || invoice.client?.name || "",
+                        address: invoice.client?.address || "",
+                        attentionTo: attentionTo || invoice.client?.attentionTo,
+                        email: invoice.client?.email,
+                        phone: invoice.client?.phone,
+                        vatNumber: invoice.client?.vatNumber
+                    },
+                    metadata: invoice.metadata,
+                    terms: (invoice as any).terms?.map((t: any) => ({ bodySnapshot: t.bodySnapshot || t.template?.body || "" }))
+                },
+                company: {
+                    name: company.name,
+                    address: company.address,
+                    phone: company.phone,
+                    email: company.email,
+                    website: company.website,
+                    logoUrl: company.logoUrl,
+                    vatNumber: company.vatNumber,
+                    registrationNumber: company.registrationNumber,
+                    vatRegistrationDate: companySettings?.vatRegistrationDate,
+                    vatRate: companySettings?.vatRate,
+                    bankDetails: company.bankDetails
+                },
+                companySettings: {
+                    theme: companySettings?.theme,
+                    currency: currencySymbol,
+                    taxId: companySettings?.taxId
+                }
+            });
+            const filename = `${numberLabel}.pdf`;
+            aeroDoc.save(filename);
+            return;
+        }
+
+        const isAeroWashQuote = false;
+
+        // 1. Header Bar (Shared)
         const badge = invoice.status === 'CHECKED' ? '✓ VERIFIED / CHECKED' : undefined;
         const isVatActive = isVatEffective(date, companySettings);
         const docTitle = getDocumentHeading(invoice.type, isVatActive);
@@ -2910,6 +2979,7 @@ export function InvoiceViewer({
                                     }}
                                     highlightIndex={highlightIndex}
                                     isInvoice={invoice.type === 'INVOICE'}
+                                    justificationEnabled={companySettings?.justificationEnabled !== false}
                                 />
                             </div>
                             {showCatalogPanel && (
@@ -2926,6 +2996,27 @@ export function InvoiceViewer({
                             )}
                         </div>
                     </div>
+                ) : isAeroWashDocument ? (
+                    <AeroWashDocumentPreview
+                        invoice={invoice}
+                        company={company}
+                        companySettings={companySettings}
+                        items={items}
+                        subtotal={subtotal}
+                        total={total}
+                        taxAmount={taxAmount}
+                        isVatRegistered={isVatRegistered}
+                        vatRate={vatRate}
+                        currencySymbol={currencySymbol}
+                        quoteNumber={quoteNumber}
+                        date={date}
+                        site={site}
+                        reference={reference}
+                        notes={note}
+                        attentionTo={attentionTo}
+                        isLocked={isLocked}
+                        onEditItems={() => setIsEditingInvoiceItems(true)}
+                    />
                 ) : (
                     <div className="mb-10 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
                         {invoice.type === 'INVOICE' && (

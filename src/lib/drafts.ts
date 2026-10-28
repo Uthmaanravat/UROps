@@ -306,6 +306,28 @@ export function getDraft<T = any>(key: string, companyId?: string): DraftMetadat
 /**
  * Clear a specific draft and remove from per-business index
  */
+/**
+ * Clear all drafts for the active business
+ */
+export function clearAllDrafts(companyId?: string): void {
+    const storage = getStorage();
+    if (!storage) return;
+
+    try {
+        const cId = companyId || getActiveCompanyId();
+        if (cId) {
+            const index = getDraftIndex(cId);
+            for (const key of index) {
+                storage.removeItem(key);
+            }
+            setDraftIndex([], cId);
+        }
+        window.dispatchEvent(new CustomEvent('urops_draft_updated'));
+    } catch (e) {
+        console.error('Failed to clear all drafts', e);
+    }
+}
+
 export function clearDraft(key: string, companyId?: string): void {
     const storage = getStorage();
     if (!storage) return;

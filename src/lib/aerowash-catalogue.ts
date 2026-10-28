@@ -67,7 +67,7 @@ export interface CatalogueItemDef {
     itemNumber: number;
     name: string;
     clientDescription: string;
-    category: 'CLEANING' | 'ASSESSMENT & REPORTING' | 'SITE CONDITIONS';
+    category: 'CLEANING' | 'ASSESSMENT & REPORTING' | 'SITE CONDITIONS' | 'CONTRACTS';
     pricingMethod: string;
     internalNotes?: string;
     isProvisional?: boolean;
@@ -268,6 +268,24 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
             'Travel provision for sites beyond the standard service area (see Terms).',
         category: 'SITE CONDITIONS',
         pricingMethod: 'PRICE_ON_QUOTE'
+    },
+    {
+        itemNumber: 21,
+        name: 'Scheduled Maintenance Programme – [Biannual / Quarterly / Monthly]',
+        clientDescription:
+            'Scheduled maintenance visits on fixed, pre-agreed dates.',
+        category: 'CONTRACTS',
+        pricingMethod: 'CONTRACT_PROGRAMME_DISCOUNT',
+        internalNotes: 'Discount: Biannual −10%, Quarterly −15%, Monthly −20%. Client sees price per visit + visits per year, no percentages.'
+    },
+    {
+        itemNumber: 22,
+        name: 'Monthly Glazing + Quarterly Full Facade Programme',
+        clientDescription:
+            'Monthly window and glazing maintenance, with a full facade clean included every quarter in the same visit.',
+        category: 'CONTRACTS',
+        pricingMethod: 'CONTRACT_COMBINED_PROGRAMME',
+        internalNotes: '= 8 × item 1 + 4 × item 2 per year at the monthly rate, generated as recurring visits. Landmark flag forces Once-off + Full facade on first quote.'
     }
 ];
 
@@ -302,7 +320,7 @@ export const MINIMUM_FLOOR_RATE_PER_M2 = 12.0;
 export const AEROWASH_STANDARD_TERMS_NAME = 'AeroWash Standard Quotation Terms';
 
 export const AEROWASH_STANDARD_TERMS_BODY = `1. Scope and Fixed Price
-Quotations are fixed price based on the scope, elevations and dimensions agreed at the time of quotation. Any variation or additional works requested will be quoted separately before execution. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued after the registration date.
+Quotations are fixed price based on the scope, elevations and dimensions agreed at the time of quotation. Any variation or additional works requested will be quoted separately before execution. Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
 
 2. Service Area
 The standard service area is within 50 km of Parow, Cape Town. Sites beyond this carry an Extended Travel provision.
@@ -325,3 +343,63 @@ All flight operations are conducted in accordance with South African Civil Aviat
 8. Payment Terms and Validity
 Payment terms: 
 Quote validity: `;
+
+
+/**
+ * Auto-generates a client-facing Scope of Works description from selected items and site info.
+ * Hard rule: Plain client language, NO passes, pressures, chemicals, water type/volumes.
+ */
+export function generateAeroWashScopeOfWorks(params: {
+    siteName?: string;
+    elevationNames?: string[];
+    hasGlazing?: boolean;
+    hasFullFacade?: boolean;
+    hasRoofClean?: boolean;
+    hasSolarClean?: boolean;
+    hasSignage?: boolean;
+    hasBirdFouling?: boolean;
+    hasStainPreTreatment?: boolean;
+    hasPostConstruction?: boolean;
+    hasFacadeSurvey?: boolean;
+    hasThermalSurvey?: boolean;
+}): string {
+    const siteStr = params.siteName ? ` at ${params.siteName}` : '';
+    const elevStr = params.elevationNames && params.elevationNames.length > 0
+        ? params.elevationNames.join(', ')
+        : 'the exposed building elevations';
+
+    const sentences: string[] = [];
+
+    // Base sentence
+    const cleanType = params.hasFullFacade ? 'full facade and window' : 'exterior maintenance';
+    sentences.push(
+        `Exterior maintenance cleaning of ${elevStr}${siteStr}, delivered by drone with no scaffolding, cradles, ladders or rope access and no obstruction of trading or parking.`
+    );
+
+    if (params.hasRoofClean) {
+        sentences.push('Includes soft wash treatment of roof surfaces to remove organic growth and accumulated debris.');
+    }
+    if (params.hasSolarClean) {
+        sentences.push('Includes pure water cleaning of the solar photovoltaic panel array.');
+    }
+    if (params.hasSignage) {
+        sentences.push('Includes cleaning of building signage, entrance features and canopies.');
+    }
+    if (params.hasBirdFouling) {
+        sentences.push('Includes targeted treatment and removal of bird fouling from facade surfaces, ledges and roof areas.');
+    }
+    if (params.hasStainPreTreatment) {
+        sentences.push('Includes pre-treatment of organic growth and surface staining across affected facade areas.');
+    }
+    if (params.hasPostConstruction) {
+        sentences.push('Includes removal of construction dust and residue from exterior surfaces.');
+    }
+    if (params.hasFacadeSurvey) {
+        sentences.push('Includes high-resolution aerial photographic condition survey of the building envelope.');
+    }
+    if (params.hasThermalSurvey) {
+        sentences.push('Includes thermal imaging survey of roof surfaces to inspect membrane integrity.');
+    }
+
+    return sentences.join(' ');
+}
