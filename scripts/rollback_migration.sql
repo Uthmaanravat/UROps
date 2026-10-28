@@ -22,7 +22,8 @@ ALTER TABLE "public"."CompanySettings"
     DROP COLUMN IF EXISTS "thermalCameraEnabled",
     DROP COLUMN IF EXISTS "vatRegistrationDate",
     DROP COLUMN IF EXISTS "vatRate",
-    DROP COLUMN IF EXISTS "justificationEnabled";
+    DROP COLUMN IF EXISTS "justificationEnabled",
+    DROP COLUMN IF EXISTS "validityDays";
 
 -- 4. Rollback AeroWash terms template / restore previous version if existing
 DO $$

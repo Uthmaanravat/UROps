@@ -287,6 +287,14 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         category: 'CONTRACTS',
         pricingMethod: 'CONTRACT_COMBINED_PROGRAMME',
         internalNotes: '= 8 × item 1 + 4 × item 2 per year at the monthly rate, generated as recurring visits. Landmark flag forces Once-off + Full facade on first quote.'
+    },
+    {
+        itemNumber: 23,
+        name: 'Low-Level & Detail Hand Clean',
+        clientDescription:
+            'Hand cleaning of ground-level glazing, entrances and detail areas that are not reachable by drone, completed as part of the same visit.',
+        category: 'CLEANING',
+        pricingMethod: 'PRICE_ON_QUOTE'
     }
 ];
 
@@ -342,7 +350,7 @@ Existing damage, failed sealant, staining that has penetrated the substrate and 
 All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [to be completed]. This quotation is valid until the date shown.`;
+A 60% deposit is payable on acceptance to secure the booking. The balance is payable on completion. This quotation is valid for 45 days from the date of issue.`;
 
 
 /**
@@ -403,3 +411,156 @@ export function generateAeroWashScopeOfWorks(params: {
 
     return sentences.join(' ');
 }
+
+// ============================================================================
+// SITE INSPECTION & CONDITION FLAGS (AeroWash)
+// ============================================================================
+
+export interface SiteVisitPhoto {
+    id: string;
+    photoNumber: string; // "01", "02", etc.
+    url: string;
+    caption?: string;
+    elevation?: string;
+}
+
+export interface ConditionTypePreset {
+    id: string;
+    label: string;
+    condition: string;
+    consequence: string;
+    restoration: string;
+    isExcludedFromCleaning?: boolean;
+}
+
+export const CONDITION_TYPE_PRESETS: Record<string, ConditionTypePreset> = {
+    GLASS_ETCHING: {
+        id: 'GLASS_ETCHING',
+        label: 'Glass etching',
+        condition: 'existing surface etching to the glass',
+        consequence: 'This condition is in the glass and cannot be removed by cleaning. These panels will be washed but will retain a visible cloudy appearance afterwards.',
+        restoration: 'glass restoration or replacement'
+    },
+    HARD_WATER: {
+        id: 'HARD_WATER',
+        label: 'Hard water / mineral staining',
+        condition: 'mineral deposit staining to the glass',
+        consequence: 'Deposits bonded to the glass may not be fully removed by maintenance cleaning and may remain visible afterwards.',
+        restoration: 'glass restoration'
+    },
+    SCRATCHED_GLASS: {
+        id: 'SCRATCHED_GLASS',
+        label: 'Scratched glass',
+        condition: 'existing scratching to the glass',
+        consequence: 'Scratches are permanent damage and will remain visible after cleaning.',
+        restoration: 'glass replacement'
+    },
+    FAILED_SEALANT: {
+        id: 'FAILED_SEALANT',
+        label: 'Failed or perished sealant',
+        condition: 'failed or perished sealant to window and panel joints',
+        consequence: 'Water may enter through these joints during washing. AeroWash will avoid direct spray on affected joints where practical.',
+        restoration: 'sealant repair'
+    },
+    PENETRATED_STAINING: {
+        id: 'PENETRATED_STAINING',
+        label: 'Penetrated staining',
+        condition: 'staining that has penetrated the substrate',
+        consequence: 'This staining is within the surface and cannot be removed by cleaning.',
+        restoration: 'surface restoration or repainting'
+    },
+    RUST_STREAKING: {
+        id: 'RUST_STREAKING',
+        label: 'Rust streaking',
+        condition: 'rust streaking from fixings and metalwork',
+        consequence: 'The source of the staining remains and streaking may return after cleaning.',
+        restoration: 'metalwork repair or treatment'
+    },
+    EFFLORESCENCE: {
+        id: 'EFFLORESCENCE',
+        label: 'Efflorescence',
+        condition: 'efflorescence (salt deposits) on masonry',
+        consequence: 'Efflorescence is caused by moisture within the wall and may reappear after cleaning.',
+        restoration: 'damp treatment'
+    },
+    CRACKED_GLAZING: {
+        id: 'CRACKED_GLAZING',
+        label: 'Cracked or damaged glazing',
+        condition: 'cracked or damaged glazing',
+        consequence: 'Affected panels will be excluded from cleaning to avoid further damage.',
+        restoration: 'glass replacement',
+        isExcludedFromCleaning: true
+    },
+    LOOSE_RENDER_CLADDING: {
+        id: 'LOOSE_RENDER_CLADDING',
+        label: 'Loose or damaged render/cladding',
+        condition: 'loose or damaged render or cladding',
+        consequence: 'Affected areas will be excluded from cleaning to avoid further damage.',
+        restoration: 'facade repair',
+        isExcludedFromCleaning: true
+    },
+    OTHER: {
+        id: 'OTHER',
+        label: 'Other',
+        condition: '',
+        consequence: '',
+        restoration: ''
+    }
+};
+
+export interface ConditionFlag {
+    id: string;
+    elevation: string;
+    location: string;
+    conditionType: string;
+    conditionText?: string;
+    consequenceText?: string;
+    restorationText?: string;
+    photoRefs: string[];
+    wording: string;
+}
+
+/**
+ * Formats a list of photo numbers into a range or list string (e.g. ['04', '05', '06', '07', '08', '09'] -> "04–09")
+ */
+export function formatPhotoRefs(refs: string[]): string {
+    if (!refs || refs.length === 0) return '';
+    const sorted = [...refs].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    const nums = sorted.map(s => parseInt(s, 10));
+
+    let isContiguous = nums.length > 1;
+    for (let i = 1; i < nums.length; i++) {
+        if (nums[i] !== nums[i - 1] + 1) {
+            isContiguous = false;
+            break;
+        }
+    }
+
+    if (isContiguous && sorted.length >= 2) {
+        return `${sorted[0]}–${sorted[sorted.length - 1]}`;
+    }
+    return sorted.join(', ');
+}
+
+/**
+ * Auto-generates the exact wording for a condition flag:
+ * "Pre-clean inspection on [date] recorded [condition] on the [elevation], [location] (photographs [refs] attached). [Consequence sentence] No allowance for [restoration item] is included in this quotation."
+ */
+export function generateConditionFlagWording(params: {
+    date: string;
+    condition: string;
+    elevation: string;
+    location: string;
+    photoRefs?: string[];
+    consequence?: string;
+    restoration?: string;
+}): string {
+    const photoStr = params.photoRefs && params.photoRefs.length > 0
+        ? ` (photographs ${formatPhotoRefs(params.photoRefs)} attached)`
+        : '';
+    const consequenceSentence = params.consequence ? `${params.consequence.trim()} ` : '';
+    const restorationSentence = params.restoration ? `No allowance for ${params.restoration.trim()} is included in this quotation.` : '';
+
+    return `Pre-clean inspection on ${params.date} recorded ${params.condition} on the ${params.elevation}, ${params.location}${photoStr}. ${consequenceSentence}${restorationSentence}`.trim();
+}
+

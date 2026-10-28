@@ -38,6 +38,7 @@ export async function updateCompanySettings(data: {
     thermalCameraEnabled?: boolean
     vatRegistrationDate?: Date | string | null
     vatRate?: number | string | null
+    validityDays?: number | string | null
 }) {
     try {
         const companyId = await ensureAuth()
@@ -51,6 +52,11 @@ export async function updateCompanySettings(data: {
             parsedData.vatRate = data.vatRate !== null && data.vatRate !== ''
                 ? Number(data.vatRate)
                 : 15.0;
+        }
+        if (data.validityDays !== undefined) {
+            parsedData.validityDays = data.validityDays !== null && data.validityDays !== ''
+                ? parseInt(String(data.validityDays), 10)
+                : 30;
         }
         let settings;
         try {

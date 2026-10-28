@@ -12,17 +12,20 @@ ALTER TABLE "public"."CompanySettings"
     ADD COLUMN IF NOT EXISTS "thermalCameraEnabled" BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS "vatRegistrationDate" TIMESTAMP(3),
     ADD COLUMN IF NOT EXISTS "vatRate" DOUBLE PRECISION DEFAULT 15.0,
-    ADD COLUMN IF NOT EXISTS "justificationEnabled" BOOLEAN NOT NULL DEFAULT true;
+    ADD COLUMN IF NOT EXISTS "justificationEnabled" BOOLEAN NOT NULL DEFAULT true,
+    ADD COLUMN IF NOT EXISTS "validityDays" INTEGER DEFAULT 30;
 
--- 2. Configure per-company justification settings
--- AeroWash: Justification completely removed (false)
+-- 2. Configure per-company justification & validity settings
+-- AeroWash: Justification completely removed (false), Quotation validity = 45 days
 -- LR Builders: Justification enabled for General Work, hidden for Tender (true)
 UPDATE "public"."CompanySettings"
-SET "justificationEnabled" = false
+SET "justificationEnabled" = false,
+    "validityDays" = 45
 WHERE "companyId" = '70af7281-072d-4ed5-9f2e-af4d93e99ea9';
 
 UPDATE "public"."CompanySettings"
-SET "justificationEnabled" = true
+SET "justificationEnabled" = true,
+    "validityDays" = 30
 WHERE "companyId" = '299c43ec-9578-4c45-91cb-a881a539e25d';
 
 -- 3. Add JSONB metadata columns to Invoice and InvoiceItem
@@ -379,6 +382,20 @@ ON CONFLICT ("companyId", "itemNumber") DO UPDATE SET
     "isActive" = true,
     "updatedAt" = CURRENT_TIMESTAMP;
 
+INSERT INTO "public"."CatalogueItem" (
+    "id", "companyId", "itemNumber", "name", "clientDescription", "category", "pricingMethod", "internalNotes", "isActive", "updatedAt"
+) VALUES (
+    'cwk_cat_aw_23', '70af7281-072d-4ed5-9f2e-af4d93e99ea9', 23, 'Low-Level & Detail Hand Clean', 'Hand cleaning of ground-level glazing, entrances and detail areas that are not reachable by drone, completed as part of the same visit.', 'CLEANING', 'PRICE_ON_QUOTE', NULL, true, CURRENT_TIMESTAMP
+)
+ON CONFLICT ("companyId", "itemNumber") DO UPDATE SET
+    "name" = EXCLUDED."name",
+    "clientDescription" = EXCLUDED."clientDescription",
+    "category" = EXCLUDED."category",
+    "pricingMethod" = EXCLUDED."pricingMethod",
+    "internalNotes" = EXCLUDED."internalNotes",
+    "isActive" = true,
+    "updatedAt" = CURRENT_TIMESTAMP;
+
 -- 6. Seed / Update AeroWash Standard Quotation Terms (8 approved clauses)
 DO $$
 DECLARE
@@ -420,7 +437,7 @@ Existing damage, failed sealant, staining that has penetrated the substrate and 
 All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [to be completed]. This quotation is valid until the date shown.',
+A 60% deposit is payable on acceptance to secure the booking. The balance is payable on completion. This quotation is valid for 45 days from the date of issue.',
             true, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         );
 
@@ -450,7 +467,7 @@ Existing damage, failed sealant, staining that has penetrated the substrate and 
 All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [to be completed]. This quotation is valid until the date shown.',
+A 60% deposit is payable on acceptance to secure the booking. The balance is payable on completion. This quotation is valid for 45 days from the date of issue.',
             CURRENT_TIMESTAMP
         );
     ELSE
@@ -482,7 +499,7 @@ Existing damage, failed sealant, staining that has penetrated the substrate and 
 All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [to be completed]. This quotation is valid until the date shown.',
+A 60% deposit is payable on acceptance to secure the booking. The balance is payable on completion. This quotation is valid for 45 days from the date of issue.',
             "version" = v_version_num,
             "is_default" = true,
             "updated_at" = CURRENT_TIMESTAMP
@@ -514,7 +531,7 @@ Existing damage, failed sealant, staining that has penetrated the substrate and 
 All flight operations are conducted in line with South African Civil Aviation Authority (SACAA) regulations, during daylight hours only.
 
 8. Payment Terms and Validity
-Payment terms: [to be completed]. This quotation is valid until the date shown.',
+A 60% deposit is payable on acceptance to secure the booking. The balance is payable on completion. This quotation is valid for 45 days from the date of issue.',
             CURRENT_TIMESTAMP
         );
     END IF;

@@ -187,6 +187,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         thermalCameraEnabled: (initialSettings as any)?.thermalCameraEnabled ?? false,
         bankDetails: initialSettings?.bankDetails || "",
         paymentTerms: initialSettings?.paymentTerms || "",
+        validityDays: (initialSettings as any)?.validityDays ?? 30,
         currency: initialSettings?.currency || "R",
         theme: initialSettings?.theme || "dark",
         aiEnabled: initialSettings?.aiEnabled ?? true,
@@ -862,6 +863,17 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                                     value={formData.paymentTerms}
                                     onChange={handleChange}
                                     placeholder="e.g. Net 30, Due on Receipt"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="validityDays">Quotation Validity (Days)</Label>
+                                <Input
+                                    id="validityDays"
+                                    name="validityDays"
+                                    type="number"
+                                    value={formData.validityDays}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, validityDays: parseInt(e.target.value, 10) || 0 }))}
+                                    placeholder="e.g. 45"
                                 />
                             </div>
                             <div className="space-y-2">

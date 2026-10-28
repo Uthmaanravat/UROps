@@ -41,6 +41,8 @@ export interface AeroWashQuotePdfOptions {
             metadata?: any;
         }[];
         metadata?: any;
+        conditionFlags?: any[];
+        siteVisitPhotos?: any[];
         terms?: { bodySnapshot: string }[];
     };
     company: {
@@ -98,8 +100,8 @@ export async function generateAeroWashQuotePdf({
         ? (isVatActive ? 'T A X   I N V O I C E' : 'I N V O I C E')
         : 'Q U O T A T I O N';
 
-    // Validity: quote date + validity days (default 30)
-    const validityDays = companySettings?.validityDays || 30;
+    // Validity: quote date + validity days (default 45)
+    const validityDays = companySettings?.validityDays || 45;
     const validUntilDate = new Date(dateObj);
     validUntilDate.setDate(validUntilDate.getDate() + validityDays);
 
@@ -393,6 +395,65 @@ export async function generateAeroWashQuotePdf({
                 amountCellContent
             ]);
         });
+
+        // Condition flags for this elevation
+        const conditionFlags: any[] = invoice.metadata?.conditionFlags || invoice.conditionFlags || [];
+        const matchingFlags = conditionFlags.filter((f: any) =>
+            f.elevation && (
+                f.elevation.toLowerCase() === group.area.toLowerCase() ||
+                (!isGroupedByElevation && sequentialGroups.length === 1)
+            )
+        );
+
+        matchingFlags.forEach((flag: any) => {
+            tableBody.push([
+                {
+                    content: `Existing condition noted:\n${flag.wording}`,
+                    colSpan: 2,
+                    styles: {
+                        fillColor: [255, 247, 237], // #FFF7ED light orange
+                        textColor: [124, 45, 18],   // #7C2D12
+                        lineColor: [208, 94, 0],    // #D05E00
+                        lineWidth: { left: 1.5, top: 0, right: 0, bottom: 0 },
+                        fontSize: 7.5,
+                        fontStyle: 'normal',
+                        cellPadding: 3.5
+                    }
+                }
+            ]);
+        });
+    });
+
+    // Any remaining condition flags not caught by elevation matching
+    const conditionFlagsAll: any[] = invoice.metadata?.conditionFlags || invoice.conditionFlags || [];
+    const processedFlagIds = new Set();
+    sequentialGroups.forEach(group => {
+        const matching = conditionFlagsAll.filter((f: any) =>
+            f.elevation && (
+                f.elevation.toLowerCase() === group.area.toLowerCase() ||
+                (!isGroupedByElevation && sequentialGroups.length === 1)
+            )
+        );
+        matching.forEach(f => processedFlagIds.add(f.id));
+    });
+
+    const unhandledFlags = conditionFlagsAll.filter((f: any) => !processedFlagIds.has(f.id));
+    unhandledFlags.forEach((flag: any) => {
+        tableBody.push([
+            {
+                content: `Existing condition noted (${flag.elevation}):\n${flag.wording}`,
+                colSpan: 2,
+                styles: {
+                    fillColor: [255, 247, 237],
+                    textColor: [124, 45, 18],
+                    lineColor: [208, 94, 0],
+                    lineWidth: { left: 1.5, top: 0, right: 0, bottom: 0 },
+                    fontSize: 7.5,
+                    fontStyle: 'normal',
+                    cellPadding: 3.5
+                }
+            }
+        ]);
     });
 
     autoTable(doc, {
@@ -686,6 +747,142 @@ export async function generateAeroWashQuotePdf({
             termsY += (clauseLines.length * 3.8) + 3;
         }
     });
+
+    // ==========================================
+    // 9b. APPENDIX: SITE INSPECTION PHOTOGRAPHS
+    // ==========================================
+    const siteVisitPhotos: any[] = invoice.metadata?.siteVisitPhotos || invoice.siteVisitPhotos || [];
+    if (siteVisitPhotos && siteVisitPhotos.length > 0) {
+        doc.addPage();
+
+        // Black header on Appendix page
+        doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
+        doc.rect(0, 0, 210, 28, 'F');
+
+        // AW Logo mark
+        doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+        doc.triangle(14, 20, 18, 9, 21, 20, 'F');
+        doc.triangle(21, 20, 24, 12, 27, 20, 'F');
+        doc.triangle(27, 20, 30, 9, 34, 20, 'F');
+        doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
+        doc.triangle(16, 20, 18, 15, 20, 20, 'F');
+        doc.triangle(28, 20, 30, 15, 32, 20, 'F');
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text("A E R O W A S H", 38, 16);
+
+        // Right: APPENDIX heading & doc reference
+        doc.setFontSize(11);
+        doc.text("S I T E   I N S P E C T I O N   P H O T O G R A P H S", 196, 12, { align: "right" });
+
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+        doc.text(`Quote No. ${numberLabel}`, 196, 18, { align: "right" });
+
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(255, 255, 255);
+        doc.text(shortSite, 196, 23, { align: "right" });
+
+        // Thin orange rule
+        doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+        doc.rect(0, 28, 210, 1.2, 'F');
+
+        // Section header line
+        let photoY = 36;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.5);
+        doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+        doc.text("P H O T O G R A P H I C   R E C O R D", 14, photoY);
+        doc.setDrawColor(lightLineRGB[0], lightLineRGB[1], lightLineRGB[2]);
+        doc.setLineWidth(0.3);
+        doc.line(14, photoY + 2, 196, photoY + 2);
+        photoY += 8;
+
+        // Grid of photos: 3 columns per row
+        const cols = 3;
+        const colWidth = 56;
+        const colGap = 7;
+        const photoHeight = 42;
+        const cardHeight = 65;
+
+        siteVisitPhotos.forEach((photo: any, pIdx: number) => {
+            const colIndex = pIdx % cols;
+            const rowIndex = Math.floor(pIdx / cols);
+
+            // New page if overflowing
+            const cardY = photoY + (rowIndex * (cardHeight + 5));
+            if (cardY + cardHeight > pageHeight - 16) {
+                doc.addPage();
+                doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
+                doc.rect(0, 0, 210, 28, 'F');
+                doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+                doc.rect(0, 28, 210, 1.2, 'F');
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(255, 255, 255);
+                doc.text("A E R O W A S H", 38, 16);
+                doc.setFontSize(11);
+                doc.text("S I T E   I N S P E C T I O N   P H O T O G R A P H S   ( C O N T . )", 196, 12, { align: "right" });
+                photoY = 36;
+            }
+
+            const cardX = 14 + (colIndex * (colWidth + colGap));
+
+            // Card background & border
+            doc.setFillColor(249, 250, 251); // #F9FAFB
+            doc.setDrawColor(229, 231, 235); // #E5E7EB
+            doc.setLineWidth(0.3);
+            doc.roundedRect(cardX, cardY, colWidth, cardHeight, 1.5, 1.5, 'FD');
+
+            // Photo image or placeholder
+            if (photo.url && typeof photo.url === 'string' && (photo.url.startsWith('data:image') || photo.url.startsWith('http') || photo.url.length > 100)) {
+                try {
+                    const format = photo.url.includes('image/png') ? 'PNG' : 'JPEG';
+                    doc.addImage(photo.url, format, cardX + 2, cardY + 2, colWidth - 4, photoHeight, undefined, 'FAST');
+                } catch (e) {
+                    doc.setFillColor(243, 244, 246);
+                    doc.rect(cardX + 2, cardY + 2, colWidth - 4, photoHeight, 'F');
+                    doc.setFontSize(7);
+                    doc.setTextColor(156, 163, 175);
+                    doc.text("Photo Attached", cardX + (colWidth / 2), cardY + (photoHeight / 2), { align: "center" });
+                }
+            } else {
+                doc.setFillColor(243, 244, 246);
+                doc.rect(cardX + 2, cardY + 2, colWidth - 4, photoHeight, 'F');
+                doc.setFontSize(7);
+                doc.setTextColor(156, 163, 175);
+                doc.text("Inspection Photo", cardX + (colWidth / 2), cardY + (photoHeight / 2), { align: "center" });
+            }
+
+            // Photo badge: Photo 04
+            const labelY = cardY + photoHeight + 6;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.5);
+            doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+            doc.text(`Photo ${photo.photoNumber}`, cardX + 3, labelY);
+
+            // Elevation
+            if (photo.elevation) {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7);
+                doc.setTextColor(darkGreyRGB[0], darkGreyRGB[1], darkGreyRGB[2]);
+                const elevLines = doc.splitTextToSize(photo.elevation, colWidth - 6);
+                doc.text(elevLines[0], cardX + colWidth - 3, labelY, { align: "right" });
+            }
+
+            // Caption
+            if (photo.caption) {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(6.5);
+                doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
+                const capLines = doc.splitTextToSize(photo.caption, colWidth - 6);
+                doc.text(capLines.slice(0, 2), cardX + 3, labelY + 4);
+            }
+        });
+    }
 
     // ==========================================
     // 10. FOOTER ON EVERY PAGE

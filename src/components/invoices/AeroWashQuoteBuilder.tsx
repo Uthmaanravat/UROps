@@ -34,7 +34,13 @@ import {
     MINIMUM_JOB_AMOUNT,
     MINIMUM_FLOOR_RATE_PER_M2,
     AEROWASH_STANDARD_TERMS_NAME,
-    generateAeroWashScopeOfWorks
+    generateAeroWashScopeOfWorks,
+    CONDITION_TYPE_PRESETS,
+    ConditionTypePreset,
+    ConditionFlag,
+    SiteVisitPhoto,
+    generateConditionFlagWording,
+    formatPhotoRefs
 } from "@/lib/aerowash-catalogue"
 import { formatCurrency } from "@/lib/utils"
 
@@ -57,6 +63,7 @@ export interface ElevationState {
     hasExtendedSoiling: boolean;
     extendedSoilingPrice: number;
     allowSoilingOverride: boolean;
+    exclusions?: string;
 }
 
 export interface SiteProvisionsState {
@@ -190,6 +197,183 @@ export function AeroWashQuoteBuilder({
     const [isLandmark, setIsLandmark] = useState(false);
     const [siteVisitDone, setSiteVisitDone] = useState(true);
     const [contractorSpecReceived, setContractorSpecReceived] = useState(false);
+
+    // 3b. Site Visit Record & Photos State
+    const [siteVisitDate, setSiteVisitDate] = useState<string>(() => {
+        return initialData?.metadata?.siteVisitDate || initialData?.siteVisitDate || new Date().toISOString().slice(0, 10);
+    });
+    const [siteVisitAttendedBy, setSiteVisitAttendedBy] = useState<string>(() => {
+        return initialData?.metadata?.siteVisitAttendedBy || initialData?.siteVisitAttendedBy || '';
+    });
+    const [siteVisitPhotos, setSiteVisitPhotos] = useState<SiteVisitPhoto[]>(() => {
+        return initialData?.metadata?.siteVisitPhotos || initialData?.siteVisitPhotos || [];
+    });
+
+    // 3c. Condition Flags State
+    const [conditionFlags, setConditionFlags] = useState<ConditionFlag[]>(() => {
+        return initialData?.metadata?.conditionFlags || initialData?.conditionFlags || [];
+    });
+
+    // Condition Flag inline editor state
+    const [isAddingFlag, setIsAddingFlag] = useState(false);
+    const [flagElevation, setFlagElevation] = useState('');
+    const [flagLocation, setFlagLocation] = useState('');
+    const [flagConditionType, setFlagConditionType] = useState('GLASS_ETCHING');
+    const [flagPhotoRefs, setFlagPhotoRefs] = useState<string[]>([]);
+    const [flagCustomCondition, setFlagCustomCondition] = useState('');
+    const [flagCustomConsequence, setFlagCustomConsequence] = useState('');
+    const [flagCustomRestoration, setFlagCustomRestoration] = useState('');
+    const [flagCustomWording, setFlagCustomWording] = useState('');
+    const [isFlagWordingEdited, setIsFlagWordingEdited] = useState(false);
+
+    const computedFlagWording = useMemo(() => {
+        const preset = CONDITION_TYPE_PRESETS[flagConditionType] || CONDITION_TYPE_PRESETS.GLASS_ETCHING;
+        const condition = flagConditionType === 'OTHER' ? flagCustomCondition : preset.condition;
+        const consequence = flagConditionType === 'OTHER' ? flagCustomConsequence : preset.consequence;
+        const restoration = flagConditionType === 'OTHER' ? flagCustomRestoration : preset.restoration;
+
+        let formattedDate = 'site inspection';
+        if (siteVisitDate) {
+            const parts = siteVisitDate.split('-');
+            if (parts.length === 3) {
+                const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                formattedDate = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            } else {
+                formattedDate = new Date(siteVisitDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            }
+        }
+
+        return generateConditionFlagWording({
+            date: formattedDate,
+            condition,
+            elevation: flagElevation || elevations[0]?.name || 'elevation',
+            location: flagLocation || 'specified areas',
+            photoRefs: flagPhotoRefs,
+            consequence,
+            restoration
+        });
+    }, [flagConditionType, flagCustomCondition, flagCustomConsequence, flagCustomRestoration, siteVisitDate, flagElevation, flagLocation, flagPhotoRefs, elevations]);
+
+    useEffect(() => {
+        if (!isFlagWordingEdited) {
+            setFlagCustomWording(computedFlagWording);
+        }
+    }, [computedFlagWording, isFlagWordingEdited]);
+
+    const handleStartAddFlag = () => {
+        const defaultElev = elevations[0]?.name || '';
+        setFlagElevation(defaultElev);
+        setFlagLocation('');
+        setFlagConditionType('GLASS_ETCHING');
+        setFlagPhotoRefs([]);
+        setFlagCustomCondition('');
+        setFlagCustomConsequence('');
+        setFlagCustomRestoration('');
+        setIsFlagWordingEdited(false);
+        setIsAddingFlag(true);
+    };
+
+    const handleSaveFlag = () => {
+        const preset = CONDITION_TYPE_PRESETS[flagConditionType] || CONDITION_TYPE_PRESETS.GLASS_ETCHING;
+        const conditionText = flagConditionType === 'OTHER' ? flagCustomCondition : preset.condition;
+        const consequenceText = flagConditionType === 'OTHER' ? flagCustomConsequence : preset.consequence;
+        const restorationText = flagConditionType === 'OTHER' ? flagCustomRestoration : preset.restoration;
+        const elevTarget = flagElevation || elevations[0]?.name || '';
+
+        const newFlag: ConditionFlag = {
+            id: `flag-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            elevation: elevTarget,
+            location: flagLocation,
+            conditionType: flagConditionType,
+            conditionText,
+            consequenceText,
+            restorationText,
+            photoRefs: [...flagPhotoRefs].sort((a, b) => parseInt(a, 10) - parseInt(b, 10)),
+            wording: flagCustomWording || computedFlagWording
+        };
+
+        setConditionFlags(prev => [...prev, newFlag]);
+
+        // Auto-exclusion rule:
+        if (preset.isExcludedFromCleaning || flagConditionType === 'CRACKED_GLAZING' || flagConditionType === 'LOOSE_RENDER_CLADDING') {
+            if (flagLocation.trim()) {
+                setElevations(prev => prev.map(e => {
+                    if (e.name === elevTarget) {
+                        const current = e.exclusions ? e.exclusions.trim() : '';
+                        const loc = flagLocation.trim();
+                        const updated = current
+                            ? (current.toLowerCase().includes(loc.toLowerCase()) ? current : `${current}, ${loc}`)
+                            : loc;
+                        return { ...e, exclusions: updated };
+                    }
+                    return e;
+                }));
+            }
+        }
+
+        setIsAddingFlag(false);
+        setIsFlagWordingEdited(false);
+    };
+
+    const handleDeleteFlag = (id: string) => {
+        setConditionFlags(prev => prev.filter(f => f.id !== id));
+    };
+
+    const handleAddPhotos = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        Array.from(files).forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const dataUrl = event.target?.result as string;
+                setSiteVisitPhotos(prev => {
+                    const nextNum = String(prev.length + 1).padStart(2, '0');
+                    return [
+                        ...prev,
+                        {
+                            id: `photo-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 5)}`,
+                            photoNumber: nextNum,
+                            url: dataUrl,
+                            caption: '',
+                            elevation: elevations[0]?.name || ''
+                        }
+                    ];
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handleAddBlankPhoto = () => {
+        setSiteVisitPhotos(prev => {
+            const nextNum = String(prev.length + 1).padStart(2, '0');
+            return [
+                ...prev,
+                {
+                    id: `photo-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+                    photoNumber: nextNum,
+                    url: '',
+                    caption: '',
+                    elevation: elevations[0]?.name || ''
+                }
+            ];
+        });
+    };
+
+    const handleUpdatePhoto = (id: string, updates: Partial<SiteVisitPhoto>) => {
+        setSiteVisitPhotos(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    };
+
+    const handleDeletePhoto = (id: string) => {
+        setSiteVisitPhotos(prev => {
+            const remaining = prev.filter(p => p.id !== id);
+            return remaining.map((p, idx) => ({
+                ...p,
+                photoNumber: String(idx + 1).padStart(2, '0')
+            }));
+        });
+    };
 
     // 4. Client View Toggle for Admin Verification
     const [previewMode, setPreviewMode] = useState<'BUILDER' | 'CLIENT_VIEW'>('BUILDER');
@@ -739,6 +923,10 @@ export function AeroWashQuoteBuilder({
                 programme,
                 isLandmark,
                 siteVisitDone,
+                siteVisitDate,
+                siteVisitAttendedBy,
+                siteVisitPhotos,
+                conditionFlags,
                 contractorSpecReceived,
                 totalCalculatedArea: calculation.totalCalculatedArea,
                 minimumJobRaised: calculation.minimumJobRaised,
@@ -749,7 +937,7 @@ export function AeroWashQuoteBuilder({
             taxAmount: calculation.taxAmount,
             validationErrors: calculation.errors
         });
-    }, [calculation, scopeOfWorks, autoGeneratedScope]);
+    }, [calculation, scopeOfWorks, autoGeneratedScope, siteVisitDone, siteVisitDate, siteVisitAttendedBy, siteVisitPhotos, conditionFlags]);
 
     return (
         <div className="space-y-6">
@@ -1117,6 +1305,25 @@ export function AeroWashQuoteBuilder({
                                                         )}
                                                     </div>
                                                 </div>
+
+                                                {/* Exclusions (if condition flags excluded areas) */}
+                                                {elev.exclusions && (
+                                                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs flex items-center justify-between">
+                                                        <div className="flex items-center gap-2 text-amber-300">
+                                                            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                                                            <span><strong className="text-amber-200">Excluded from cleaning:</strong> {elev.exclusions}</span>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => updateElevation(elev.id, { exclusions: '' })}
+                                                            className="text-gray-400 hover:text-white h-6 px-2 text-[10px]"
+                                                        >
+                                                            Clear
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -1124,6 +1331,436 @@ export function AeroWashQuoteBuilder({
                             })}
                         </div>
                     </div>
+
+                    {/* SECTION: SITE INSPECTION & CONDITION FLAGS */}
+                    <Card className="border-white/10 bg-[#0F172A]/70">
+                        <CardHeader className="p-4 bg-white/[0.02] border-b border-white/5 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                                    <Camera className="w-4 h-4 text-primary" />
+                                    Site Inspection & Condition Flags
+                                </CardTitle>
+                                <CardDescription className="text-xs text-gray-400">
+                                    Record site inspection attendance, photograph register, and pre-clean condition flags.
+                                </CardDescription>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 cursor-pointer bg-white/[0.04] hover:bg-white/[0.08] px-3 py-1.5 rounded-lg border border-white/10 transition">
+                                    <input
+                                        type="checkbox"
+                                        checked={siteVisitDone}
+                                        onChange={e => setSiteVisitDone(e.target.checked)}
+                                        className="rounded text-primary"
+                                    />
+                                    <span className="text-xs font-semibold text-white">Site visit completed</span>
+                                </label>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-4 space-y-5">
+                            {/* Site Visit Attendance Fields */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                <div>
+                                    <Label className="text-[11px] text-gray-400">Site Visit Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={siteVisitDate}
+                                        onChange={e => setSiteVisitDate(e.target.value)}
+                                        className="h-9 text-xs mt-1 bg-background/50 border-white/10"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="text-[11px] text-gray-400">Attended By</Label>
+                                    <Input
+                                        type="text"
+                                        placeholder="e.g. John Doe / Flight Operations"
+                                        value={siteVisitAttendedBy}
+                                        onChange={e => setSiteVisitAttendedBy(e.target.value)}
+                                        className="h-9 text-xs mt-1 bg-background/50 border-white/10"
+                                    />
+                                </div>
+                                <div className="flex items-end">
+                                    <div className="w-full">
+                                        <Label className="text-[11px] text-gray-400">Photographs Upload</Label>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <label className="cursor-pointer flex items-center justify-center gap-1.5 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 rounded-lg px-3 py-2 text-xs font-semibold transition flex-1">
+                                                <Camera className="w-3.5 h-3.5" />
+                                                <span>Upload Photos</span>
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    accept="image/*"
+                                                    onChange={handleAddPhotos}
+                                                    className="hidden"
+                                                />
+                                            </label>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleAddBlankPhoto}
+                                                className="h-9 text-xs border-white/10 hover:bg-white/5"
+                                            >
+                                                + Photo Entry
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Uploaded Photos Gallery */}
+                            {siteVisitPhotos.length > 0 && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                                            Inspection Photographs ({siteVisitPhotos.length})
+                                        </span>
+                                        <span className="text-[11px] text-gray-400">
+                                            Auto-numbered 01, 02, 03…
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                        {siteVisitPhotos.map(photo => (
+                                            <div key={photo.id} className="p-2.5 rounded-lg bg-white/[0.02] border border-white/10 space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="px-2 py-0.5 rounded bg-primary/20 text-primary font-mono font-bold text-xs">
+                                                        Photo {photo.photoNumber}
+                                                    </span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleDeletePhoto(photo.id)}
+                                                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-400"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </div>
+
+                                                {/* Photo Thumbnail */}
+                                                <div className="aspect-[4/3] rounded bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
+                                                    {photo.url ? (
+                                                        <img src={photo.url} alt={`Photo ${photo.photoNumber}`} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="flex flex-col items-center gap-1 text-gray-500 text-[10px]">
+                                                            <Camera className="w-5 h-5" />
+                                                            <span>No image</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Elevation Select */}
+                                                <div>
+                                                    <select
+                                                        value={photo.elevation || ''}
+                                                        onChange={e => handleUpdatePhoto(photo.id, { elevation: e.target.value })}
+                                                        className="w-full h-7 text-xs rounded bg-background/60 border border-white/10 px-2 text-gray-200"
+                                                    >
+                                                        <option value="">Select elevation...</option>
+                                                        {elevations.map(e => (
+                                                            <option key={e.id} value={e.name}>{e.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                {/* Caption Input */}
+                                                <div>
+                                                    <Input
+                                                        placeholder="Optional caption..."
+                                                        value={photo.caption || ''}
+                                                        onChange={e => handleUpdatePhoto(photo.id, { caption: e.target.value })}
+                                                        className="h-7 text-xs bg-background/60 border-white/10"
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Condition Flags Section - only available once "Site visit done" is ticked */}
+                            <div className="pt-4 border-t border-white/10 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                            <AlertTriangle className="w-4 h-4 text-[#D05E00]" />
+                                            Pre-Clean Condition Flags ({conditionFlags.length})
+                                        </h4>
+                                        <p className="text-[11px] text-gray-400">
+                                            {siteVisitDone
+                                                ? "Identified during site visit. Printed in orange notice boxes on quote & carried to job sheet."
+                                                : "Enable 'Site visit completed' above to add pre-clean condition flags."}
+                                        </p>
+                                    </div>
+
+                                    {siteVisitDone && !isAddingFlag && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={handleStartAddFlag}
+                                            className="h-8 text-xs bg-[#D05E00] hover:bg-[#B34E00] text-white flex items-center gap-1.5"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            <span>Add Condition Flag</span>
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {/* Condition Flags Inline Form */}
+                                {siteVisitDone && isAddingFlag && (
+                                    <div className="p-4 rounded-xl bg-white/[0.03] border border-[#D05E00]/40 space-y-4">
+                                        <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                            <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                                New Condition Flag
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setIsAddingFlag(false)}
+                                                className="h-7 text-xs text-gray-400 hover:text-white"
+                                            >
+                                                Cancel
+                                            </Button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                            {/* Elevation Dropdown */}
+                                            <div>
+                                                <Label className="text-[11px] text-gray-400">Elevation</Label>
+                                                <select
+                                                    value={flagElevation}
+                                                    onChange={e => {
+                                                        setFlagElevation(e.target.value);
+                                                        setIsFlagWordingEdited(false);
+                                                    }}
+                                                    className="w-full h-9 text-xs rounded-md bg-background/70 border border-white/10 px-2.5 text-gray-200 mt-1"
+                                                >
+                                                    {elevations.map(e => (
+                                                        <option key={e.id} value={e.name}>{e.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            {/* Location */}
+                                            <div>
+                                                <Label className="text-[11px] text-gray-400">Location (free text)</Label>
+                                                <Input
+                                                    placeholder="e.g. levels 3 and 4"
+                                                    value={flagLocation}
+                                                    onChange={e => {
+                                                        setFlagLocation(e.target.value);
+                                                        setIsFlagWordingEdited(false);
+                                                    }}
+                                                    className="h-9 text-xs mt-1 bg-background/70 border-white/10"
+                                                />
+                                            </div>
+
+                                            {/* Condition Type Dropdown */}
+                                            <div>
+                                                <Label className="text-[11px] text-gray-400">Condition Type</Label>
+                                                <select
+                                                    value={flagConditionType}
+                                                    onChange={e => {
+                                                        setFlagConditionType(e.target.value);
+                                                        setIsFlagWordingEdited(false);
+                                                    }}
+                                                    className="w-full h-9 text-xs rounded-md bg-background/70 border border-white/10 px-2.5 text-gray-200 mt-1"
+                                                >
+                                                    {Object.values(CONDITION_TYPE_PRESETS).map(preset => (
+                                                        <option key={preset.id} value={preset.id}>
+                                                            {preset.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* If OTHER condition type: custom inputs */}
+                                        {flagConditionType === 'OTHER' && (
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 rounded-lg bg-black/20 border border-white/5">
+                                                <div>
+                                                    <Label className="text-[10px] text-gray-400">Condition wording</Label>
+                                                    <Input
+                                                        placeholder="e.g. surface corrosion"
+                                                        value={flagCustomCondition}
+                                                        onChange={e => {
+                                                            setFlagCustomCondition(e.target.value);
+                                                            setIsFlagWordingEdited(false);
+                                                        }}
+                                                        className="h-8 text-xs mt-1"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-[10px] text-gray-400">Consequence sentence</Label>
+                                                    <Input
+                                                        placeholder="e.g. Will not be removed by washing."
+                                                        value={flagCustomConsequence}
+                                                        onChange={e => {
+                                                            setFlagCustomConsequence(e.target.value);
+                                                            setIsFlagWordingEdited(false);
+                                                        }}
+                                                        className="h-8 text-xs mt-1"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-[10px] text-gray-400">Restoration item</Label>
+                                                    <Input
+                                                        placeholder="e.g. specialized restoration"
+                                                        value={flagCustomRestoration}
+                                                        onChange={e => {
+                                                            setFlagCustomRestoration(e.target.value);
+                                                            setIsFlagWordingEdited(false);
+                                                        }}
+                                                        className="h-8 text-xs mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Photo References multi-select */}
+                                        {siteVisitPhotos.length > 0 && (
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <Label className="text-[11px] text-gray-400">
+                                                        Attach Photographs {flagPhotoRefs.length > 0 && `(${formatPhotoRefs(flagPhotoRefs)})`}
+                                                    </Label>
+                                                    <span className="text-[10px] text-gray-400">
+                                                        Shown as range on quote e.g. 04–09
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-black/20 border border-white/5">
+                                                    {siteVisitPhotos.map(p => {
+                                                        const isSelected = flagPhotoRefs.includes(p.photoNumber);
+                                                        return (
+                                                            <button
+                                                                key={p.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFlagPhotoRefs(prev => 
+                                                                        isSelected
+                                                                            ? prev.filter(ref => ref !== p.photoNumber)
+                                                                            : [...prev, p.photoNumber]
+                                                                    );
+                                                                    setIsFlagWordingEdited(false);
+                                                                }}
+                                                                className={`px-2.5 py-1 text-xs rounded font-mono font-bold transition flex items-center gap-1.5 ${
+                                                                    isSelected
+                                                                        ? 'bg-[#D05E00] text-white'
+                                                                        : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                                                                }`}
+                                                            >
+                                                                <span>Photo {p.photoNumber}</span>
+                                                                {p.elevation && <span className="text-[10px] opacity-70">({p.elevation})</span>}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Auto-generated wording preview & edit */}
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-[11px] text-[#D05E00] font-bold">
+                                                    Generated Notice Box Wording (Editable before saving)
+                                                </Label>
+                                                {isFlagWordingEdited && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setIsFlagWordingEdited(false);
+                                                            setFlagCustomWording(computedFlagWording);
+                                                        }}
+                                                        className="text-[10px] text-gray-400 hover:text-white flex items-center gap-1"
+                                                    >
+                                                        <RotateCcw className="w-3 h-3" />
+                                                        <span>Reset to auto</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <textarea
+                                                rows={3}
+                                                value={flagCustomWording}
+                                                onChange={e => {
+                                                    setFlagCustomWording(e.target.value);
+                                                    setIsFlagWordingEdited(true);
+                                                }}
+                                                className="w-full text-xs font-mono rounded-lg bg-black/40 border border-white/10 p-3 text-gray-200 focus:outline-none focus:border-[#D05E00] leading-relaxed"
+                                            />
+                                            {(flagConditionType === 'CRACKED_GLAZING' || flagConditionType === 'LOOSE_RENDER_CLADDING') && (
+                                                <p className="text-[11px] text-amber-400 flex items-center gap-1 pt-1">
+                                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                                    <span>{`Note: Saving this flag will automatically add "${flagLocation || 'this location'}" to ${flagElevation}'s exclusions.`}</span>
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Save Button */}
+                                        <div className="flex justify-end gap-2 pt-2">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setIsAddingFlag(false)}
+                                                className="h-8 text-xs text-gray-400"
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={handleSaveFlag}
+                                                className="h-8 text-xs bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold"
+                                            >
+                                                Save Condition Flag
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* List of active condition flags */}
+                                {conditionFlags.length > 0 && (
+                                    <div className="space-y-3">
+                                        {conditionFlags.map(flag => (
+                                            <div
+                                                key={flag.id}
+                                                className="bg-[#FFF7ED] border-l-4 border-[#D05E00] p-3.5 rounded-r-xl space-y-1.5 shadow-sm text-zinc-900"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-xs text-[#9A3412] tracking-wide uppercase">
+                                                            Existing condition noted
+                                                        </span>
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#D05E00]/15 text-[#9A3412]">
+                                                            {flag.elevation}
+                                                        </span>
+                                                        {flag.location && (
+                                                            <span className="text-[10px] text-[#7C2D12]">
+                                                                · {flag.location}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleDeleteFlag(flag.id)}
+                                                        className="h-6 w-6 p-0 text-red-700 hover:text-red-900 hover:bg-red-100"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </div>
+                                                <p className="text-xs text-[#7C2D12] leading-relaxed">
+                                                    {flag.wording}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     {/* SECTION 2: BUILDING & SITE PROVISIONS */}
                     <Card className="border-white/10 bg-[#0F172A]/70">
@@ -1578,37 +2215,52 @@ export function AeroWashQuoteBuilder({
 
                     {/* Client Lines Table */}
                     <div className="space-y-4">
-                        {Array.from(new Set(calculation.clientItems.map(i => i.area))).map(areaName => (
-                            <div key={areaName} className="space-y-2">
-                                <h4 className="text-xs font-black uppercase tracking-wider text-primary bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20">
-                                    {areaName}
-                                </h4>
-                                <div className="space-y-2">
-                                    {calculation.clientItems
-                                        .filter(item => item.area === areaName)
-                                        .map((item, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2"
-                                            >
-                                                <div className="space-y-1 max-w-2xl">
-                                                    <div className="text-sm font-bold text-white">{item.name}</div>
-                                                    <div className="text-xs text-gray-400 leading-relaxed">
-                                                        {item.description}
+                        {Array.from(new Set(calculation.clientItems.map(i => i.area))).map(areaName => {
+                            const matchingFlags = conditionFlags.filter(f => f.elevation === areaName);
+                            return (
+                                <div key={areaName} className="space-y-2">
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-primary bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20">
+                                        {areaName}
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {calculation.clientItems
+                                            .filter(item => item.area === areaName)
+                                            .map((item, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2"
+                                                >
+                                                    <div className="space-y-1 max-w-2xl">
+                                                        <div className="text-sm font-bold text-white">{item.name}</div>
+                                                        <div className="text-xs text-gray-400 leading-relaxed">
+                                                            {item.description}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-base font-bold text-white font-mono shrink-0">
+                                                        {item.amount === 0 ? (
+                                                            <span className="text-emerald-400">No charge</span>
+                                                        ) : (
+                                                            formatCurrency(item.amount, currencySymbol)
+                                                        )}
                                                     </div>
                                                 </div>
-                                                <div className="text-base font-bold text-white font-mono shrink-0">
-                                                    {item.amount === 0 ? (
-                                                        <span className="text-emerald-400">No charge</span>
-                                                    ) : (
-                                                        formatCurrency(item.amount, currencySymbol)
-                                                    )}
+                                            ))}
+
+                                        {/* Orange Notice Box for Condition Flags under this elevation */}
+                                        {matchingFlags.map(flag => (
+                                            <div key={flag.id} className="bg-[#FFF7ED] border-l-4 border-[#D05E00] p-3.5 rounded-r-xl space-y-1 my-2 text-zinc-900">
+                                                <div className="font-bold text-xs text-[#9A3412] tracking-wide uppercase">
+                                                    Existing condition noted
+                                                </div>
+                                                <div className="text-xs text-[#7C2D12] leading-relaxed">
+                                                    {flag.wording}
                                                 </div>
                                             </div>
                                         ))}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {/* Totals Summary */}
@@ -1655,6 +2307,35 @@ export function AeroWashQuoteBuilder({
                             )}
                         </div>
                     </div>
+
+                    {/* Appendix: Site Inspection Photographs */}
+                    {siteVisitPhotos.length > 0 && (
+                        <div className="border-t border-white/10 pt-6 space-y-4">
+                            <div className="text-[11px] font-black uppercase tracking-wider text-primary">
+                                APPENDIX: SITE INSPECTION PHOTOGRAPHS
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                {siteVisitPhotos.map(photo => (
+                                    <div key={photo.id} className="bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden p-3 space-y-2">
+                                        <div className="aspect-[4/3] bg-black/40 rounded-lg flex items-center justify-center overflow-hidden border border-white/5">
+                                            {photo.url ? (
+                                                <img src={photo.url} alt={`Photo ${photo.photoNumber}`} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="text-gray-500 text-xs">No image</div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="font-bold text-primary font-mono">Photo {photo.photoNumber}</span>
+                                            <span className="text-gray-400 text-[10px] truncate max-w-[120px]">{photo.elevation}</span>
+                                        </div>
+                                        {photo.caption && (
+                                            <p className="text-[11px] text-gray-300 leading-tight">{photo.caption}</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </Card>
             )}
 

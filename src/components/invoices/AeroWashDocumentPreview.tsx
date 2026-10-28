@@ -62,7 +62,7 @@ export function AeroWashDocumentPreview({
         ? (isVatRegistered ? 'TAX INVOICE' : 'INVOICE')
         : 'QUOTATION';
 
-    const validityDays = companySettings?.validityDays || 30;
+    const validityDays = companySettings?.validityDays || 45;
     const validUntilDate = new Date(dateObj);
     validUntilDate.setDate(validUntilDate.getDate() + validityDays);
 
@@ -236,66 +236,118 @@ export function AeroWashDocumentPreview({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {items.map((item, idx) => {
-                                    const isIncluded = item.isIncluded || item.metadata?.isIncluded || (item.unitPrice === 0 && item.originalPrice && item.originalPrice > 0);
-                                    const originalAmount = item.originalPrice || (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
-                                    const amount = (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
+                                {(() => {
+                                    const conditionFlags: any[] = invoice.metadata?.conditionFlags || invoice.conditionFlags || [];
+                                    const sequentialGroups: { area: string; items: any[] }[] = [];
+                                    items.forEach(item => {
+                                        const area = (item.area || item.metadata?.area || '').trim();
+                                        const last = sequentialGroups[sequentialGroups.length - 1];
+                                        if (last && last.area === area) {
+                                            last.items.push(item);
+                                        } else {
+                                            sequentialGroups.push({ area, items: [item] });
+                                        }
+                                    });
 
-                                    const rawDesc = item.description || "";
-                                    let title = rawDesc;
-                                    let subDesc = "";
+                                    const isGroupedByElevation = sequentialGroups.length > 1 && sequentialGroups.some(g => Boolean(g.area));
+                                    let itemIndexCounter = 0;
 
-                                    if (rawDesc.includes("\n")) {
-                                        const parts = rawDesc.split("\n");
-                                        title = parts[0].trim();
-                                        subDesc = parts.slice(1).join(" ").trim();
-                                    } else if (rawDesc.includes(" – ")) {
-                                        const parts = rawDesc.split(" – ");
-                                        title = parts[0].trim();
-                                        subDesc = parts.slice(1).join(" – ").trim();
-                                    } else if (rawDesc.includes(" - ")) {
-                                        const parts = rawDesc.split(" - ");
-                                        title = parts[0].trim();
-                                        subDesc = parts.slice(1).join(" - ").trim();
-                                    }
+                                    return sequentialGroups.map((group, gIdx) => {
+                                        const matchingFlags = conditionFlags.filter(f =>
+                                            f.elevation && (
+                                                f.elevation.toLowerCase() === group.area.toLowerCase() ||
+                                                (!isGroupedByElevation && sequentialGroups.length === 1)
+                                            )
+                                        );
 
-                                    const cleanTitle = `${idx + 1}. ${title.replace(/^\d+[\.\)]\s*/, '')}`;
-
-                                    return (
-                                        <tr key={item.id || idx} className="hover:bg-gray-50/60 transition-colors">
-                                            <td className="py-3 px-4 align-top space-y-1">
-                                                <div className="font-bold text-zinc-900 text-[13px]">
-                                                    {cleanTitle}
-                                                </div>
-                                                {subDesc && (
-                                                    <div className="text-gray-600 text-xs leading-relaxed">
-                                                        {subDesc}
-                                                    </div>
+                                        return (
+                                            <React.Fragment key={gIdx}>
+                                                {isGroupedByElevation && group.area && (
+                                                    <tr className="bg-gray-50/80 border-y border-gray-200">
+                                                        <td colSpan={2} className="py-2 px-4 font-black text-[11px] text-[#D05E00] uppercase tracking-wider">
+                                                            {group.area}
+                                                        </td>
+                                                    </tr>
                                                 )}
-                                            </td>
-                                            <td className="py-3 px-4 text-right align-top">
-                                                {isIncluded ? (
-                                                    <div className="space-y-0.5">
-                                                        <div className="line-through text-gray-400 font-normal">
-                                                            {formatCurrency(originalAmount, currencySymbol)}
-                                                        </div>
-                                                        <div className="text-emerald-600 font-black tracking-wider text-[11px]">
-                                                            INCLUDED
-                                                        </div>
-                                                    </div>
-                                                ) : amount === 0 ? (
-                                                    <div className="text-emerald-600 font-black tracking-wider text-[11px]">
-                                                        INCLUDED
-                                                    </div>
-                                                ) : (
-                                                    <div className="font-bold text-zinc-900 text-sm">
-                                                        {formatCurrency(amount, currencySymbol)}
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                {group.items.map((item: any, iIdx: number) => {
+                                                    itemIndexCounter++;
+                                                    const isIncluded = item.isIncluded || item.metadata?.isIncluded || (item.unitPrice === 0 && item.originalPrice && item.originalPrice > 0);
+                                                    const originalAmount = item.originalPrice || (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
+                                                    const amount = (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
+
+                                                    const rawDesc = item.description || "";
+                                                    let title = rawDesc;
+                                                    let subDesc = "";
+
+                                                    if (rawDesc.includes("\n")) {
+                                                        const parts = rawDesc.split("\n");
+                                                        title = parts[0].trim();
+                                                        subDesc = parts.slice(1).join(" ").trim();
+                                                    } else if (rawDesc.includes(" – ")) {
+                                                        const parts = rawDesc.split(" – ");
+                                                        title = parts[0].trim();
+                                                        subDesc = parts.slice(1).join(" – ").trim();
+                                                    } else if (rawDesc.includes(" - ")) {
+                                                        const parts = rawDesc.split(" - ");
+                                                        title = parts[0].trim();
+                                                        subDesc = parts.slice(1).join(" - ").trim();
+                                                    }
+
+                                                    const cleanTitle = `${itemIndexCounter}. ${title.replace(/^\d+[\.\)]\s*/, '')}`;
+
+                                                    return (
+                                                        <tr key={item.id || `${gIdx}-${iIdx}`} className="hover:bg-gray-50/60 transition-colors">
+                                                            <td className="py-3 px-4 align-top space-y-1">
+                                                                <div className="font-bold text-zinc-900 text-[13px]">
+                                                                    {cleanTitle}
+                                                                </div>
+                                                                {subDesc && (
+                                                                    <div className="text-gray-600 text-xs leading-relaxed">
+                                                                        {subDesc}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td className="py-3 px-4 text-right align-top">
+                                                                {isIncluded ? (
+                                                                    <div className="space-y-0.5">
+                                                                        <div className="line-through text-gray-400 font-normal">
+                                                                            {formatCurrency(originalAmount, currencySymbol)}
+                                                                        </div>
+                                                                        <div className="text-emerald-600 font-black tracking-wider text-[11px]">
+                                                                            INCLUDED
+                                                                        </div>
+                                                                    </div>
+                                                                ) : amount === 0 ? (
+                                                                    <div className="text-emerald-600 font-black tracking-wider text-[11px]">
+                                                                        INCLUDED
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="font-bold text-zinc-900 text-sm">
+                                                                        {formatCurrency(amount, currencySymbol)}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+
+                                                {/* Orange Notice Box for Condition Flags under this elevation */}
+                                                {matchingFlags.map(flag => (
+                                                    <tr key={flag.id} className="bg-[#FFF7ED]">
+                                                        <td colSpan={2} className="py-3 px-4 border-l-4 border-[#D05E00] space-y-1">
+                                                            <div className="font-bold text-xs text-[#9A3412] uppercase tracking-wider">
+                                                                Existing condition noted
+                                                            </div>
+                                                            <div className="text-[11px] text-[#7C2D12] leading-relaxed">
+                                                                {flag.wording}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </React.Fragment>
+                                        );
+                                    });
+                                })()}
                             </tbody>
                         </table>
                     </div>
@@ -411,6 +463,45 @@ export function AeroWashDocumentPreview({
                             ))}
                         </div>
                     </div>
+
+                    {/* APPENDIX: SITE INSPECTION PHOTOGRAPHS (Page 3 style) */}
+                    {(() => {
+                        const siteVisitPhotos: any[] = invoice.metadata?.siteVisitPhotos || invoice.siteVisitPhotos || [];
+                        if (!siteVisitPhotos || siteVisitPhotos.length === 0) return null;
+
+                        return (
+                            <div className="border-t-[2px] border-gray-300 pt-8 mt-12 space-y-4">
+                                <div className="flex justify-between items-center border-b border-gray-200 pb-2">
+                                    <span className="font-black text-xs uppercase tracking-[0.2em] text-[#D05E00]">
+                                        Appendix: Site Inspection Photographs
+                                    </span>
+                                    <span className="text-[10px] font-mono text-gray-400">
+                                        {siteVisitPhotos.length} Photographs Attached
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {siteVisitPhotos.map(photo => (
+                                        <div key={photo.id} className="border border-gray-200 rounded-lg p-2.5 bg-gray-50/60 space-y-2">
+                                            <div className="aspect-[4/3] bg-gray-100 rounded overflow-hidden flex items-center justify-center border border-gray-200">
+                                                {photo.url ? (
+                                                    <img src={photo.url} alt={`Photo ${photo.photoNumber}`} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="text-gray-400 text-xs">No image</div>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="font-bold text-[#D05E00] font-mono">Photo {photo.photoNumber}</span>
+                                                <span className="text-gray-600 font-medium text-[11px] truncate max-w-[130px]">{photo.elevation}</span>
+                                            </div>
+                                            {photo.caption && (
+                                                <p className="text-[11px] text-gray-700 leading-tight">{photo.caption}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Footer Bar */}

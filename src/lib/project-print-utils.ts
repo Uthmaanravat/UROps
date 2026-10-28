@@ -483,6 +483,138 @@ export async function generateJobSheetPdf(
     doc.text("Name: ___________________________________________", 112, y + 11)
     doc.text("Signature: _______________________ Date: _________", 112, y + 17)
 
+    // Pre-Clean Inspection & Caution Flags carry over to Job Sheet
+    const conditionFlags: any[] = project.conditionFlags
+        || project.metadata?.conditionFlags
+        || project.invoices?.find((i: any) => i.metadata?.conditionFlags)?.metadata?.conditionFlags
+        || [];
+    const siteVisitPhotos: any[] = project.siteVisitPhotos
+        || project.metadata?.siteVisitPhotos
+        || project.invoices?.find((i: any) => i.metadata?.siteVisitPhotos)?.metadata?.siteVisitPhotos
+        || [];
+
+    if (conditionFlags.length > 0 || siteVisitPhotos.length > 0) {
+        doc.addPage();
+        // Brand Header Bar
+        doc.setFillColor(20, 20, 30);
+        doc.rect(0, 0, pageWidth, 8, "F");
+        doc.setFillColor(primaryR, primaryG, primaryB);
+        doc.rect(0, 8, pageWidth, 2.5, "F");
+
+        // Header Title
+        doc.setFontSize(13);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 41, 59);
+        doc.text("JOB SHEET: PRE-CLEAN INSPECTION & CAUTION FLAGS", 14, 18);
+
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Project: ${project.title || project.name || 'Job'}  ·  Site: ${project.siteAddress || project.site || 'Site'}`, 14, 23);
+
+        let curY = 28;
+
+        if (conditionFlags.length > 0) {
+            doc.setFillColor(primaryR, primaryG, primaryB);
+            doc.rect(14, curY, pageWidth - 28, 5.5, "F");
+            doc.setFontSize(7.5);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(255, 255, 255);
+            doc.text("CAUTION FLAGS & EXISTING CONDITIONS NOTED (OPERATIONAL ATTENTION REQUIRED)", 18, curY + 3.8);
+            curY += 7.5;
+
+            conditionFlags.forEach((flag: any) => {
+                const flagLines = doc.splitTextToSize(flag.wording, pageWidth - 36);
+                const boxHeight = Math.max(12, (flagLines.length * 3.8) + 7);
+
+                doc.setFillColor(255, 247, 237); // #FFF7ED
+                doc.setDrawColor(208, 94, 0); // #D05E00
+                doc.setLineWidth(0.3);
+                doc.rect(14, curY, pageWidth - 28, boxHeight, 'F');
+                doc.setFillColor(208, 94, 0);
+                doc.rect(14, curY, 1.5, boxHeight, 'F');
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(7.5);
+                doc.setTextColor(154, 52, 18);
+                doc.text(`EXISTING CONDITION NOTED: ${flag.elevation || 'ELEVATION'} ${flag.location ? `(${flag.location})` : ''}`, 18, curY + 4);
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7);
+                doc.setTextColor(124, 45, 18);
+                doc.text(flagLines, 18, curY + 8);
+
+                curY += boxHeight + 3.5;
+            });
+        }
+
+        if (siteVisitPhotos.length > 0) {
+            curY += 3;
+            doc.setFillColor(71, 85, 105);
+            doc.rect(14, curY, pageWidth - 28, 5.5, "F");
+            doc.setFontSize(7.5);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(255, 255, 255);
+            doc.text("INSPECTION PHOTOGRAPHS", 18, curY + 3.8);
+            curY += 7.5;
+
+            const cols = 3;
+            const colWidth = 56;
+            const colGap = 7;
+            const photoHeight = 42;
+            const cardHeight = 62;
+
+            siteVisitPhotos.forEach((photo: any, pIdx: number) => {
+                const colIndex = pIdx % cols;
+                const rowIndex = Math.floor(pIdx / cols);
+                const cardY = curY + (rowIndex * (cardHeight + 4));
+
+                if (cardY + cardHeight > 285) return;
+
+                const cardX = 14 + (colIndex * (colWidth + colGap));
+
+                doc.setFillColor(248, 250, 252);
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.3);
+                doc.roundedRect(cardX, cardY, colWidth, cardHeight, 1.5, 1.5, 'FD');
+
+                if (photo.url && typeof photo.url === 'string' && (photo.url.startsWith('data:image') || photo.url.startsWith('http') || photo.url.length > 100)) {
+                    try {
+                        const format = photo.url.includes('image/png') ? 'PNG' : 'JPEG';
+                        doc.addImage(photo.url, format, cardX + 2, cardY + 2, colWidth - 4, photoHeight, undefined, 'FAST');
+                    } catch (e) {
+                        doc.setFillColor(241, 245, 249);
+                        doc.rect(cardX + 2, cardY + 2, colWidth - 4, photoHeight, 'F');
+                    }
+                } else {
+                    doc.setFillColor(241, 245, 249);
+                    doc.rect(cardX + 2, cardY + 2, colWidth - 4, photoHeight, 'F');
+                }
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(7.5);
+                doc.setTextColor(primaryR, primaryG, primaryB);
+                doc.text(`Photo ${photo.photoNumber}`, cardX + 3, cardY + photoHeight + 6);
+
+                if (photo.elevation) {
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(7);
+                    doc.setTextColor(71, 85, 105);
+                    const el = doc.splitTextToSize(photo.elevation, colWidth - 6);
+                    doc.text(el[0], cardX + colWidth - 3, cardY + photoHeight + 6, { align: "right" });
+                }
+
+                if (photo.caption) {
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(6.5);
+                    doc.setTextColor(100, 116, 139);
+                    const cap = doc.splitTextToSize(photo.caption, colWidth - 6);
+                    doc.text(cap.slice(0, 2), cardX + 3, cardY + photoHeight + 10);
+                }
+            });
+        }
+    }
+
     return doc
 }
 

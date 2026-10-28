@@ -121,6 +121,7 @@ model CompanySettings {
   vatRegistrationDate  DateTime?
   vatRate              Float?   @default(15.0)
   justificationEnabled Boolean  @default(true)
+  validityDays         Int?     @default(30)
 }
 
 model Client {
