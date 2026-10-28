@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
-const { generateAeroWashQuotePdf } = require('../src/lib/aerowash-quote-pdf');
+const { generateAeroWashQuotePdf } = require('../src/lib/aerowash-quote-pdf.ts');
 const { generateConditionFlagWording } = require('../src/lib/aerowash-catalogue');
 
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';

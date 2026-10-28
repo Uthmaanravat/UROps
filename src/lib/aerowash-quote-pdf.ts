@@ -130,8 +130,7 @@ export async function generateAeroWashQuotePdf({
     });
         const rawLogo =
         (companySettings as any)?.layoutPreferences?.darkHeaderLogoUrl ||
-        (companySettings as any)?.logoUrl ||
-        company.logoUrl;
+        '/aerowash_header_logo.png';
     const headerLogoBase64 =
         (await resolveImageBase64(rawLogo)) ||
         (await resolveImageBase64('/aerowash_header_logo.png'));
@@ -674,13 +673,54 @@ export async function generateAeroWashQuotePdf({
     // ==========================================
     doc.addPage();
 
-    // Top thin black/orange strip
+    // Black header on Terms page (Matches reference media_1793210441931_b9902b4d.png)
     doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
-    doc.rect(0, 0, 210, 8, 'F');
-    doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    doc.rect(0, 8, 210, 1.2, 'F');
+    doc.rect(0, 0, 210, 28, 'F');
 
-    let p2Y = 18;
+    // AW Logo mark on left
+    if (headerLogoBase64) {
+        try {
+            const imgProps = doc.getImageProperties(headerLogoBase64);
+            const maxH = 20;
+            const aspect = imgProps.width / imgProps.height;
+            const renderW = Math.min(maxH * aspect, 50);
+            const renderH = renderW / aspect;
+            const renderY = 4 + (maxH - renderH) / 2;
+            doc.addImage(headerLogoBase64, 'PNG', 14, renderY, renderW, renderH);
+        } catch {
+            doc.addImage(headerLogoBase64, 'PNG', 14, 4, 34, 20);
+        }
+    } else {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(255, 255, 255);
+        doc.text("A E R O W A S H", 14, 16);
+    }
+
+    // Right: TERMS heading & doc reference
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(255, 255, 255);
+    doc.text("T E R M S", 196, 12, { align: "right" });
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(255, 255, 255);
+    doc.text(isInvoice ? "Invoice No. " : "Quote No. ", 158, 18);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+    doc.text(numberLabel, 196, 18, { align: "right" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(200, 200, 200);
+    doc.text(shortSite, 196, 23, { align: "right" });
+
+    // Thin orange rule under header band
+    doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+    doc.rect(0, 28, 210, 1.2, 'F');
+
+    let p2Y = 36;
 
     // Helper: Draw orange spaced heading with underline
     const drawSpacedHeading = (title: string, x: number, y: number, width: number) => {

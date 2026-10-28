@@ -125,7 +125,7 @@ export function AeroWashDocumentPreview({
                     <div className="flex items-center">
                         {((companySettings?.layoutPreferences as any)?.darkHeaderLogoUrl || companySettings?.logoUrl || company?.logoUrl || "/aerowash_header_logo.png") ? (
                             <img
-                                src={(companySettings?.layoutPreferences as any)?.darkHeaderLogoUrl || companySettings?.logoUrl || company?.logoUrl || "/aerowash_header_logo.png"}
+                                src={(companySettings?.layoutPreferences as any)?.darkHeaderLogoUrl || "/aerowash_header_logo.png"}
                                 alt={company?.name || "AeroWash"}
                                 className="h-14 sm:h-16 w-auto max-w-[240px] object-contain"
                             />
@@ -430,8 +430,27 @@ export function AeroWashDocumentPreview({
                         </div>
                     )}
 
-                    {/* TERMS AND CONDITIONS (Page 2 style) */}
-                    <div className="border-t-[2px] border-gray-300 pt-8 mt-12 space-y-6">
+                    {/* TERMS AND CONDITIONS (Page 2 style matching reference) */}
+                    <div className="rounded-2xl overflow-hidden border border-gray-200 mt-12 shadow-lg">
+                        {/* Terms Header Band */}
+                        <div className="bg-[#0A0A0A] text-white p-6 border-b-[2.5px] border-[#D05E00] flex justify-between items-center">
+                            <img
+                                src={(companySettings?.layoutPreferences as any)?.darkHeaderLogoUrl || "/aerowash_header_logo.png"}
+                                alt="AeroWash Drone Cleaning Solutions"
+                                className="h-12 w-auto object-contain"
+                            />
+                            <div className="text-right space-y-0.5">
+                                <h2 className="text-lg font-black tracking-[0.25em] text-white">TERMS</h2>
+                                <div className="text-xs">
+                                    <span className="text-gray-400">{isInvoice ? "Invoice No. " : "Quote No. "}</span>
+                                    <span className="font-bold text-[#D05E00]">{numberLabel}</span>
+                                </div>
+                                <div className="text-[11px] text-gray-300 font-medium">
+                                    {invoice.site ? invoice.site.split(',')[0].replace(/^Site:\s*/i, '') : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 sm:p-8 space-y-6 bg-white">
                         {/* 1. INCLUDED & EXCLUDED */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             {/* INCLUDED */}
@@ -603,6 +622,7 @@ export function AeroWashDocumentPreview({
                             <div className="pt-2 text-xs text-gray-500">
                                 Purchase order no. (if applicable): <span className="border-b border-gray-300 inline-block w-48">&nbsp;</span>
                             </div>
+                        </div>
                         </div>
                     </div>
 
