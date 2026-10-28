@@ -385,10 +385,6 @@ export function AeroWashDocumentPreview({
                                 <span className="font-black text-xs tracking-[0.2em]">TOTAL DUE</span>
                                 <span className="font-black text-xl tracking-tight text-white">{formatCurrency(total, currencySymbol)}</span>
                             </div>
-
-                            <div className="text-[10px] text-gray-400 text-right italic pt-1">
-                                Prepared by: {prepName}, {prepPhone}
-                            </div>
                         </div>
                     </div>
 

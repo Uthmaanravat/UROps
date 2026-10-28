@@ -555,16 +555,7 @@ export async function generateAeroWashQuotePdf({
     doc.setFontSize(11);
     doc.text(formatCurrency(invoice.total, currencySymbol), totalsRightX - 4, barY + 6.5, { align: "right" });
 
-    currentY = barY + 13;
-
-    // Prepared by line
-    const prepName = companySettings?.preparedByName || "Uthmaan Ravat";
-    const prepPhone = companySettings?.preparedByPhone || "067 829 3350";
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
-    doc.text(`Prepared by: ${prepName}, ${prepPhone}`, totalsRightX, currentY, { align: "right" });
-    currentY += 7;
+    currentY = barY + 14;
 
     // ==========================================
     // 6. NOTICE BOX (Site visit required)
