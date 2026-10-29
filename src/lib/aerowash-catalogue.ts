@@ -556,8 +556,53 @@ export function formatPhotoRefs(refs: string[]): string {
 }
 
 /**
- * Auto-generates the exact wording for a condition flag:
- * "Pre-clean inspection on [date] recorded [condition] on the [elevation], [location] (photographs [refs] attached). [Consequence sentence] No allowance for [restoration item] is included in this quotation."
+ * Returns formatted photograph reference parenthetical:
+ * 1 photo: " (photograph 01 attached)"
+ * multiple: " (photographs 01–02 attached)"
+ */
+export function formatPhotoSentenceRef(refs?: string[]): string {
+    if (!refs || refs.length === 0) return '';
+    const refStr = formatPhotoRefs(refs);
+    if (!refStr) return '';
+    if (refs.length === 1) {
+        return ` (photograph ${refStr} attached)`;
+    }
+    return ` (photographs ${refStr} attached)`;
+}
+
+/**
+ * Lowercases location text mid-sentence, unless it's a proper noun or level reference (e.g. "Level 4").
+ */
+export function formatLocationForSentence(text: string): string {
+    if (!text) return '';
+    const trimmed = text.trim();
+
+    // Preserve words that are references to levels, floors, blocks, or acronyms
+    return trimmed.replace(/\b([A-Za-z0-9–\-]+)\b/g, (match) => {
+        const lower = match.toLowerCase();
+        // Preserved capitalized words or user's exact case for level/floor
+        if (['level', 'levels', 'floor', 'floors', 'block', 'unit', 'bay', 'tower'].includes(lower)) {
+            return match;
+        }
+        // Roman numerals or acronyms
+        if (/^(ii|iii|iv|v|vi|vii|viii|ix|x|hvac|cctv|db)$/i.test(match)) {
+            return match.toUpperCase();
+        }
+        // If it starts with a number or digit (e.g. "2nd", "3rd"), leave as is
+        if (/^\d/.test(match)) return match;
+        // Default: lowercase mid-sentence (e.g. "Cracked Windows" -> "cracked windows")
+        return lower;
+    });
+}
+
+/**
+ * Smarter wording generator for AeroWash condition flags:
+ * - Natural phrasing reusing user's location input
+ * - Lowercases mid-sentence words, keeps "Level 4", etc.
+ * - Detects item vs place (e.g. "2 cracked windows" vs "Level 4" / "east end, levels 2–3")
+ * - Distinguishes singular/plural ("This" vs "These")
+ * - Full date format ("28 October 2026")
+ * - Singular/plural photo reference ("photograph 01 attached" vs "photographs 01–02 attached")
  */
 export function generateConditionFlagWording(params: {
     date: string;
@@ -567,13 +612,93 @@ export function generateConditionFlagWording(params: {
     photoRefs?: string[];
     consequence?: string;
     restoration?: string;
+    isExcludedFromCleaning?: boolean;
 }): string {
-    const photoStr = params.photoRefs && params.photoRefs.length > 0
-        ? ` (photographs ${formatPhotoRefs(params.photoRefs)} attached)`
-        : '';
-    const consequenceSentence = params.consequence ? `${params.consequence.trim()} ` : '';
-    const restorationSentence = params.restoration ? `No allowance for ${params.restoration.trim()} is included in this quotation.` : '';
+    const rawLoc = (params.location || '').trim();
+    const formattedLoc = formatLocationForSentence(rawLoc);
+    const photoStr = formatPhotoSentenceRef(params.photoRefs);
 
-    return `Pre-clean inspection on ${params.date} recorded ${params.condition} on the ${params.elevation}, ${params.location}${photoStr}. ${consequenceSentence}${restorationSentence}`.trim();
+    // Format full date (e.g. "28 October 2026")
+    let displayDate = params.date;
+    if (displayDate && !isNaN(new Date(displayDate).getTime()) && displayDate.includes('-')) {
+        displayDate = new Date(displayDate).toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+    }
+
+    // Determine if location is an ITEM/OBJECT (e.g. "2 cracked windows", "1 scratched panel")
+    // vs a PLACE (e.g. "Level 4", "east end, levels 2–3", "Ground floor")
+    const isPlacePrefix = /^(level|levels|floor|floors|bay|section|elevation|ground|roof|parapet|east|west|north|south|top|bottom|corner)/i.test(rawLoc);
+    const startsWithCount = /^(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b/i.test(rawLoc);
+    const hasItemNoun = /\b(window|windows|panel|panels|pane|panes|glass|render|cladding|joint|joints|seal|seals|tile|tiles|bracket|brackets|downpipe|gutter)\b/i.test(rawLoc);
+
+    const isItem = startsWithCount || (hasItemNoun && !isPlacePrefix);
+
+    // Check singular vs plural
+    const isSingular = /^(\b1\b|one|a\b|an\b)/i.test(rawLoc) || (!startsWithCount && !/s\b/i.test(rawLoc));
+    const pronoun = isSingular ? 'This' : 'These';
+
+    // Target noun for place consequences (e.g. "The affected glazing", "The affected cladding")
+    let affectedSubject = 'glazing';
+    if (/render|cladding/i.test(params.condition) || /render|cladding/i.test(rawLoc)) {
+        affectedSubject = 'cladding';
+    } else if (/sealant|joint/i.test(params.condition) || /sealant|joint/i.test(rawLoc)) {
+        affectedSubject = 'sealant joints';
+    } else if (/efflorescence|masonry|brick/i.test(params.condition)) {
+        affectedSubject = 'masonry';
+    } else if (/metal|rust/i.test(params.condition)) {
+        affectedSubject = 'metalwork';
+    }
+
+    let sentence1 = '';
+    let consequenceSentence = '';
+
+    const conditionLower = (params.condition || '').toLowerCase();
+
+    if (isItem) {
+        // Sentence 1: "Pre-clean inspection on [date] recorded [location] on the [elevation] (photographs...)"
+        sentence1 = `Pre-clean inspection on ${displayDate} recorded ${formattedLoc} on the ${params.elevation}${photoStr}.`;
+
+        // Consequence:
+        if (params.isExcludedFromCleaning || conditionLower.includes('cracked') || conditionLower.includes('loose') || (params.consequence && params.consequence.toLowerCase().includes('excluded'))) {
+            consequenceSentence = `${pronoun} will be excluded from cleaning to avoid further damage.`;
+        } else if (conditionLower.includes('scratch') || conditionLower.includes('etch') || conditionLower.includes('permanent')) {
+            consequenceSentence = `${pronoun} will remain visible after cleaning.`;
+        } else if (params.consequence) {
+            consequenceSentence = params.consequence
+                .replace(/^Affected (panels|areas) will be/i, `${pronoun} will be`)
+                .replace(/^These panels will be/i, `${pronoun} will be`)
+                .replace(/^Scratches are permanent damage and will/i, `${pronoun} will`);
+        }
+    } else {
+        // Location is a place: "Level 4", "east end, levels 2–3"
+        // Sentence 1: "Pre-clean inspection on [date] recorded [condition] on the [elevation], [location] (photographs...)"
+        const conditionText = params.condition || 'cracked or damaged glazing';
+        sentence1 = `Pre-clean inspection on ${displayDate} recorded ${conditionText} on the ${params.elevation}, ${formattedLoc}${photoStr}.`;
+
+        // Consequence for a place:
+        if (params.isExcludedFromCleaning || conditionLower.includes('cracked') || conditionLower.includes('loose') || (params.consequence && params.consequence.toLowerCase().includes('excluded'))) {
+            consequenceSentence = `The affected ${affectedSubject} will be excluded from cleaning to avoid further damage.`;
+        } else if (conditionLower.includes('scratch')) {
+            consequenceSentence = `The affected ${affectedSubject} will remain visible after cleaning.`;
+        } else if (conditionLower.includes('etching')) {
+            consequenceSentence = `The affected ${affectedSubject} will be washed but will retain a visible cloudy appearance afterwards.`;
+        } else if (conditionLower.includes('sealant')) {
+            consequenceSentence = `AeroWash will avoid direct spray on affected joints where practical.`;
+        } else if (params.consequence) {
+            consequenceSentence = params.consequence.replace(/^Affected (panels|areas)/i, `The affected ${affectedSubject}`);
+        }
+    }
+
+    // Restoration sentence:
+    let restorationSentence = '';
+    if (params.restoration && params.restoration.trim()) {
+        restorationSentence = `No allowance for ${params.restoration.trim()} is included in this quotation.`;
+    }
+
+    const full = [sentence1, consequenceSentence, restorationSentence].filter(Boolean).join(' ');
+    return full.replace(/\s+/g, ' ').trim();
 }
 

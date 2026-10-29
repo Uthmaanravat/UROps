@@ -20,7 +20,7 @@ import autoTable from "jspdf-autotable"
 import ExcelJS from "exceljs"
 import { saveAs } from "file-saver"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
-import { sendInvoiceEmail } from "@/app/(dashboard)/invoices/email-actions"
+import { sendInvoiceEmail, requestQuoteApprovalAction, ownerApproveQuoteAction, verifyQuoteActionPermission, getQuoteShareLinkAction } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction, getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction, renameProjectAction } from "@/app/(dashboard)/invoices/project-actions"
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react"
@@ -45,14 +45,18 @@ export function InvoiceViewer({
     availableProjects = [],
     tenders = [],
     termsTemplates = [],
-    isAdmin = false
+    isAdmin = false,
+    currentUserEmail = '',
+    isOwner = false
 }: { 
     invoice: any, 
     companySettings?: any, 
     availableProjects?: any[],
     tenders?: any[],
     termsTemplates?: any[],
-    isAdmin?: boolean
+    isAdmin?: boolean,
+    currentUserEmail?: string,
+    isOwner?: boolean
 }) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
@@ -964,6 +968,12 @@ export function InvoiceViewer({
     };
 
     const isAeroWashDocument = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash'));
+    const totalDue = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+    const isQuoteOverLimit = isAeroWashDocument && invoice.type === 'QUOTE' && (totalDue > 50000 || (Number(invoice.total) || 0) > 50000);
+    const [approvalStatus, setApprovalStatus] = useState<string>((invoice.metadata as any)?.approvalStatus || 'NONE');
+    const [isApproving, setIsApproving] = useState(false);
+    const [isRequestingApproval, setIsRequestingApproval] = useState(false);
+    const isApproved = approvalStatus === 'APPROVED';
 
     const handleSendEmail = async () => {
         if (!recipientEmails) {
@@ -1000,6 +1010,17 @@ export function InvoiceViewer({
     const currencySymbol = companySettings?.currency || "R";
 
     const generatePDF = async () => {
+        // Server-side permission verification for over-R50k quotes
+        if (isQuoteOverLimit && !isApproved && !isOwner) {
+            alert("This quotation exceeds R50,000 and requires owner approval before downloading.");
+            return;
+        }
+        const perm = await verifyQuoteActionPermission(invoice.id, 'DOWNLOAD_PDF');
+        if (!perm.allowed) {
+            alert(perm.error || "Cannot download PDF: Requires owner approval.");
+            return;
+        }
+
         const doc = new jsPDF();
         const currencySymbol = companySettings?.currency || "R";
         const [themeR, themeG, themeB] = getThemePrimaryRGB(companySettings?.theme);
@@ -2156,6 +2177,73 @@ export function InvoiceViewer({
                 </div>
             )}
 
+            {/* Approval Notification Banner for Over-R50,000 Quotes */}
+            {isQuoteOverLimit && !isApproved && (
+                <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/10 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-amber-200 shadow-xl backdrop-blur-sm">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400">
+                            <AlertTriangle className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <div className="font-bold text-sm text-white flex items-center gap-2">
+                                <span>Owner Approval Required</span>
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    Total: R{totalDue.toLocaleString()} (&gt; R50,000)
+                                </span>
+                            </div>
+                            <p className="text-xs text-amber-300/80 mt-0.5">
+                                {isOwner
+                                    ? "As company owner, your sign-off is required. PDF download, client email, and link sharing are blocked for non-owners until approved."
+                                    : "This quotation exceeds R50,000. PDF download, emailing, and sharing are locked server-side until approved by the company owner."
+                                }
+                            </p>
+                        </div>
+                    </div>
+                    {isOwner ? (
+                        <Button
+                            size="sm"
+                            disabled={isApproving}
+                            onClick={async () => {
+                                setIsApproving(true);
+                                const res = await ownerApproveQuoteAction(invoice.id);
+                                setIsApproving(false);
+                                if (res.success) {
+                                    setApprovalStatus('APPROVED');
+                                    alert("Quotation approved! Email, PDF, and share link are now unlocked.");
+                                    router.refresh();
+                                } else {
+                                    alert(res.error || "Failed to approve quotation");
+                                }
+                            }}
+                            className="bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 shrink-0 px-5 h-10"
+                        >
+                            {isApproving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                            <span>Approve Quote (1-click)</span>
+                        </Button>
+                    ) : (
+                        <Button
+                            size="sm"
+                            disabled={isRequestingApproval || approvalStatus === 'PENDING'}
+                            onClick={async () => {
+                                setIsRequestingApproval(true);
+                                const res = await requestQuoteApprovalAction(invoice.id);
+                                setIsRequestingApproval(false);
+                                if (res.success) {
+                                    setApprovalStatus('PENDING');
+                                    alert("Approval requested! Company owner has been notified via email and in-app alert.");
+                                } else {
+                                    alert(res.error || "Failed to request approval");
+                                }
+                            }}
+                            className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-xs rounded-xl shadow flex items-center gap-2 shrink-0 px-4 h-10"
+                        >
+                            {isRequestingApproval ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4 text-amber-400" />}
+                            <span>{approvalStatus === 'PENDING' ? 'Approval Requested (Pending)' : 'Notify Owner for Approval'}</span>
+                        </Button>
+                    )}
+                </div>
+            )}
+
             {/* Header Actions */}
             {/* Professional Action Bar */}
             <div className="flex flex-col xl:flex-row justify-between items-center gap-6 py-8 print:hidden border-b border-white/5 pb-10">
@@ -2177,40 +2265,123 @@ export function InvoiceViewer({
                 <div className="flex flex-wrap items-center justify-center gap-3">
                     {/* Document & Sharing Actions */}
                     <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 shadow-inner">
-                        <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm" disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
-                                    <Mail className="mr-2 h-4 w-4 text-primary" /> Email
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="bg-[#0F172A] border-white/10 text-white">
-                                <DialogHeader>
-                                    <DialogTitle className="text-2xl font-black uppercase tracking-wider">Send via Email</DialogTitle>
-                                    <DialogDescription className="text-gray-400">
-                                        Send this {invoice.type.toLowerCase()} directly to the client.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-6 py-6">
-                                    <div className="space-y-3">
-                                        <Label htmlFor="emails" className="text-[10px] font-black uppercase tracking-widest text-primary">Recipient Emails</Label>
-                                        <Input
-                                            id="emails"
-                                            placeholder="client@example.com, admin@example.com"
-                                            value={recipientEmails}
-                                            onChange={(e) => setRecipientEmails(e.target.value)}
-                                            className="bg-white/5 border-white/10 text-white h-12 focus:border-primary"
-                                        />
-                                        <p className="text-[10px] text-muted-foreground italic">Separate multiple addresses with commas.</p>
-                                    </div>
-                                </div>
-                                <DialogFooter>
-                                    <Button variant="ghost" onClick={() => setIsEmailDialogOpen(false)} className="text-gray-400">Cancel</Button>
-                                    <Button onClick={handleSendEmail} disabled={loading || !recipientEmails} className="bg-primary text-primary-foreground font-black px-8">
-                                        {loading ? "Sending..." : "Dispatch Email"}
+                        {isQuoteOverLimit && !isApproved ? (
+                            isOwner ? (
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={isApproving}
+                                        onClick={async () => {
+                                            setIsApproving(true);
+                                            const res = await ownerApproveQuoteAction(invoice.id);
+                                            setIsApproving(false);
+                                            if (res.success) {
+                                                setApprovalStatus('APPROVED');
+                                                alert("Quotation approved! You can now dispatch it to the client.");
+                                                router.refresh();
+                                            } else {
+                                                alert(res.error || "Failed to approve quotation");
+                                            }
+                                        }}
+                                        className="h-10 px-4 rounded-lg bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold text-xs flex items-center gap-2"
+                                    >
+                                        {isApproving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                                        <span>Approve Quote (1-click)</span>
                                     </Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
+                                    <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button variant="ghost" size="sm" disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
+                                                <Mail className="mr-2 h-4 w-4 text-primary" /> Email
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="bg-[#0F172A] border-white/10 text-white">
+                                            <DialogHeader>
+                                                <DialogTitle className="text-2xl font-black uppercase tracking-wider">Send via Email</DialogTitle>
+                                                <DialogDescription className="text-gray-400">
+                                                    Send this {invoice.type.toLowerCase()} directly to the client.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="grid gap-6 py-6">
+                                                <div className="space-y-3">
+                                                    <Label htmlFor="emails" className="text-[10px] font-black uppercase tracking-widest text-primary">Recipient Emails</Label>
+                                                    <Input
+                                                        id="emails"
+                                                        placeholder="client@example.com, admin@example.com"
+                                                        value={recipientEmails}
+                                                        onChange={(e) => setRecipientEmails(e.target.value)}
+                                                        className="bg-white/5 border-white/10 text-white h-12 focus:border-primary"
+                                                    />
+                                                    <p className="text-[10px] text-muted-foreground italic">Separate multiple addresses with commas.</p>
+                                                </div>
+                                            </div>
+                                            <DialogFooter>
+                                                <Button variant="ghost" onClick={() => setIsEmailDialogOpen(false)} className="text-gray-400">Cancel</Button>
+                                                <Button onClick={handleSendEmail} disabled={loading || !recipientEmails} className="bg-primary text-primary-foreground font-black px-8">
+                                                    {loading ? "Sending..." : "Dispatch Email"}
+                                                </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                            ) : (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={isRequestingApproval || approvalStatus === 'PENDING'}
+                                    onClick={async () => {
+                                        setIsRequestingApproval(true);
+                                        const res = await requestQuoteApprovalAction(invoice.id);
+                                        setIsRequestingApproval(false);
+                                        if (res.success) {
+                                            setApprovalStatus('PENDING');
+                                            alert("Approval requested! Company owner has been notified via email and in-app alert.");
+                                        } else {
+                                            alert(res.error || "Failed to request approval");
+                                        }
+                                    }}
+                                    className="h-10 px-4 rounded-lg bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold text-xs flex items-center gap-2 border border-amber-500/30"
+                                >
+                                    {isRequestingApproval ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4 text-amber-400" />}
+                                    <span>{approvalStatus === 'PENDING' ? 'Approval Requested (Pending Owner Sign-Off)' : 'Needs approval (> R50,000)'}</span>
+                                </Button>
+                            )
+                        ) : (
+                            <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
+                                        <Mail className="mr-2 h-4 w-4 text-primary" /> Email
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="bg-[#0F172A] border-white/10 text-white">
+                                    <DialogHeader>
+                                        <DialogTitle className="text-2xl font-black uppercase tracking-wider">Send via Email</DialogTitle>
+                                        <DialogDescription className="text-gray-400">
+                                            Send this {invoice.type.toLowerCase()} directly to the client.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="grid gap-6 py-6">
+                                        <div className="space-y-3">
+                                            <Label htmlFor="emails" className="text-[10px] font-black uppercase tracking-widest text-primary">Recipient Emails</Label>
+                                            <Input
+                                                id="emails"
+                                                placeholder="client@example.com, admin@example.com"
+                                                value={recipientEmails}
+                                                onChange={(e) => setRecipientEmails(e.target.value)}
+                                                className="bg-white/5 border-white/10 text-white h-12 focus:border-primary"
+                                            />
+                                            <p className="text-[10px] text-muted-foreground italic">Separate multiple addresses with commas.</p>
+                                        </div>
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="ghost" onClick={() => setIsEmailDialogOpen(false)} className="text-gray-400">Cancel</Button>
+                                        <Button onClick={handleSendEmail} disabled={loading || !recipientEmails} className="bg-primary text-primary-foreground font-black px-8">
+                                            {loading ? "Sending..." : "Dispatch Email"}
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        )}
 
                         <div className="w-px h-6 bg-white/10 self-center mx-1" />
 
@@ -2220,11 +2391,46 @@ export function InvoiceViewer({
                         }} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
                             <Download className="mr-2 h-4 w-4 text-emerald-500" /> Excel
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={async () => {
-                            await saveChanges();
-                            await generatePDF();
-                        }} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
-                            <Download className="mr-2 h-4 w-4 text-rose-500" /> PDF
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={loading || (isQuoteOverLimit && !isApproved && !isOwner)}
+                            onClick={async () => {
+                                if (isQuoteOverLimit && !isApproved && !isOwner) {
+                                    alert("This quotation exceeds R50,000 and requires owner approval before downloading.");
+                                    return;
+                                }
+                                await saveChanges();
+                                await generatePDF();
+                            }}
+                            className={cn(
+                                "h-10 px-4 rounded-lg text-white font-bold text-xs",
+                                (isQuoteOverLimit && !isApproved && !isOwner) ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-white/10"
+                            )}
+                            title={(isQuoteOverLimit && !isApproved && !isOwner) ? "Locked: Over R50,000 requires owner approval" : "Download PDF"}
+                        >
+                            {isQuoteOverLimit && !isApproved && !isOwner ? <Lock className="mr-2 h-4 w-4 text-amber-500" /> : <Download className="mr-2 h-4 w-4 text-rose-500" />} PDF
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={loading || (isQuoteOverLimit && !isApproved && !isOwner)}
+                            onClick={async () => {
+                                const res = await getQuoteShareLinkAction(invoice.id);
+                                if (!res.success) {
+                                    alert(res.error || "Cannot share quote: Requires owner approval.");
+                                    return;
+                                }
+                                await navigator.clipboard.writeText(res.shareUrl || '');
+                                alert("Client share link copied to clipboard:\n" + res.shareUrl);
+                            }}
+                            className={cn(
+                                "h-10 px-4 rounded-lg text-white font-bold text-xs",
+                                (isQuoteOverLimit && !isApproved && !isOwner) ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-white/10"
+                            )}
+                            title={(isQuoteOverLimit && !isApproved && !isOwner) ? "Locked: Over R50,000 requires owner approval" : "Share Client Link"}
+                        >
+                            {isQuoteOverLimit && !isApproved && !isOwner ? <Lock className="mr-2 h-4 w-4 text-amber-500" /> : <Copy className="mr-2 h-4 w-4 text-blue-400" />} Share Link
                         </Button>
                         
                         {invoice.type === 'INVOICE' && (

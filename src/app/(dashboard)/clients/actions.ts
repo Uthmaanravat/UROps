@@ -203,3 +203,51 @@ export async function getClientContactsAction(clientId: string) {
         orderBy: { name: 'asc' }
     })
 }
+
+export async function createClientInlineAction(payload: {
+    name: string;
+    contact?: string;
+    contactName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+}) {
+    try {
+        const companyId = await ensureAuth();
+        if (!payload.name || payload.name.trim() === '') {
+            return { success: false, error: "Client name is required" };
+        }
+
+        const words = payload.name.trim().split(/\s+/).filter(Boolean);
+        let codePrefix = '';
+        if (words.length >= 2) {
+            codePrefix = words.map(w => w.replace(/[^A-Za-z0-9]/g, '')[0]).join('').toUpperCase().slice(0, 4);
+        } else {
+            codePrefix = payload.name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4);
+        }
+        if (!codePrefix) codePrefix = 'CLI';
+
+        const attentionTo = payload.contactName?.trim() || payload.contact?.trim() || null;
+
+        const client = await prisma.client.create({
+            data: {
+                companyId,
+                name: payload.name.trim(),
+                companyName: payload.name.trim(),
+                attentionTo,
+                email: payload.email?.trim() || null,
+                phone: payload.phone?.trim() || null,
+                address: payload.address?.trim() || null,
+                codePrefix,
+            },
+            include: { contacts: true, defaultTermsTemplate: true }
+        });
+
+        revalidatePath('/clients');
+        revalidatePath('/invoices/new');
+        return { success: true, client };
+    } catch (e: any) {
+        console.error("createClientInlineAction error:", e);
+        return { success: false, error: e.message || "Failed to create client" };
+    }
+}

@@ -44,6 +44,35 @@ export default async function DashboardLayout({
 
         const settings = dbUser.company?.settings || null;
 
+        let pendingApprovals: any[] = [];
+        if ((dbUser as any).isOwner) {
+            try {
+                const quotes = await prisma.invoice.findMany({
+                    where: {
+                        companyId: dbUser.companyId,
+                        type: 'QUOTE',
+                        total: { gt: 50000 }
+                    },
+                    select: {
+                        id: true,
+                        quoteNumber: true,
+                        total: true,
+                        metadata: true,
+                        client: { select: { name: true } }
+                    }
+                });
+                const pending = quotes.filter(q => (q.metadata as any)?.approvalStatus !== 'APPROVED');
+                pendingApprovals = pending.map(q => ({
+                    id: q.id,
+                    quoteNumber: q.quoteNumber,
+                    clientName: q.client?.name || 'Client',
+                    total: q.total
+                }));
+            } catch (err) {
+                console.error('Error fetching pending approvals:', err);
+            }
+        }
+
         // CRITICAL: Must JSON-serialize to avoid Date object issues with Client Components
         let serializedUser = null;
         let serializedSettings = null;
@@ -56,7 +85,7 @@ export default async function DashboardLayout({
             serializedUser = { ...dbUser, createdAt: String(dbUser.createdAt), updatedAt: String(dbUser.updatedAt) };
         }
 
-        return <DashboardLayoutClient user={serializedUser} settings={serializedSettings}>{children}</DashboardLayoutClient>
+        return <DashboardLayoutClient user={serializedUser} settings={serializedSettings} pendingApprovals={pendingApprovals}>{children}</DashboardLayoutClient>
     } catch (criticalError) {
         console.error("Dashboard Layout Critical Error:", criticalError);
         // If it's a redirect error, rethrow it

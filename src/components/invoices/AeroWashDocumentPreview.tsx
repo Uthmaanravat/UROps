@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { formatCurrency, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Edit3, Check, FileText } from "lucide-react";
+import { Edit3, Check, FileText, CheckCircle2 } from "lucide-react";
 import { parseClauses } from "@/lib/terms-utils";
 import { AEROWASH_STANDARD_TERMS_BODY } from "@/lib/aerowash-catalogue";
 
@@ -82,9 +82,24 @@ export function AeroWashDocumentPreview({
     const allowanceName = invoice.metadata?.allowanceName || "Introductory allowance";
     const subtotalStandardRates = subtotal + allowanceAmount;
 
-    const siteVisitRequired = invoice.metadata?.siteVisitRequired ?? (
-        total >= 50000 || items.some(i => i.description?.toLowerCase().includes('site visit') || i.description?.toLowerCase().includes('pre-treatment'))
+    const siteVisitCompleted = Boolean(
+        invoice.metadata?.siteVisitDone || 
+        invoice.metadata?.siteVisitCompleted ||
+        (invoice.metadata?.siteVisitPhotos && invoice.metadata.siteVisitPhotos.length > 0) ||
+        (invoice.metadata?.conditionFlags && invoice.metadata.conditionFlags.length > 0)
     );
+    const siteVisitDateRaw = invoice.metadata?.siteVisitDate;
+    const siteVisitDateFormatted = siteVisitDateRaw 
+        ? new Date(siteVisitDateRaw).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+        : new Date(invoice.date || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const siteVisitRequired = !siteVisitCompleted && (
+        invoice.metadata?.siteVisitRequired ?? (
+            total >= 50000 || items.some(i => i.description?.toLowerCase().includes('site visit') || i.description?.toLowerCase().includes('pre-treatment'))
+        )
+    );
+
+    const clientRef = invoice.client?.codePrefix || invoice.metadata?.clientCodePrefix;
 
     const prepName = companySettings?.preparedByName || "Uthmaan Ravat";
     const prepPhone = companySettings?.preparedByPhone || "067 829 3350";
@@ -156,6 +171,12 @@ export function AeroWashDocumentPreview({
                                     <span className="font-bold text-[#D05E00]">{formattedValidDate}</span>
                                 </div>
                             )}
+                            {clientRef && (
+                                <div>
+                                    <span className="text-gray-400">Client ref: </span>
+                                    <span className="font-bold text-gray-200">{clientRef}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -194,6 +215,9 @@ export function AeroWashDocumentPreview({
                                 <div className="font-bold text-sm text-zinc-900">
                                     {attentionName}
                                 </div>
+                                {clientRef && (
+                                    <div className="font-bold text-zinc-800">Client ref: {clientRef}</div>
+                                )}
                                 {invoice.client?.email && <div>{invoice.client.email}</div>}
                                 {invoice.client?.phone && <div>{invoice.client.phone}</div>}
                                 {invoice.client?.companyName && invoice.client.companyName !== attentionName && (
@@ -382,8 +406,15 @@ export function AeroWashDocumentPreview({
                         </div>
                     </div>
 
-                    {/* NOTICE BOX (Site visit required) */}
-                    {siteVisitRequired && (
+                    {/* NOTICE BOX (Completed vs Required) */}
+                    {siteVisitCompleted ? (
+                        <div className="bg-[#F0FDF4] border-l-4 border-emerald-600 p-3.5 rounded-r-xl space-y-1">
+                            <div className="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>Measurements and condition confirmed on site on {siteVisitDateFormatted}.</span>
+                            </div>
+                        </div>
+                    ) : siteVisitRequired ? (
                         <div className="bg-[#FFF7ED] border-l-4 border-[#D05E00] p-4 rounded-r-xl space-y-1">
                             <div className="font-bold text-xs text-[#9A3412]">
                                 Site visit required to confirm this quotation
@@ -392,7 +423,7 @@ export function AeroWashDocumentPreview({
                                 Measurements are taken from aerial survey data. Before this quotation is confirmed, AeroWash will attend site at no charge to verify dimensions, assess condition, confirm water and power points and identify access constraints. A revised figure will be issued if verified measurements differ materially.
                             </div>
                         </div>
-                    )}
+                    ) : null}
 
                     {/* BANKING DETAILS (Invoices only) */}
                     {isInvoice && (
@@ -447,6 +478,7 @@ export function AeroWashDocumentPreview({
                                 </div>
                                 <div className="text-[11px] text-gray-300 font-medium">
                                     {invoice.site ? invoice.site.split(',')[0].replace(/^Site:\s*/i, '') : ''}
+                                    {clientRef ? ` · Client ref: ${clientRef}` : ''}
                                 </div>
                             </div>
                         </div>
@@ -628,7 +660,15 @@ export function AeroWashDocumentPreview({
 
                     {/* APPENDIX: SITE INSPECTION PHOTOGRAPHS (Page 3 style) */}
                     {(() => {
-                        const siteVisitPhotos: any[] = invoice.metadata?.siteVisitPhotos || invoice.siteVisitPhotos || [];
+                        const siteVisitPhotosRaw: any[] = invoice.metadata?.siteVisitPhotos || invoice.siteVisitPhotos || [];
+                        const flags: any[] = invoice.metadata?.conditionFlags || invoice.conditionFlags || [];
+                        const referencedRefs = new Set<string>();
+                        flags.forEach((f: any) => (f.photoRefs || []).forEach((r: string) => referencedRefs.add(String(r).trim())));
+
+                        const siteVisitPhotos = siteVisitPhotosRaw.filter((p: any) => {
+                            if (referencedRefs.size > 0) return referencedRefs.has(String(p.photoNumber).trim());
+                            return p.isSelected !== false && p.selected !== false;
+                        });
                         if (!siteVisitPhotos || siteVisitPhotos.length === 0) return null;
 
                         return (

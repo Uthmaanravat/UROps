@@ -83,6 +83,7 @@ model User {
   name                   String?
   phone                  String?
   role                   Role     @default(MANAGER)
+  isOwner                Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
   companyId              String

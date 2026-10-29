@@ -5,7 +5,7 @@ import React from "react"
 
 const cache = (React as any).cache || ((fn: any) => fn)
 
-export const getAuthCompanyId = cache(async () => {
+export const getAuthUser = cache(async () => {
     const supabase = createClient()
     if (!supabase) return null
 
@@ -19,10 +19,15 @@ export const getAuthCompanyId = cache(async () => {
                 { email: { equals: user.email?.trim().toLowerCase(), mode: 'insensitive' } }
             ]
         },
-        select: { companyId: true }
+        select: { id: true, email: true, name: true, role: true, isOwner: true, companyId: true }
     })
 
-    return dbUser?.companyId || null
+    return dbUser || null
+})
+
+export const getAuthCompanyId = cache(async () => {
+    const user = await getAuthUser()
+    return user?.companyId || null
 })
 
 export async function ensureAuth() {

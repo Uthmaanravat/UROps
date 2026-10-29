@@ -11,6 +11,7 @@ import {
     AlertTriangle,
     ShieldAlert,
     CheckCircle2,
+    Check,
     Building2,
     Calendar,
     Camera,
@@ -109,6 +110,7 @@ export interface SiteProvisionsState {
 
 export interface AeroWashQuoteBuilderProps {
     siteName?: string;
+    clientSelected?: boolean;
     currencySymbol?: string;
     surveyCameraEnabled?: boolean;
     thermalCameraEnabled?: boolean;
@@ -129,6 +131,7 @@ export interface AeroWashQuoteBuilderProps {
 
 export function AeroWashQuoteBuilder({
     siteName = "",
+    clientSelected = false,
     currencySymbol = "R",
     surveyCameraEnabled = false,
     thermalCameraEnabled = false,
@@ -164,34 +167,17 @@ export function AeroWashQuoteBuilder({
         return item ? item.isActive !== false : true;
     };
 
-    // 1. Elevations State
+    const cleanItemLabel = (name?: string) => {
+        if (!name) return '';
+        return name.replace(/^Item\s+\d+:\s*/i, '').replace(/\s*–\s*\[Elevation\]/i, '').trim();
+    };
+
+    // 1. Elevations State (Blank by default for new quotes)
     const [elevations, setElevations] = useState<ElevationState[]>(() => {
         if (initialData?.elevations && initialData.elevations.length > 0) {
             return initialData.elevations;
         }
-        return [
-            {
-                id: 'elev-1',
-                name: 'Front Elevation',
-                width: 36.36,
-                height: 51.0,
-                polygonArea: undefined,
-                band: 'D',
-                condition: 'Sound',
-                selectedCleaning: 'FULL_FACADE',
-                isMostlyGlassTower: false,
-                hasBalconies: false,
-                balconyPercent: 12,
-                hasPreTreatment: false,
-                preTreatmentPercent: 25,
-                hasPreCoatingWash: false,
-                hasExtendedSoiling: false,
-                extendedSoilingPrice: 0,
-                allowSoilingOverride: false,
-                hasHandClean: false,
-                handCleanPrice: 0
-            }
-        ];
+        return [];
     });
 
     // 2. Site Provisions State
@@ -264,6 +250,7 @@ export function AeroWashQuoteBuilder({
     const [flagCustomRestoration, setFlagCustomRestoration] = useState('');
     const [flagCustomWording, setFlagCustomWording] = useState('');
     const [isFlagWordingEdited, setIsFlagWordingEdited] = useState(false);
+    const [warnNoPhotosSelected, setWarnNoPhotosSelected] = useState(false);
 
     const computedFlagWording = useMemo(() => {
         const preset = CONDITION_TYPE_PRESETS[flagConditionType] || CONDITION_TYPE_PRESETS.GLASS_ETCHING;
@@ -276,9 +263,9 @@ export function AeroWashQuoteBuilder({
             const parts = siteVisitDate.split('-');
             if (parts.length === 3) {
                 const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-                formattedDate = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                formattedDate = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
             } else {
-                formattedDate = new Date(siteVisitDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                formattedDate = new Date(siteVisitDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
             }
         }
 
@@ -289,7 +276,8 @@ export function AeroWashQuoteBuilder({
             location: flagLocation || 'specified areas',
             photoRefs: flagPhotoRefs,
             consequence,
-            restoration
+            restoration,
+            isExcludedFromCleaning: preset.isExcludedFromCleaning || flagConditionType === 'CRACKED_GLAZING' || flagConditionType === 'LOOSE_RENDER_CLADDING'
         });
     }, [flagConditionType, flagCustomCondition, flagCustomConsequence, flagCustomRestoration, siteVisitDate, flagElevation, flagLocation, flagPhotoRefs, elevations]);
 
@@ -309,10 +297,17 @@ export function AeroWashQuoteBuilder({
         setFlagCustomConsequence('');
         setFlagCustomRestoration('');
         setIsFlagWordingEdited(false);
+        setWarnNoPhotosSelected(false);
         setIsAddingFlag(true);
     };
 
-    const handleSaveFlag = () => {
+    const handleSaveFlag = (force = false) => {
+        if (!force && siteVisitPhotos.length > 0 && flagPhotoRefs.length === 0) {
+            setWarnNoPhotosSelected(true);
+            return;
+        }
+        setWarnNoPhotosSelected(false);
+
         const preset = CONDITION_TYPE_PRESETS[flagConditionType] || CONDITION_TYPE_PRESETS.GLASS_ETCHING;
         const conditionText = flagConditionType === 'OTHER' ? flagCustomCondition : preset.condition;
         const consequenceText = flagConditionType === 'OTHER' ? flagCustomConsequence : preset.consequence;
@@ -455,6 +450,7 @@ export function AeroWashQuoteBuilder({
 
     // 4. Client View Toggle for Admin Verification
     const [previewMode, setPreviewMode] = useState<'BUILDER' | 'CLIENT_VIEW'>('BUILDER');
+    const [checkedClientView, setCheckedClientView] = useState(false);
 
     // 5. Scope of Works State & Auto-Generation
     const [scopeOfWorks, setScopeOfWorks] = useState<string>(() => {
@@ -493,15 +489,18 @@ export function AeroWashQuoteBuilder({
         setIsScopeEdited(false);
     };
 
+    // Elevation Presets for Admin Convenience
+    const ELEVATION_PRESETS = ['North', 'South', 'East', 'West', 'Front', 'Rear', 'Street frontage', 'Courtyard'];
+
     // Elevation Actions
     const addElevation = () => {
         const id = `elev-${Date.now()}`;
-        const name = `Elevation ${elevations.length + 1}`;
+        const nextName = ELEVATION_PRESETS.find(p => !elevations.some(e => e.name === p)) || `Elevation ${elevations.length + 1}`;
         setElevations(prev => [
             ...prev,
             {
                 id,
-                name,
+                name: nextName,
                 width: 25.0,
                 height: 18.0,
                 band: 'B',
@@ -523,7 +522,6 @@ export function AeroWashQuoteBuilder({
     };
 
     const removeElevation = (id: string) => {
-        if (elevations.length <= 1) return;
         setElevations(prev => prev.filter(e => e.id !== id));
     };
 
@@ -1099,16 +1097,64 @@ export function AeroWashQuoteBuilder({
 
     return (
         <div className="space-y-6">
+            {/* Step Strip */}
+            <div className="bg-[#0F172A]/90 border border-white/10 rounded-2xl p-3 shadow-lg">
+                <div className="flex items-center justify-between overflow-x-auto gap-2 py-1 scrollbar-none">
+                    {[
+                        { id: 'step-client', label: '1 Client', isComplete: Boolean(clientSelected || (siteName && siteName.trim())) },
+                        { id: 'step-elevations', label: '2 Elevations', isComplete: elevations.length > 0 && elevations.some(e => (e.width || 0) > 0 && (e.height || 0) > 0) },
+                        { id: 'step-site-visit', label: '3 Site visit', isComplete: siteVisitDone || conditionFlags.length > 0 || siteVisitPhotos.length > 0 || Boolean(siteVisitDate) },
+                        { id: 'step-extras', label: '4 Extras', isComplete: true },
+                        { id: 'step-contract', label: '5 Contract', isComplete: Boolean(programme) },
+                        { id: 'step-preview', label: '6 Check client view', isComplete: previewMode === 'CLIENT_VIEW' || checkedClientView },
+                        { id: 'step-save', label: '7 Save', isComplete: calculation.errors.length === 0 && elevations.length > 0 && (clientSelected || Boolean(siteName && siteName.trim())) }
+                    ].map((step, idx) => {
+                        const isDone = step.isComplete;
+                        return (
+                            <button
+                                key={step.id}
+                                type="button"
+                                onClick={() => {
+                                    if (step.id === 'step-preview') {
+                                        setPreviewMode('CLIENT_VIEW');
+                                        setCheckedClientView(true);
+                                        setTimeout(() => {
+                                            document.getElementById('step-preview')?.scrollIntoView({ behavior: 'smooth' });
+                                        }, 100);
+                                    } else if (step.id === 'step-client') {
+                                        document.getElementById('client-select')?.scrollIntoView({ behavior: 'smooth' });
+                                    } else if (step.id === 'step-save') {
+                                        document.getElementById('save-quote-submit-btn')?.scrollIntoView({ behavior: 'smooth' });
+                                    } else {
+                                        setPreviewMode('BUILDER');
+                                        setTimeout(() => {
+                                            document.getElementById(step.id)?.scrollIntoView({ behavior: 'smooth' });
+                                        }, 100);
+                                    }
+                                }}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                                    isDone
+                                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25'
+                                        : 'bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10'
+                                }`}
+                            >
+                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                                    isDone ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white/10 text-gray-400'
+                                }`}>
+                                    {isDone ? <Check className="w-3 h-3 stroke-[3]" /> : idx + 1}
+                                </span>
+                                <span>{step.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
             {/* Header Toolbar */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#1E293B]/40 p-4 rounded-2xl border border-white/5">
                 <div>
-                    <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded bg-primary/20 text-primary border border-primary/30">
-                            Rate Card Rev 13
-                        </span>
-                        <h2 className="text-lg font-bold text-white">AeroWash Elevation & Catalogue Quote Builder</h2>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <h2 className="text-lg font-bold text-white">AeroWash Elevation & Catalogue Quote Builder</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
                         Fixed-price facade quoting. Client output strips internal dimensions, rates, and bands.
                     </p>
                 </div>
@@ -1168,7 +1214,7 @@ export function AeroWashQuoteBuilder({
             {previewMode === 'BUILDER' ? (
                 <>
                     {/* SECTION 1: ELEVATIONS */}
-                    <div className="space-y-4">
+                    <div id="step-elevations" className="space-y-4">
                         <div className="flex justify-between items-center">
                             <div>
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -1176,7 +1222,7 @@ export function AeroWashQuoteBuilder({
                                     Elevations & Facade Specs
                                 </h3>
                                 <p className="text-xs text-gray-400">
-                                    Split building into elevations. Pricing uses full elevation width × height.
+                                    One block per side of the building. Enter width and height in metres.
                                 </p>
                             </div>
                             <Button
@@ -1192,123 +1238,170 @@ export function AeroWashQuoteBuilder({
                         </div>
 
                         <div className="space-y-4">
-                            {elevations.map((elev, idx) => {
-                                const bandInfo = getBandFromHeight(elev.height);
-                                const isHeavy = elev.condition === 'Heavy';
-                                const nominalArea = elev.width * elev.height;
-                                const areaToUse = elev.polygonArea && elev.polygonArea > 0 ? elev.polygonArea : nominalArea;
-                                const bandRate = RATE_CARD_BANDS[elev.band]?.rate || 28;
-                                const glazingPrice = roundToNearest50(areaToUse * bandRate);
-                                const facadePrice = roundToNearest50(glazingPrice * (elev.isMostlyGlassTower ? 1 : 1.15));
+                            {elevations.length === 0 ? (
+                                <Card className="border-dashed border-2 border-white/10 bg-[#0F172A]/40 p-8 text-center rounded-2xl">
+                                    <Building2 className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-60" />
+                                    <h4 className="text-sm font-bold text-white mb-1">No Elevations Added Yet</h4>
+                                    <p className="text-xs text-gray-400 max-w-md mx-auto mb-4">
+                                        One block per side of the building. Enter width and height in metres to calculate facade areas and cleaning band rates.
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        onClick={addElevation}
+                                        className="bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold text-xs"
+                                    >
+                                        <Plus className="w-4 h-4 mr-1.5" />
+                                        Add First Elevation
+                                    </Button>
+                                </Card>
+                            ) : (
+                                elevations.map((elev, idx) => {
+                                    const bandInfo = getBandFromHeight(elev.height);
+                                    const isHeavy = elev.condition === 'Heavy';
+                                    const nominalArea = elev.width * elev.height;
+                                    const areaToUse = elev.polygonArea && elev.polygonArea > 0 ? elev.polygonArea : nominalArea;
+                                    const bandRate = RATE_CARD_BANDS[elev.band]?.rate || 28;
+                                    const glazingPrice = roundToNearest50(areaToUse * bandRate);
+                                    const facadePrice = roundToNearest50(glazingPrice * (elev.isMostlyGlassTower ? 1 : 1.15));
+                                    const isPreset = ELEVATION_PRESETS.includes(elev.name);
+                                    const selectValue = isPreset ? elev.name : 'Other';
 
-                                return (
-                                    <Card key={elev.id} className="border-white/10 bg-[#0F172A]/70 overflow-hidden">
-                                        <CardHeader className="p-4 bg-white/[0.02] border-b border-white/5 flex flex-row items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">
-                                                    {idx + 1}
-                                                </span>
-                                                <Input
-                                                    value={elev.name}
-                                                    onChange={e => updateElevation(elev.id, { name: e.target.value })}
-                                                    className="h-8 text-sm font-bold w-48 bg-background/50 border-white/10"
-                                                />
-                                                <span className="text-xs text-gray-400">
-                                                    {nominalArea.toFixed(1)} m² nominal {elev.polygonArea ? `(${elev.polygonArea} m² measured)` : ''}
-                                                </span>
-                                            </div>
+                                    return (
+                                        <Card key={elev.id} className="border-white/10 bg-[#0F172A]/70 overflow-hidden">
+                                            <CardHeader className="p-4 bg-white/[0.02] border-b border-white/5 flex flex-row items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">
+                                                        {idx + 1}
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <select
+                                                            value={selectValue}
+                                                            onChange={e => {
+                                                                const val = e.target.value;
+                                                                if (val === 'Other') {
+                                                                    if (isPreset) updateElevation(elev.id, { name: '' });
+                                                                } else {
+                                                                    updateElevation(elev.id, { name: val });
+                                                                }
+                                                            }}
+                                                            className="h-8 text-xs font-bold bg-[#0F172A] border border-white/10 rounded-md px-2 text-white cursor-pointer"
+                                                        >
+                                                            {ELEVATION_PRESETS.map(preset => (
+                                                                <option key={preset} value={preset}>{preset}</option>
+                                                            ))}
+                                                            <option value="Other">Other (custom)...</option>
+                                                        </select>
+                                                        {selectValue === 'Other' && (
+                                                            <Input
+                                                                placeholder="Elevation name"
+                                                                value={elev.name}
+                                                                onChange={e => updateElevation(elev.id, { name: e.target.value })}
+                                                                className="h-8 text-xs font-bold w-36 bg-background/50 border-white/10"
+                                                                autoFocus
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs text-gray-400">
+                                                        {nominalArea.toFixed(1)} m² nominal {elev.polygonArea ? `(${elev.polygonArea} m² measured)` : ''}
+                                                    </span>
+                                                </div>
 
-                                            <div className="flex items-center gap-2">
-                                                {elevations.length > 1 && (
+                                                <div className="flex items-center gap-2">
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={() => removeElevation(elev.id)}
                                                         className="text-gray-400 hover:text-red-400 h-8 px-2"
+                                                        title="Delete elevation"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
                                                     </Button>
-                                                )}
-                                            </div>
-                                        </CardHeader>
-
-                                        <CardContent className="p-4 space-y-4">
-                                            {/* Dimensions & Band Row */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                                                <div>
-                                                    <Label className="text-[11px] text-gray-400">Width (m)</Label>
-                                                    <Input
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        value={elev.width ?? ''}
-                                                        onChange={e => updateElevation(elev.id, { width: parseDecimalInput(e.target.value) })}
-                                                        className="h-9 text-sm font-mono mt-1"
-                                                    />
                                                 </div>
+                                            </CardHeader>
 
-                                                <div>
-                                                    <Label className="text-[11px] text-gray-400">Height (m)</Label>
-                                                    <Input
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        value={elev.height ?? ''}
-                                                        onChange={e => updateElevation(elev.id, { height: parseDecimalInput(e.target.value) })}
-                                                        className="h-9 text-sm font-mono mt-1"
-                                                    />
-                                                </div>
+                                            <CardContent className="p-4 space-y-4">
+                                                {/* Dimensions & Band Row */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                                    <div>
+                                                        <Label className="text-[11px] text-gray-400">Width (m)</Label>
+                                                        <Input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            value={elev.width ?? ''}
+                                                            onChange={e => updateElevation(elev.id, { width: parseDecimalInput(e.target.value) })}
+                                                            className="h-9 text-sm font-mono mt-1"
+                                                        />
+                                                    </div>
 
-                                                <div>
-                                                    <Label className="text-[11px] text-gray-400">Height Band</Label>
-                                                    <select
-                                                        value={elev.band}
-                                                        onChange={e => updateElevation(elev.id, { band: e.target.value as any })}
-                                                        className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1 font-mono font-bold"
-                                                    >
-                                                        <option value="A">Band A (≤10.5 m) – R16/m²</option>
-                                                        <option value="B">Band B (10.5–21 m) – R20/m²</option>
-                                                        <option value="C">Band C (21–35 m) – R24/m²</option>
-                                                        <option value="D">Band D (35–52.5 m) – R28/m²</option>
-                                                        <option value="E">Band E (&gt;52.5 m) – R34/m²</option>
-                                                    </select>
-                                                </div>
+                                                    <div>
+                                                        <Label className="text-[11px] text-gray-400">Height (m)</Label>
+                                                        <Input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            value={elev.height ?? ''}
+                                                            onChange={e => updateElevation(elev.id, { height: parseDecimalInput(e.target.value) })}
+                                                            className="h-9 text-sm font-mono mt-1"
+                                                        />
+                                                    </div>
 
-                                                <div>
-                                                    <Label className="text-[11px] text-gray-400">Condition</Label>
-                                                    <select
-                                                        value={elev.condition}
-                                                        onChange={e => updateElevation(elev.id, { condition: e.target.value as any })}
-                                                        className={`w-full h-9 rounded-md border border-input px-3 text-xs mt-1 font-bold ${
-                                                            isHeavy ? 'bg-red-500/20 text-red-300 border-red-500/50' : 'bg-background'
-                                                        }`}
-                                                    >
-                                                        <option value="Light">Light (Routine)</option>
-                                                        <option value="Sound">Sound (Normal)</option>
-                                                        <option value="Medium">Medium (Soiled)</option>
-                                                        <option value="Heavy">Heavy (Restoration Needed)</option>
-                                                    </select>
-                                                </div>
+                                                    <div>
+                                                        <Label className="text-[11px] text-gray-400">Height Band</Label>
+                                                        <select
+                                                            value={elev.band}
+                                                            onChange={e => updateElevation(elev.id, { band: e.target.value as any })}
+                                                            className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1 font-mono font-bold"
+                                                        >
+                                                            <option value="A">Band A (≤10.5 m) – R16/m²</option>
+                                                            <option value="B">Band B (10.5–21 m) – R20/m²</option>
+                                                            <option value="C">Band C (21–35 m) – R24/m²</option>
+                                                            <option value="D">Band D (35–52.5 m) – R28/m²</option>
+                                                            <option value="E">Band E (&gt;52.5 m) – R34/m²</option>
+                                                        </select>
+                                                    </div>
 
-                                                <div>
-                                                    <Label className="text-[11px] text-gray-400">Area (m²)</Label>
-                                                    <div className="h-9 px-3 flex items-center justify-between rounded-md border border-primary/40 bg-primary/10 text-sm font-mono font-black text-primary mt-1">
-                                                        <span>{nominalArea.toFixed(1)} m²</span>
-                                                        <span className="text-[10px] text-gray-400 font-normal">Auto</span>
+                                                    <div>
+                                                        <Label className="text-[11px] text-gray-400">Condition</Label>
+                                                        <select
+                                                            value={elev.condition === 'Sound' || elev.condition === 'Light' ? 'Sound' : (elev.condition === 'Heavy' ? 'Heavy' : 'Medium')}
+                                                            onChange={e => {
+                                                                const val = e.target.value as 'Sound' | 'Medium' | 'Heavy';
+                                                                const updates: Partial<ElevationState> = { condition: val as any };
+                                                                if (val === 'Medium') {
+                                                                    updates.hasPreTreatment = true;
+                                                                }
+                                                                updateElevation(elev.id, updates);
+                                                            }}
+                                                            className={`w-full h-9 rounded-md border border-input px-3 text-xs mt-1 font-bold ${
+                                                                isHeavy ? 'bg-red-500/20 text-red-300 border-red-500/50' : 'bg-background'
+                                                            }`}
+                                                        >
+                                                            <option value="Sound">Normal (regular maintenance)</option>
+                                                            <option value="Medium">Moderate (needs pre-treatment, site visit required)</option>
+                                                            <option value="Heavy">Heavy (decline: needs restoration)</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <Label className="text-[11px] text-gray-400">Area (m²)</Label>
+                                                        <div className="h-9 px-3 flex items-center justify-between rounded-md border border-primary/40 bg-primary/10 text-sm font-mono font-black text-primary mt-1">
+                                                            <span>{nominalArea.toFixed(1)} m²</span>
+                                                            <span className="text-[10px] text-gray-400 font-normal">Auto</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
 
-                                            {/* Optional Polygon Cross-Check */}
-                                            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-                                                <span className="text-gray-400 text-[11px]">Polygon cross-check (optional):</span>
-                                                <Input
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    placeholder="Optional m²"
-                                                    value={elev.polygonArea ?? ''}
-                                                    onChange={e => updateElevation(elev.id, { polygonArea: e.target.value.trim() ? parseDecimalInput(e.target.value) : undefined })}
-                                                    className="h-7 w-32 text-xs font-mono bg-background/50 border-white/10"
-                                                />
+                                                {/* Optional Polygon Cross-Check */}
+                                                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                                                    <span className="text-gray-400 text-[11px]">Check measurement (optional): area from Google Earth:</span>
+                                                    <Input
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        placeholder="Optional m²"
+                                                        value={elev.polygonArea ?? ''}
+                                                        onChange={e => updateElevation(elev.id, { polygonArea: e.target.value.trim() ? parseDecimalInput(e.target.value) : undefined })}
+                                                        className="h-7 w-32 text-xs font-mono bg-background/50 border-white/10"
+                                                    />
                                                 {elev.polygonArea && elev.polygonArea > 0 ? (
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[11px] text-amber-300 font-mono">
@@ -1355,7 +1448,7 @@ export function AeroWashQuoteBuilder({
                                                             onChange={() => updateElevation(elev.id, { selectedCleaning: 'GLAZING' })}
                                                             className="text-primary"
                                                         />
-                                                        <span>Item 1: Glazing Only ({formatCurrency(glazingPrice, currencySymbol)})</span>
+                                                        <span>Glazing Only ({formatCurrency(glazingPrice, currencySymbol)})</span>
                                                     </label>
 
                                                     <label className="flex items-center gap-1.5 cursor-pointer">
@@ -1367,10 +1460,10 @@ export function AeroWashQuoteBuilder({
                                                             className="text-primary"
                                                         />
                                                         <span className="flex items-center gap-1">
-                                                            Item 2: Full Facade ({formatCurrency(facadePrice, currencySymbol)})
+                                                            Full Facade ({formatCurrency(facadePrice, currencySymbol)})
                                                             {!elev.isMostlyGlassTower && (
-                                                                <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-mono font-bold">
-                                                                    PROVISIONAL +15%
+                                                                <span className="text-[10px] text-gray-400 font-normal ml-1">
+                                                                    (rate under review)
                                                                 </span>
                                                             )}
                                                         </span>
@@ -1416,7 +1509,7 @@ export function AeroWashQuoteBuilder({
                                                                     onChange={e => updateElevation(elev.id, { hasBalconies: e.target.checked })}
                                                                     className="rounded text-primary"
                                                                 />
-                                                                <span>{getItem(3)?.name?.replace(' – [Elevation]', '') || 'Item 3: Balconies & Details'}</span>
+                                                                <span>{cleanItemLabel(getItem(3)?.name) || 'Balconies & Detail Areas'}</span>
                                                             </label>
                                                             {elev.hasBalconies && (
                                                                 <div className="flex items-center gap-2 pl-6">
@@ -1448,9 +1541,9 @@ export function AeroWashQuoteBuilder({
                                                                     className="rounded text-primary"
                                                                 />
                                                                 <span className="flex items-center gap-1">
-                                                                    {getItem(4)?.name?.replace(' – [Elevation]', '') || 'Item 4: Pre-Treatment'}
-                                                                    <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono">
-                                                                        PROVISIONAL
+                                                                    {cleanItemLabel(getItem(4)?.name) || 'Stain & Growth Pre-Treatment'}
+                                                                    <span className="text-[10px] text-gray-400 font-normal ml-1">
+                                                                        (rate under review)
                                                                     </span>
                                                                 </span>
                                                             </label>
@@ -1483,7 +1576,7 @@ export function AeroWashQuoteBuilder({
                                                                     onChange={e => updateElevation(elev.id, { hasPreCoatingWash: e.target.checked })}
                                                                     className="rounded text-primary"
                                                                 />
-                                                                <span>{getItem(9)?.name?.replace(' – [Elevation]', '') || 'Item 9: Pre-Coating Wash'}</span>
+                                                                <span>{cleanItemLabel(getItem(9)?.name) || 'Pre-Coating Wash'}</span>
                                                             </label>
                                                             {elev.hasPreCoatingWash && (
                                                                 <p className="text-[10px] text-gray-400 pl-6">
@@ -1493,7 +1586,7 @@ export function AeroWashQuoteBuilder({
                                                         </div>
                                                     )}
 
-                                                    {/* Item 16: Extended Soiling Provision */}
+                                                    {/* Extended Soiling Provision */}
                                                     {isItemActive(16) && (
                                                         <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 space-y-2">
                                                             <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -1503,7 +1596,7 @@ export function AeroWashQuoteBuilder({
                                                                     onChange={e => updateElevation(elev.id, { hasExtendedSoiling: e.target.checked })}
                                                                     className="rounded text-primary"
                                                                 />
-                                                                <span>{getItem(16)?.name?.replace(' – [Elevation]', '') || 'Item 16: Extended Soiling'}</span>
+                                                                <span>{cleanItemLabel(getItem(16)?.name) || 'Extended Soiling Provision'}</span>
                                                             </label>
                                                             {elev.hasExtendedSoiling && (
                                                                 <div className="space-y-1.5 pl-6">
@@ -1522,7 +1615,7 @@ export function AeroWashQuoteBuilder({
                                                                                 onChange={e => updateElevation(elev.id, { allowSoilingOverride: e.target.checked })}
                                                                                 className="rounded text-primary"
                                                                             />
-                                                                            <span>Allow override (double charge with Item 4)</span>
+                                                                            <span>Allow override (double charge with Stain & Growth Pre-Treatment)</span>
                                                                         </label>
                                                                     )}
                                                                 </div>
@@ -1530,7 +1623,7 @@ export function AeroWashQuoteBuilder({
                                                         </div>
                                                     )}
 
-                                                    {/* Item 23: Low-Level & Detail Hand Clean */}
+                                                    {/* Low-Level & Detail Hand Clean */}
                                                     {isItemActive(23) && (
                                                         <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 space-y-2">
                                                             <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -1540,7 +1633,7 @@ export function AeroWashQuoteBuilder({
                                                                     onChange={e => updateElevation(elev.id, { hasHandClean: e.target.checked })}
                                                                     className="rounded text-primary"
                                                                 />
-                                                                <span>{getItem(23)?.name?.replace(' – [Elevation]', '') || 'Item 23: Hand Clean'}</span>
+                                                                <span>{cleanItemLabel(getItem(23)?.name) || 'Low-Level & Detail Hand Clean'}</span>
                                                             </label>
                                                             {elev.hasHandClean && (
                                                                 <div className="pl-6">
@@ -1579,12 +1672,12 @@ export function AeroWashQuoteBuilder({
                                         </CardContent>
                                     </Card>
                                 );
-                            })}
+                            }))}
                         </div>
                     </div>
 
                     {/* SECTION: SITE INSPECTION & CONDITION FLAGS */}
-                    <Card className="border-white/10 bg-[#0F172A]/70">
+                    <Card id="step-site-visit" className="border-white/10 bg-[#0F172A]/70">
                         <CardHeader className="p-4 bg-white/[0.02] border-b border-white/5 flex flex-row items-center justify-between">
                             <div>
                                 <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
@@ -1592,7 +1685,7 @@ export function AeroWashQuoteBuilder({
                                     Site Inspection & Condition Flags
                                 </CardTitle>
                                 <CardDescription className="text-xs text-gray-400">
-                                    Record site inspection attendance, photograph register, and pre-clean condition flags.
+                                    Record pre-existing defects and site access notes with photo evidence.
                                 </CardDescription>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1880,7 +1973,7 @@ export function AeroWashQuoteBuilder({
                                                         Shown as range on quote e.g. 04–09
                                                     </span>
                                                 </div>
-                                                <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-black/20 border border-white/5">
+                                                <div className="flex flex-wrap gap-2 p-2.5 rounded-xl bg-black/30 border border-white/10">
                                                     {siteVisitPhotos.map(p => {
                                                         const isSelected = flagPhotoRefs.includes(p.photoNumber);
                                                         return (
@@ -1894,15 +1987,21 @@ export function AeroWashQuoteBuilder({
                                                                             : [...prev, p.photoNumber]
                                                                     );
                                                                     setIsFlagWordingEdited(false);
+                                                                    setWarnNoPhotosSelected(false);
                                                                 }}
-                                                                className={`px-2.5 py-1 text-xs rounded font-mono font-bold transition flex items-center gap-1.5 ${
+                                                                className={`px-3 py-1.5 text-xs rounded-lg font-mono font-bold transition-all flex items-center gap-1.5 border shadow-sm ${
                                                                     isSelected
-                                                                        ? 'bg-[#D05E00] text-white'
-                                                                        : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                                                                        ? 'bg-[#D05E00] text-white border-[#D05E00] ring-2 ring-[#D05E00]/40 shadow-[#D05E00]/30'
+                                                                        : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20'
                                                                 }`}
                                                             >
+                                                                {isSelected ? (
+                                                                    <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                                                                ) : (
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                                                                )}
                                                                 <span>Photo {p.photoNumber}</span>
-                                                                {p.elevation && <span className="text-[10px] opacity-70">({p.elevation})</span>}
+                                                                {p.elevation && <span className="text-[10px] opacity-75 font-normal font-sans">({p.elevation})</span>}
                                                             </button>
                                                         );
                                                     })}
@@ -1947,13 +2046,45 @@ export function AeroWashQuoteBuilder({
                                             )}
                                         </div>
 
+                                        {/* Warning when no photos are selected */}
+                                        {warnNoPhotosSelected && (
+                                            <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs animate-in fade-in">
+                                                <div className="flex items-center gap-2">
+                                                    <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                                                    <span>No defect photos selected for this flag. Are you sure you want to proceed without attaching photos?</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => handleSaveFlag(true)}
+                                                        className="h-7 px-3 text-xs bg-amber-600 hover:bg-amber-500 text-white font-bold"
+                                                    >
+                                                        Save Anyway
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => setWarnNoPhotosSelected(false)}
+                                                        className="h-7 px-2 text-xs text-gray-400 hover:text-white"
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Save Button */}
                                         <div className="flex justify-end gap-2 pt-2">
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() => setIsAddingFlag(false)}
+                                                onClick={() => {
+                                                    setIsAddingFlag(false);
+                                                    setWarnNoPhotosSelected(false);
+                                                }}
                                                 className="h-8 text-xs text-gray-400"
                                             >
                                                 Cancel
@@ -1961,7 +2092,7 @@ export function AeroWashQuoteBuilder({
                                             <Button
                                                 type="button"
                                                 size="sm"
-                                                onClick={handleSaveFlag}
+                                                onClick={() => handleSaveFlag(false)}
                                                 className="h-8 text-xs bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold"
                                             >
                                                 Save Condition Flag
@@ -2014,20 +2145,20 @@ export function AeroWashQuoteBuilder({
                     </Card>
 
                     {/* SECTION 2: BUILDING & SITE PROVISIONS */}
-                    <Card className="border-white/10 bg-[#0F172A]/70">
+                    <Card id="step-extras" className="border-white/10 bg-[#0F172A]/70">
                         <CardHeader className="p-4 bg-white/[0.02] border-b border-white/5">
                             <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
                                 <Building2 className="w-4 h-4 text-primary" />
                                 Building & Site Provisions
                             </CardTitle>
                             <CardDescription className="text-xs text-gray-400">
-                                Additional scope, water access, and working condition provisions.
+                                Select additional services or site requirements for this engagement.
                             </CardDescription>
                         </CardHeader>
 
                         <CardContent className="p-4 space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-                                {/* Item 15: Occupied Building */}
+                                {/* Occupied Building Provision */}
                                 {isItemActive(15) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2037,7 +2168,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasOccupiedBuilding: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(15)?.name || 'Item 15: Occupied Building Provision'}</span>
+                                            <span>{cleanItemLabel(getItem(15)?.name) || 'Occupied Building Provision'}</span>
                                         </label>
                                         <p className="text-[11px] text-gray-400">
                                             {getItem(15)?.clientDescription || 'Automatic 10% provision of all cleaning lines for tenant notifications and interrupted access.'}
@@ -2045,7 +2176,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 11: Site Visit (R0) */}
+                                {/* Site Visit & Facade Assessment (R0) */}
                                 {isItemActive(11) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2055,7 +2186,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasSiteVisit: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(11)?.name || 'Item 11: Site Visit & Facade Assessment'}</span>
+                                            <span>{cleanItemLabel(getItem(11)?.name) || 'Site Visit & Facade Assessment'}</span>
                                         </label>
                                         <p className="text-[11px] text-emerald-400 font-bold">
                                             R0 – Shown as &quot;No charge&quot; on client quote
@@ -2063,7 +2194,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 14: Service Photo Record */}
+                                {/* Service Photo Record */}
                                 {isItemActive(14) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2073,7 +2204,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasPhotoRecord: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(14)?.name || 'Item 14: Service Photo Record'}</span>
+                                            <span>{cleanItemLabel(getItem(14)?.name) || 'Service Photo Record'}</span>
                                         </label>
                                         <div className="flex items-center gap-2">
                                             <Input
@@ -2090,7 +2221,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 5: Roof Clean */}
+                                {/* Roof Maintenance Clean */}
                                 {isItemActive(5) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2100,7 +2231,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasRoofClean: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(5)?.name || 'Item 5: Roof Maintenance Clean'}</span>
+                                            <span>{cleanItemLabel(getItem(5)?.name) || 'Roof Maintenance Clean'}</span>
                                         </label>
                                         {siteProvisions.hasRoofClean && (
                                             <Input
@@ -2114,7 +2245,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 6: Solar Array Clean */}
+                                {/* Solar Array Clean */}
                                 {isItemActive(6) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2124,7 +2255,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasSolarClean: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(6)?.name || 'Item 6: Solar Array Clean'}</span>
+                                            <span>{cleanItemLabel(getItem(6)?.name) || 'Solar Array Clean'}</span>
                                         </label>
                                         {siteProvisions.hasSolarClean && (
                                             <div className="space-y-1.5 pl-6">
@@ -2162,7 +2293,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 7: Signage & Entrance Features */}
+                                {/* Signage & Entrance Features */}
                                 {isItemActive(7) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2172,7 +2303,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasSignage: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(7)?.name || 'Item 7: Signage & Entrance Features'}</span>
+                                            <span>{cleanItemLabel(getItem(7)?.name) || 'Signage & Entrance Features'}</span>
                                         </label>
                                         {siteProvisions.hasSignage && (
                                             <Input
@@ -2186,7 +2317,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 8: Bird Fouling Removal */}
+                                {/* Bird Fouling Removal */}
                                 {isItemActive(8) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2196,7 +2327,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasBirdFouling: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(8)?.name || 'Item 8: Bird Fouling Removal'}</span>
+                                            <span>{cleanItemLabel(getItem(8)?.name) || 'Bird Fouling Removal'}</span>
                                         </label>
                                         {siteProvisions.hasBirdFouling && (
                                             <Input
@@ -2210,7 +2341,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 10: Post-Construction Exterior Clean */}
+                                {/* Post-Construction Exterior Clean */}
                                 {isItemActive(10) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2220,7 +2351,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasPostConstruction: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(10)?.name || 'Item 10: Post-Construction Exterior Clean'}</span>
+                                            <span>{cleanItemLabel(getItem(10)?.name) || 'Post-Construction Exterior Clean'}</span>
                                         </label>
                                         {siteProvisions.hasPostConstruction && (
                                             <Input
@@ -2234,7 +2365,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 12: Facade Survey (Settings Gated) */}
+                                {/* Facade Condition Survey (Settings Gated) */}
                                 {surveyCameraEnabled && isItemActive(12) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2244,7 +2375,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasFacadeSurvey: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(12)?.name || 'Item 12: Facade Condition Survey'}</span>
+                                            <span>{cleanItemLabel(getItem(12)?.name) || 'Facade Condition Survey'}</span>
                                         </label>
                                         {siteProvisions.hasFacadeSurvey && (
                                             <Input
@@ -2258,7 +2389,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 13: Thermal Roof Survey (Settings Gated) */}
+                                {/* Thermal Roof Survey (Settings Gated) */}
                                 {thermalCameraEnabled && isItemActive(13) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2268,7 +2399,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasThermalSurvey: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(13)?.name || 'Item 13: Thermal Roof Survey'}</span>
+                                            <span>{cleanItemLabel(getItem(13)?.name) || 'Thermal Roof Survey'}</span>
                                         </label>
                                         {siteProvisions.hasThermalSurvey && (
                                             <Input
@@ -2282,7 +2413,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 17: Out of Hours */}
+                                {/* Out-of-Hours Service */}
                                 {isItemActive(17) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2292,7 +2423,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasOutOfWeekHours: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(17)?.name || 'Item 17: Out-of-Hours Service'}</span>
+                                            <span>{cleanItemLabel(getItem(17)?.name) || 'Out-of-Hours Service'}</span>
                                         </label>
                                         {siteProvisions.hasOutOfWeekHours && (
                                             <div>
@@ -2309,7 +2440,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 18: Water Supply Site Provision */}
+                                {/* Water Supply – Site Provision */}
                                 {isItemActive(18) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2319,7 +2450,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasWaterSupplySite: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(18)?.name || 'Item 18: Water Supply – Site Provision'}</span>
+                                            <span>{cleanItemLabel(getItem(18)?.name) || 'Water Supply – Site Provision'}</span>
                                         </label>
                                         {siteProvisions.hasWaterSupplySite && (
                                             <Input
@@ -2333,7 +2464,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 19: Regional Water Provision */}
+                                {/* Regional Water Provision */}
                                 {isItemActive(19) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2343,7 +2474,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasRegionalWater: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(19)?.name || 'Item 19: Regional Water Provision'}</span>
+                                            <span>{cleanItemLabel(getItem(19)?.name) || 'Regional Water Provision'}</span>
                                         </label>
                                         {siteProvisions.hasRegionalWater && (
                                             <div className="space-y-1.5 pl-6">
@@ -2367,7 +2498,7 @@ export function AeroWashQuoteBuilder({
                                     </div>
                                 )}
 
-                                {/* Item 20: Extended Travel */}
+                                {/* Extended Travel */}
                                 {isItemActive(20) && (
                                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
                                         <label className="flex items-center gap-2 cursor-pointer font-bold">
@@ -2377,7 +2508,7 @@ export function AeroWashQuoteBuilder({
                                                 onChange={e => setSiteProvisions(p => ({ ...p, hasExtendedTravel: e.target.checked }))}
                                                 className="rounded text-primary"
                                             />
-                                            <span>{getItem(20)?.name || 'Item 20: Extended Travel'}</span>
+                                            <span>{cleanItemLabel(getItem(20)?.name) || 'Extended Travel'}</span>
                                         </label>
                                         {siteProvisions.hasExtendedTravel && (
                                             <Input
@@ -2450,7 +2581,7 @@ export function AeroWashQuoteBuilder({
                     </Card>
 
                     {/* SECTION 3: CONTRACT PROGRAMMES & PRE-SEND CHECKS */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div id="step-contract" className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Card className="border-white/10 bg-[#0F172A]/70">
                             <CardHeader className="p-4 bg-white/[0.02] border-b border-white/5">
                                 <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
@@ -2458,7 +2589,7 @@ export function AeroWashQuoteBuilder({
                                     Contract Programmes (Whole Quote)
                                 </CardTitle>
                                 <CardDescription className="text-xs text-gray-400">
-                                    Applied to whole quote. Client sees visits per year and price per visit (no percentages).
+                                    Choose whether this quotation is once-off or an ongoing maintenance contract.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="p-4 space-y-3 text-xs">
@@ -2519,7 +2650,7 @@ export function AeroWashQuoteBuilder({
                                             disabled={isLandmark}
                                             onChange={() => setProgramme('MONTHLY_QUARTERLY_COMBINED')}
                                         />
-                                        <span>Item 22: Monthly Glazing + Quarterly Full Facade (8 glazing + 4 full facade)</span>
+                                        <span>Monthly Glazing + Quarterly Full Facade (8 glazing + 4 full facade)</span>
                                     </label>
                                 </div>
 
@@ -2531,7 +2662,7 @@ export function AeroWashQuoteBuilder({
                                             onChange={e => setIsLandmark(e.target.checked)}
                                             className="rounded text-primary"
                                         />
-                                        <span>Landmark Flag (Forces Once-off Full Facade on 1st quote, no discount)</span>
+                                        <span>Prestige building: first quote once-off only, no contract discount</span>
                                     </label>
                                 </div>
                             </CardContent>
@@ -2580,7 +2711,7 @@ export function AeroWashQuoteBuilder({
                 </>
             ) : (
                 /* SECTION 4: CLIENT VIEW (Strictly Clean, No Internal Fields) */
-                <Card className="border-white/10 bg-[#0F172A]/90 p-6 space-y-6">
+                <Card id="step-preview" className="border-white/10 bg-[#0F172A]/90 p-6 space-y-6">
                     <div className="border-b border-white/10 pb-4 flex justify-between items-center">
                         <div>
                             <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">

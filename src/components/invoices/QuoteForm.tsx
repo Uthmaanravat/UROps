@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Wand2, Loader2, FileText, ClipboardPaste, Sparkles, Building2, Briefcase, FileCheck, CheckCircle2, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, AlertCircle } from "lucide-react"
+import { Wand2, Loader2, FileText, ClipboardPaste, Sparkles, Building2, Briefcase, FileCheck, CheckCircle2, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, AlertCircle, Lock, Unlock, Plus, RotateCcw } from "lucide-react"
 import { createInvoiceAction, getQuoteSequenceAction, getInvoiceSequenceAction, getWorkspaceCatalogAction } from "@/app/(dashboard)/invoices/actions"
+import { createClientInlineAction } from "@/app/(dashboard)/clients/actions"
 import { getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { formatCurrency, cn } from "@/lib/utils"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
@@ -72,6 +73,7 @@ interface QuoteFormProps {
     companySettings?: any
     hasVatRegistration?: boolean
     catalogueItems?: any[]
+    currentUserEmail?: string
 }
 
 export function QuoteForm({
@@ -94,7 +96,8 @@ export function QuoteForm({
     thermalCameraEnabled = false,
     companySettings,
     hasVatRegistration = false,
-    catalogueItems = []
+    catalogueItems = [],
+    currentUserEmail = ""
 }: QuoteFormProps) {
     const isTendersEnabled = tendersEnabled
     const router = useRouter()
@@ -185,17 +188,32 @@ export function QuoteForm({
     }
 
     // Client & Project selection
+    const [clientList, setClientList] = useState(clients)
+    useEffect(() => { setClientList(clients) }, [clients])
+
     const [saveError, setSaveError] = useState<string | null>(null)
     const [clientId, setClientId] = useState(
-        initialClientId || (initialTenderId && activeTender?.clientId ? activeTender.clientId : (clients.length > 0 ? clients[0].id : ""))
+        initialClientId || (initialTenderId && activeTender?.clientId ? activeTender.clientId : (isAeroWashWorkspace ? "" : (clients.length > 0 ? clients[0].id : "")))
     )
     const [projectId, setProjectId] = useState(initialProjectId || "")
 
     useEffect(() => {
-        if (!clientId && clients.length > 0) {
-            setClientId(clients[0].id)
+        if (!isAeroWashWorkspace && !clientId && clientList.length > 0) {
+            setClientId(clientList[0].id)
         }
-    }, [clients, clientId])
+    }, [clientList, clientId, isAeroWashWorkspace])
+
+    // Lock quote number state
+    const [isAdminOverrideQuoteNumber, setIsAdminOverrideQuoteNumber] = useState(false)
+
+    // Inline New Client Modal state
+    const [isNewClientOpen, setIsNewClientOpen] = useState(false)
+    const [newClientName, setNewClientName] = useState("")
+    const [newClientContact, setNewClientContact] = useState("")
+    const [newClientEmail, setNewClientEmail] = useState("")
+    const [newClientPhone, setNewClientPhone] = useState("")
+    const [newClientAddress, setNewClientAddress] = useState("")
+    const [isCreatingClient, setIsCreatingClient] = useState(false)
 
     // Line items
     const [items, setItems] = useState<LineItem[]>(
@@ -277,7 +295,7 @@ export function QuoteForm({
     const isDiscardedRef = useRef(false)
     const hasUserEditedRef = useRef(false)
 
-    // Load draft on mount: silently restore if genuine unsaved work exists
+    // Load draft on mount: prompt user if genuine unsaved work exists
     useEffect(() => {
         if (initialLoaded.current) return
         initialLoaded.current = true
@@ -287,41 +305,50 @@ export function QuoteForm({
             const draftHasContent = Boolean(
                 (d.items && d.items.some((i: any) => (i.code && i.code.trim()) || (i.description && i.description.trim()) || (i.unitPrice && i.unitPrice > 0))) ||
                 Boolean(d.site && d.site.trim()) ||
-                Boolean(d.reference && d.reference.trim())
+                Boolean(d.reference && d.reference.trim()) ||
+                Boolean(d.aeroWashPayload && d.aeroWashPayload.items?.length > 0)
             )
             if (draftHasContent) {
-                isRestoring.current = true
-                if (d.clientId) setClientId(d.clientId)
-                if (d.projectId) setProjectId(d.projectId)
-                if (d.date) setDate(d.date)
-                if (d.items && d.items.length > 0) setItems(d.items)
-                if (d.site) setSite(d.site)
-                if (d.quoteNumber) setQuoteNumber(d.quoteNumber)
-                if (d.reference) setReference(d.reference)
-                if (d.projectName) {
-                    setProjectName(d.projectName)
-                    setIsProjectNameManual(true)
-                }
-                if (d.workType) setWorkType(d.workType)
-                if (d.selectedTenderId) setSelectedTenderId(d.selectedTenderId)
-                if (d.rateYear || d.manualRateYear) setRateYear(Number(d.rateYear || d.manualRateYear) as 1 | 2 | 3)
-                if (d.paymentNotes) setPaymentNotes(d.paymentNotes)
-                if (d.firstPaymentOption) setFirstPaymentOption(d.firstPaymentOption)
-                if (d.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(d.customFirstPaymentPercentage)
-                if (d.showPaymentNotes !== undefined) setShowPaymentNotes(d.showPaymentNotes)
-                if (d.contactId) setContactId(d.contactId)
-                if (d.attentionTo) setAttentionTo(d.attentionTo)
-                setLastSavedTimestamp(draft.updatedAt || Date.now())
-                hasUserEditedRef.current = true
-                setTimeout(() => {
-                    isRestoring.current = false
-                }, 200)
+                setPendingDraft(draft)
             } else {
                 clearDraft(STORAGE_KEY)
                 clearDraft('quote-form-draft')
             }
         }
     }, [STORAGE_KEY])
+
+    const handleRestoreDraft = () => {
+        if (!pendingDraft || !pendingDraft.data) return
+        const d = pendingDraft.data
+        isRestoring.current = true
+        if (d.clientId) setClientId(d.clientId)
+        if (d.projectId) setProjectId(d.projectId)
+        if (d.date) setDate(d.date)
+        if (d.items && d.items.length > 0) setItems(d.items)
+        if (d.site) setSite(d.site)
+        if (d.quoteNumber) setQuoteNumber(d.quoteNumber)
+        if (d.reference) setReference(d.reference)
+        if (d.projectName) {
+            setProjectName(d.projectName)
+            setIsProjectNameManual(true)
+        }
+        if (d.workType) setWorkType(d.workType)
+        if (d.selectedTenderId) setSelectedTenderId(d.selectedTenderId)
+        if (d.rateYear || d.manualRateYear) setRateYear(Number(d.rateYear || d.manualRateYear) as 1 | 2 | 3)
+        if (d.paymentNotes) setPaymentNotes(d.paymentNotes)
+        if (d.firstPaymentOption) setFirstPaymentOption(d.firstPaymentOption)
+        if (d.customFirstPaymentPercentage) setCustomFirstPaymentPercentage(d.customFirstPaymentPercentage)
+        if (d.showPaymentNotes !== undefined) setShowPaymentNotes(d.showPaymentNotes)
+        if (d.contactId) setContactId(d.contactId)
+        if (d.attentionTo) setAttentionTo(d.attentionTo)
+        if (d.aeroWashPayload) setAeroWashPayload(d.aeroWashPayload)
+        setLastSavedTimestamp(pendingDraft.updatedAt || Date.now())
+        hasUserEditedRef.current = true
+        setPendingDraft(null)
+        setTimeout(() => {
+            isRestoring.current = false
+        }, 200)
+    }
 
     // Permanently discard draft and clear form back to fresh blank state
     const handleDiscardDraft = () => {
@@ -331,6 +358,9 @@ export function QuoteForm({
         clearDraft('quote-form-draft')
         setPendingDraft(null)
         setLastSavedTimestamp(null)
+        if (isAeroWashWorkspace) {
+            setClientId("")
+        }
         setItems([{ code: "", description: "", quantity: 1, unit: "each", unitPrice: 0, total: 0 }])
         setSite("")
         setReference("")
@@ -339,6 +369,7 @@ export function QuoteForm({
         setPaymentNotes("")
         setFirstPaymentOption("none")
         setCustomFirstPaymentPercentage("")
+        setAeroWashPayload(null)
     }
 
     // Auto-save draft quietly in background ONLY when user actually edits meaningful content
@@ -412,7 +443,7 @@ export function QuoteForm({
     // Sync contacts and default terms when clientId changes
     useEffect(() => {
         if (isRestoring.current) return
-        const selectedClient = clients.find(c => c.id === clientId)
+        const selectedClient = clientList.find(c => c.id === clientId)
         const contacts = selectedClient?.contacts || []
         if (contacts.length > 0) {
             setContactId(contacts[0].id)
@@ -431,7 +462,42 @@ export function QuoteForm({
         if (selectedClient?.defaultCustomTerms) {
             setCustomTermsText(selectedClient.defaultCustomTerms)
         }
-    }, [clientId, clients, defaultCompanyTemplate])
+    }, [clientId, clientList, defaultCompanyTemplate])
+
+    // Inline Client Creation
+    const handleCreateInlineClient = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!newClientName.trim()) return
+        setIsCreatingClient(true)
+        try {
+            const res = await createClientInlineAction({
+                name: newClientName.trim(),
+                contactName: newClientContact.trim() || undefined,
+                email: newClientEmail.trim() || undefined,
+                phone: newClientPhone.trim() || undefined,
+                address: newClientAddress.trim() || undefined
+            })
+            if (res.success && res.client) {
+                setClientList(prev => [res.client as any, ...prev])
+                setClientId(res.client.id)
+                if (res.client.attentionTo) {
+                    setAttentionTo(res.client.attentionTo)
+                }
+                setIsNewClientOpen(false)
+                setNewClientName("")
+                setNewClientContact("")
+                setNewClientEmail("")
+                setNewClientPhone("")
+                setNewClientAddress("")
+            } else {
+                alert(res.error || "Failed to create client")
+            }
+        } catch (err: any) {
+            alert(err.message || "Failed to create client")
+        } finally {
+            setIsCreatingClient(false)
+        }
+    }
 
     // Sync Project Name with Reference
     useEffect(() => {
@@ -652,6 +718,44 @@ export function QuoteForm({
         <div className={cn("w-full items-start", !isAeroWashWorkspace && "flex flex-col lg:flex-row gap-6")}>
             <div className={cn("w-full space-y-6", !isAeroWashWorkspace && "flex-1")}>
                 <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} action="#" className="space-y-6">
+                    {/* Prompt to Resume Unsaved Draft */}
+                    {pendingDraft && (
+                        <div className="p-4 rounded-2xl border-2 border-[#D05E00]/60 bg-[#14141E] shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in slide-in-from-top-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-[#D05E00]/20 border border-[#D05E00]/40 flex items-center justify-center text-[#D05E00] shrink-0">
+                                    <RotateCcw className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-white">
+                                        Resume draft from {new Date(pendingDraft.updatedAt || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}?
+                                    </p>
+                                    <p className="text-xs text-gray-400">
+                                        An unsaved quotation draft was found in your browser from a previous session.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleDiscardDraft}
+                                    className="h-9 px-4 text-xs font-bold text-gray-300 hover:text-red-400 hover:border-red-400/40 border-white/10"
+                                >
+                                    Start new
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleRestoreDraft}
+                                    className="h-9 px-4 text-xs font-black bg-[#D05E00] hover:bg-[#B34E00] text-white shadow-lg"
+                                >
+                                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                                    Resume draft
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                     {saveError && (
                         <div className="p-4 rounded-xl bg-red-500/20 border-2 border-red-500/50 text-red-200 text-sm font-bold flex items-start justify-between gap-3 animate-in fade-in">
                             <div className="flex items-start gap-2">
@@ -749,9 +853,20 @@ export function QuoteForm({
                     <div className="grid gap-6 md:grid-cols-2 p-6 rounded-2xl bg-[#14141E] border border-white/5 shadow-xl">
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-                                    Client <span className="text-primary">*</span>
-                                </Label>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                        Client <span className="text-primary">*</span>
+                                    </Label>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setIsNewClientOpen(true)}
+                                        className="h-6 px-2 text-[11px] font-bold text-primary hover:text-primary hover:bg-primary/10"
+                                    >
+                                        <Plus className="w-3 h-3 mr-1" /> New client
+                                    </Button>
+                                </div>
                                 <select
                                     id="client-select"
                                     className="flex h-9 w-full rounded-md border border-input bg-[#0F0F1A] px-3 py-1 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -763,7 +878,7 @@ export function QuoteForm({
                                     required
                                 >
                                     <option value="" disabled>Select a client</option>
-                                    {clients.map(c => (
+                                    {clientList.map(c => (
                                         <option key={c.id} value={c.id}>{c.name}</option>
                                     ))}
                                 </select>
@@ -835,16 +950,44 @@ export function QuoteForm({
                             </div>
 
                             <div className="space-y-2">
-                                <Label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-muted-foreground">
-                                    {docType === 'INVOICE' ? 'Tax Invoice #' : 'Quote #'}
-                                    <InfoTooltip content="Auto-generated sequence number, customized per client or tender." />
-                                </Label>
-                                <Input
-                                    placeholder="Auto-generated or custom"
-                                    value={quoteNumber}
-                                    onChange={(e) => setQuoteNumber(e.target.value)}
-                                    className="bg-[#0F0F1A] font-mono font-bold"
-                                />
+                                <div className="flex items-center justify-between">
+                                    <Label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                        {docType === 'INVOICE' ? 'Tax Invoice #' : 'Quote #'}
+                                        {isAeroWashWorkspace && (
+                                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/10 text-primary border border-primary/30">
+                                                AW-YYYY-###
+                                            </span>
+                                        )}
+                                    </Label>
+                                    {isAeroWashWorkspace && isAdmin && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsAdminOverrideQuoteNumber(prev => !prev)}
+                                            className="text-[10px] text-gray-400 hover:text-white underline font-medium"
+                                        >
+                                            {isAdminOverrideQuoteNumber ? "Lock" : "Override (Admin)"}
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <Input
+                                        placeholder="Auto-generated sequence"
+                                        value={quoteNumber}
+                                        readOnly={isAeroWashWorkspace && !isAdminOverrideQuoteNumber}
+                                        onChange={(e) => setQuoteNumber(e.target.value)}
+                                        className={`font-mono font-bold ${
+                                            isAeroWashWorkspace && !isAdminOverrideQuoteNumber
+                                                ? "bg-[#090D16] text-gray-300 border-white/5 cursor-not-allowed select-none"
+                                                : "bg-[#0F0F1A]"
+                                        }`}
+                                    />
+                                    {isAeroWashWorkspace && !isAdminOverrideQuoteNumber && (
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-gray-400 pointer-events-none">
+                                            <Lock className="w-3 h-3 text-emerald-400" />
+                                            <span>Locked</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="space-y-2">
@@ -852,7 +995,7 @@ export function QuoteForm({
                                     Project / Reference
                                 </Label>
                                 <Input
-                                    placeholder="e.g. Wynberg Park Play Equipment"
+                                    placeholder={isAeroWashWorkspace ? "e.g. Facade clean – Canal Walk" : "e.g. Wynberg Park Play Equipment"}
                                     value={reference}
                                     onChange={(e) => setReference(e.target.value)}
                                     className="bg-[#0F0F1A]"
@@ -864,7 +1007,7 @@ export function QuoteForm({
                                     Site / Location
                                 </Label>
                                 <Input
-                                    placeholder="e.g. Wynberg Park, Corner of Main & River"
+                                    placeholder={isAeroWashWorkspace ? "e.g. 12 Christiaan Barnard St, Foreshore" : "e.g. Wynberg Park, Corner of Main & River"}
                                     value={site}
                                     onChange={(e) => setSite(e.target.value)}
                                     className="bg-[#0F0F1A]"
@@ -873,8 +1016,9 @@ export function QuoteForm({
                         </div>
                     </div>
 
-                    {/* Line Items Card with AI & Bulk buttons */}
+                    {/* Line Items Card with AI & Bulk buttons (LR Builders only) */}
                     <div className="p-6 rounded-2xl bg-[#14141E] border border-white/5 shadow-xl space-y-4">
+                        {!(isAeroWashWorkspace && docType === 'QUOTE') && (
                         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
                             <div>
                                 <h3 className="text-base font-black uppercase tracking-wider text-white">
@@ -956,11 +1100,13 @@ export function QuoteForm({
                                 )}
                             </div>
                         </div>
+                        )}
 
                         {/* AeroWash Catalogue & Elevation Quote Builder OR Standard LineItemEditor */}
                         {isAeroWashWorkspace && docType === 'QUOTE' ? (
                             <AeroWashQuoteBuilder
                                 siteName={site}
+                                clientSelected={Boolean(clientId)}
                                 currencySymbol={selectedClient?.codePrefix ? "R" : "R"}
                                 surveyCameraEnabled={surveyCameraEnabled}
                                 thermalCameraEnabled={thermalCameraEnabled}
@@ -1023,10 +1169,16 @@ export function QuoteForm({
                                                         None Selected
                                                     </span>
                                                 )}
-                                                {numberedClausesPreview.length > 0 && (
-                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-gray-400 bg-white/5 border border-white/10">
-                                                        {numberedClausesPreview.length} {numberedClausesPreview.length === 1 ? 'clause' : 'clauses'}
+                                                {isAeroWashWorkspace ? (
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-[#D05E00] bg-[#D05E00]/10 border border-[#D05E00]/30 font-bold">
+                                                        Sectioned Terms (Approved)
                                                     </span>
+                                                ) : (
+                                                    numberedClausesPreview.length > 0 && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-gray-400 bg-white/5 border border-white/10">
+                                                            {numberedClausesPreview.length} {numberedClausesPreview.length === 1 ? 'clause' : 'clauses'}
+                                                        </span>
+                                                    )
                                                 )}
                                             </div>
                                             <p className="text-xs text-muted-foreground mt-0.5">
@@ -1106,28 +1258,91 @@ export function QuoteForm({
                                             </p>
                                         </div>
 
-                                        {/* Live Sequential Preview */}
-                                        {numberedClausesPreview.length > 0 && (
-                                            <div className="space-y-2 pt-2 border-t border-white/5">
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
-                                                    <span>Sequential Clauses Preview (As Rendered On Quote)</span>
+                                        {/* Live Terms Preview */}
+                                        {isAeroWashWorkspace ? (
+                                            <div className="space-y-4 pt-2 border-t border-white/5">
+                                                <div className="text-[10px] font-black uppercase tracking-widest text-[#D05E00] flex items-center justify-between">
+                                                    <span>AeroWash Standard Quotation Terms (Layout Preview)</span>
+                                                    <span className="text-[9px] text-gray-400 font-normal">Rendered in PDF & Client View</span>
                                                 </div>
-                                                <div className="p-4 rounded-xl bg-[#090D16] border border-white/5 space-y-2 max-h-48 overflow-y-auto font-sans">
-                                                    {numberedClausesPreview.map((clause) => (
-                                                        <div key={clause.clauseNumber} className="flex items-start gap-2 text-xs text-gray-300 leading-relaxed">
-                                                            <span className="font-mono font-bold text-primary shrink-0 w-6">
-                                                                {clause.clauseNumber}.
-                                                            </span>
-                                                            <span className={clause.source === 'custom' ? 'text-cyan-200' : 'text-gray-300'}>
-                                                                {clause.text}
-                                                                {clause.source === 'custom' && (
-                                                                    <span className="ml-1.5 text-[9px] font-mono text-cyan-400 uppercase tracking-widest">[Custom]</span>
-                                                                )}
-                                                            </span>
+                                                <div className="p-4 rounded-xl bg-[#090D16] border border-white/5 space-y-4 text-xs font-sans">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <h5 className="font-bold text-[#D05E00] uppercase tracking-wider text-[11px] border-b border-white/10 pb-1">
+                                                                INCLUDED
+                                                            </h5>
+                                                            <ul className="space-y-1 text-gray-300 list-disc list-inside text-[11px]">
+                                                                <li>Scope and elevations specified on quote</li>
+                                                                <li>Pre- and post-clean photographic record</li>
+                                                                <li>All labour, equipment and remote pilot crew</li>
+                                                            </ul>
                                                         </div>
-                                                    ))}
+                                                        <div className="space-y-1.5">
+                                                            <h5 className="font-bold text-[#D05E00] uppercase tracking-wider text-[11px] border-b border-white/10 pb-1">
+                                                                EXCLUDED
+                                                            </h5>
+                                                            <ul className="space-y-1 text-gray-300 list-disc list-inside text-[11px]">
+                                                                <li>Internal faces of glass, unless separately agreed</li>
+                                                                <li>Hardened cement, paint and adhesive residue</li>
+                                                                <li>Repair of existing damage, failed sealant or penetrated staining</li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1.5 pt-2 border-t border-white/5">
+                                                        <h5 className="font-bold text-[#D05E00] uppercase tracking-wider text-[11px] border-b border-white/10 pb-1">
+                                                            CONDITIONS OF ACCESS
+                                                        </h5>
+                                                        <ul className="space-y-1 text-gray-300 list-disc list-inside text-[11px]">
+                                                            <li>Client provides access to work area and water supply point (unless site provision quoted).</li>
+                                                            <li>Flight operations conducted under SACAA regulations during daylight hours only.</li>
+                                                            <li>Work is weather-dependent; reschedule at no charge if flying unsafe.</li>
+                                                            <li>Standard service area within 50 km of Parow, Cape Town. Sites beyond carry Extended Travel.</li>
+                                                        </ul>
+                                                    </div>
+                                                    <div className="space-y-1.5 pt-2 border-t border-white/5">
+                                                        <h5 className="font-bold text-[#D05E00] uppercase tracking-wider text-[11px] border-b border-white/10 pb-1">
+                                                            COMMERCIAL TERMS
+                                                        </h5>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-gray-300">
+                                                            <ul className="space-y-1 list-disc list-inside">
+                                                                <li>Quotations are fixed price for scope and elevations stated.</li>
+                                                                <li>60% deposit payable on acceptance to secure booking.</li>
+                                                                <li>Balance payable on completion.</li>
+                                                                <li>Quotation valid for 45 days from issue date.</li>
+                                                            </ul>
+                                                            <ul className="space-y-1 list-disc list-inside">
+                                                                <li>Variations quoted separately before work carried out.</li>
+                                                                <li>Prices exclude VAT unless registered.</li>
+                                                                <li>Standby charge applies for access delays outside AeroWash control.</li>
+                                                                <li>Existing defects recorded before work; no liability for pre-existing issues.</li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
+                                        ) : (
+                                            numberedClausesPreview.length > 0 && (
+                                                <div className="space-y-2 pt-2 border-t border-white/5">
+                                                    <div className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                                                        <span>Sequential Clauses Preview (As Rendered On Quote)</span>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl bg-[#090D16] border border-white/5 space-y-2 max-h-48 overflow-y-auto font-sans">
+                                                        {numberedClausesPreview.map((clause) => (
+                                                            <div key={clause.clauseNumber} className="flex items-start gap-2 text-xs text-gray-300 leading-relaxed">
+                                                                <span className="font-mono font-bold text-primary shrink-0 w-6">
+                                                                    {clause.clauseNumber}.
+                                                                </span>
+                                                                <span className={clause.source === 'custom' ? 'text-cyan-200' : 'text-gray-300'}>
+                                                                    {clause.text}
+                                                                    {clause.source === 'custom' && (
+                                                                        <span className="ml-1.5 text-[9px] font-mono text-cyan-400 uppercase tracking-widest">[Custom]</span>
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )
                                         )}
                                     </div>
                                 )}
@@ -1206,6 +1421,7 @@ export function QuoteForm({
                                     Cancel
                                 </Button>
                                 <Button
+                                    id="save-quote-submit-btn"
                                     type="button"
                                     onClick={handleSubmit}
                                     disabled={loading || (isAeroWashWorkspace ? (!aeroWashPayload || aeroWashPayload.items.length === 0) : items.length === 0)}
@@ -1218,6 +1434,96 @@ export function QuoteForm({
                         </div>
                     </div>
                 </form>
+
+                {/* Inline New Client Modal */}
+                <Dialog open={isNewClientOpen} onOpenChange={setIsNewClientOpen}>
+                    <DialogContent className="sm:max-w-md bg-[#14141E] border-white/10 text-white">
+                        <DialogHeader>
+                            <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
+                                <Building2 className="w-5 h-5 text-primary" />
+                                Add New Client
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-gray-400">
+                                Quickly add a client without leaving this quotation.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleCreateInlineClient} className="space-y-3 py-2">
+                            <div>
+                                <Label className="text-xs font-bold text-gray-300">
+                                    Client / Company Name <span className="text-primary">*</span>
+                                </Label>
+                                <Input
+                                    required
+                                    placeholder="e.g. Growthpoint Properties"
+                                    value={newClientName}
+                                    onChange={e => setNewClientName(e.target.value)}
+                                    className="h-9 text-xs mt-1 bg-[#090D16] border-white/10"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-xs font-bold text-gray-300">
+                                    Primary Contact Name (Attention To)
+                                </Label>
+                                <Input
+                                    placeholder="e.g. Johan Smith"
+                                    value={newClientContact}
+                                    onChange={e => setNewClientContact(e.target.value)}
+                                    className="h-9 text-xs mt-1 bg-[#090D16] border-white/10"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-xs font-bold text-gray-300">Email Address</Label>
+                                    <Input
+                                        type="email"
+                                        placeholder="e.g. johan@growthpoint.co.za"
+                                        value={newClientEmail}
+                                        onChange={e => setNewClientEmail(e.target.value)}
+                                        className="h-9 text-xs mt-1 bg-[#090D16] border-white/10"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="text-xs font-bold text-gray-300">Phone Number</Label>
+                                    <Input
+                                        placeholder="e.g. 021 555 1234"
+                                        value={newClientPhone}
+                                        onChange={e => setNewClientPhone(e.target.value)}
+                                        className="h-9 text-xs mt-1 bg-[#090D16] border-white/10"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <Label className="text-xs font-bold text-gray-300">Physical Address / Site</Label>
+                                <Input
+                                    placeholder="e.g. Canal Walk Shopping Centre, Century City"
+                                    value={newClientAddress}
+                                    onChange={e => setNewClientAddress(e.target.value)}
+                                    className="h-9 text-xs mt-1 bg-[#090D16] border-white/10"
+                                />
+                            </div>
+                            <DialogFooter className="pt-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setIsNewClientOpen(false)}
+                                    className="text-xs text-gray-400"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={isCreatingClient || !newClientName.trim()}
+                                    className="bg-[#D05E00] hover:bg-[#B34E00] text-white text-xs font-bold"
+                                >
+                                    {isCreatingClient ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                                    Save & Select Client
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </div>
 
             {/* Catalog Side Panel (LR Builders only) */}

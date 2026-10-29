@@ -67,8 +67,67 @@ export async function createInvoiceAction(data: {
         : null;
 
     const codePrefix = clientObj.codePrefix;
+    const isAeroWash = companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' 
+        || settings.name?.toLowerCase().includes('aerowash')
+        || settings.theme === 'dark-orange';
 
-    if (isTender && tender) {
+    if (isAeroWash) {
+        if (data.quoteNumber) {
+            const manualNumber = data.quoteNumber;
+            const match = manualNumber.match(/(\d+)$/);
+            if (match) {
+                const manualSeq = parseInt(match[1]);
+                const currentSeq = isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0);
+                if (manualSeq > currentSeq) {
+                    await prisma.companySettings.update({
+                        where: { companyId },
+                        data: { [isInvoice ? 'lastInvoiceNumber' : 'lastQuoteNumber']: manualSeq }
+                    });
+                }
+                nextNumber = manualSeq;
+            } else {
+                nextNumber = (isInvoice ? (settings.lastInvoiceNumber || 0) : (settings.lastQuoteNumber || 0)) + 1;
+            }
+            formattedQuoteNumber = data.quoteNumber;
+
+            // Check uniqueness of manual number
+            const existing = await prisma.invoice.findFirst({
+                where: {
+                    companyId,
+                    quoteNumber: formattedQuoteNumber,
+                    type: data.type || 'QUOTE'
+                }
+            });
+            if (existing) {
+                throw new Error(`${data.type || 'QUOTE'} number ${formattedQuoteNumber} has already been used. Please use a new number.`);
+            }
+        } else {
+            let isUnique = false;
+            while (!isUnique) {
+                const updatedSettings = await prisma.companySettings.update({
+                    where: { companyId },
+                    data: isInvoice
+                        ? { lastInvoiceNumber: { increment: 1 } }
+                        : { lastQuoteNumber: { increment: 1 } }
+                });
+                nextNumber = isInvoice ? updatedSettings.lastInvoiceNumber : updatedSettings.lastQuoteNumber;
+                formattedQuoteNumber = isInvoice
+                    ? `INV-${year}-${nextNumber.toString().padStart(3, '0')}`
+                    : `AW-${year}-${nextNumber.toString().padStart(3, '0')}`;
+
+                const existing = await prisma.invoice.findFirst({
+                    where: {
+                        companyId,
+                        quoteNumber: formattedQuoteNumber,
+                        type: data.type || 'QUOTE'
+                    }
+                });
+                if (!existing) {
+                    isUnique = true;
+                }
+            }
+        }
+    } else if (isTender && tender) {
         const tenderPrefix = isInvoice ? (tender.invoicePrefix || "CCT-TI") : (tender.quotePrefix || "CCT-T");
         if (data.quoteNumber) {
             formattedQuoteNumber = data.quoteNumber;
@@ -633,6 +692,23 @@ export async function getQuoteSequenceAction(clientId?: string, workType: 'GENER
     const companyId = await ensureAuth();
     const year = new Date().getFullYear();
 
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId }
+    });
+
+    const isAeroWash = companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' 
+        || settings?.name?.toLowerCase().includes('aerowash')
+        || settings?.theme === 'dark-orange';
+
+    if (isAeroWash) {
+        const lastQuote = await prisma.invoice.findFirst({
+            where: { companyId, type: 'QUOTE' },
+            orderBy: { number: 'desc' }
+        });
+        const nextNumber = Math.max(settings?.lastQuoteNumber || 0, lastQuote?.number || 0) + 1;
+        return `AW-${year}-${nextNumber.toString().padStart(3, '0')}`;
+    }
+
     if (workType === 'TENDER') {
         const tender = tenderId
             ? await prisma.tender.findFirst({ where: { id: tenderId, companyId } })
@@ -670,10 +746,6 @@ export async function getQuoteSequenceAction(clientId?: string, workType: 'GENER
         orderBy: { number: 'desc' }
     });
 
-    const settings = await prisma.companySettings.findUnique({
-        where: { companyId }
-    });
-
     if (!settings) return null;
 
     // Use whichever is higher: the DB counter or the highest actual number found
@@ -684,6 +756,23 @@ export async function getQuoteSequenceAction(clientId?: string, workType: 'GENER
 export async function getInvoiceSequenceAction(clientId?: string, workType: 'GENERAL' | 'TENDER' = 'GENERAL', tenderId?: string) {
     const companyId = await ensureAuth();
     const year = new Date().getFullYear();
+
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId }
+    });
+
+    const isAeroWash = companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' 
+        || settings?.name?.toLowerCase().includes('aerowash')
+        || settings?.theme === 'dark-orange';
+
+    if (isAeroWash) {
+        const lastInvoice = await prisma.invoice.findFirst({
+            where: { companyId, type: 'INVOICE' },
+            orderBy: { number: 'desc' }
+        });
+        const nextNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+        return `INV-${year}-${nextNumber.toString().padStart(3, '0')}`;
+    }
 
     if (workType === 'TENDER') {
         const tender = tenderId
@@ -720,10 +809,6 @@ export async function getInvoiceSequenceAction(clientId?: string, workType: 'GEN
     const lastInvoice = await prisma.invoice.findFirst({
         where: { companyId, type: 'INVOICE' },
         orderBy: { number: 'desc' }
-    });
-
-    const settings = await prisma.companySettings.findUnique({
-        where: { companyId }
     });
 
     if (!settings) return null;
@@ -763,6 +848,11 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
             : await prisma.tender.findFirst({ where: { companyId, status: "ACTIVE" } }))
         : null;
 
+    const companySettings = await prisma.companySettings.findUnique({ where: { companyId } });
+    const isAeroWash = companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' 
+        || companySettings?.name?.toLowerCase().includes('aerowash')
+        || companySettings?.theme === 'dark-orange';
+
     const codePrefix = client.codePrefix;
     let nextInvoiceNumber = 0;
     const year = new Date().getFullYear();
@@ -771,7 +861,18 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
     // 2. Get the next invoice number based on tender prefix, client prefix or settings
     let isUnique = false;
     while (!isUnique) {
-        if (isTender && tender) {
+        if (isAeroWash) {
+            const lastInvoice = await prisma.invoice.findFirst({
+                where: { companyId, type: 'INVOICE' },
+                orderBy: { number: 'desc' }
+            });
+            nextInvoiceNumber = Math.max(companySettings?.lastInvoiceNumber || 0, lastInvoice?.number || 0) + 1;
+            await prisma.companySettings.update({
+                where: { companyId },
+                data: { lastInvoiceNumber: nextInvoiceNumber }
+            });
+            formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
+        } else if (isTender && tender) {
             const tenderPrefix = tender.invoicePrefix || "CCT-TI";
             const lastInvoice = await prisma.invoice.findFirst({
                 where: { companyId, workType: 'TENDER', type: 'INVOICE' },

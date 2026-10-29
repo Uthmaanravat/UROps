@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = 'force-dynamic';
 import { QuoteForm } from "@/components/invoices/QuoteForm";
-import { ensureAuth } from "@/lib/auth-actions";
+import { ensureAuth, getAuthUser } from "@/lib/auth-actions";
 import { ensureAeroWashCatalogueAndTerms } from "@/lib/aerowash-catalogue-seed";
 
 export default async function NewQuotePage({
@@ -11,6 +11,7 @@ export default async function NewQuotePage({
     searchParams: { clientId?: string; projectId?: string; scope?: string; type?: string; tenderId?: string; site?: string; prospectId?: string }
 }) {
     const companyId = await ensureAuth();
+    const authUser = await getAuthUser();
     await ensureAeroWashCatalogueAndTerms(companyId);
 
     const [clients, projects, settings, tenders, termsTemplates, catalogueItems] = await Promise.all([
@@ -70,6 +71,8 @@ export default async function NewQuotePage({
                 companySettings={settings}
                 hasVatRegistration={!!settings?.taxId && settings.taxId.trim() !== ''}
                 catalogueItems={catalogueItems}
+                isAdmin={authUser?.role === 'ADMIN'}
+                currentUserEmail={authUser?.email || ''}
             />
         </div>
     )

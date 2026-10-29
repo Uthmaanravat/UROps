@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link";
+
 import { Sidebar } from "@/components/layout/Sidebar";
 import { UserCircle, Menu, X, LogOut, Rocket, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -15,10 +17,12 @@ export default function DashboardLayoutClient({
     children,
     user,
     settings,
+    pendingApprovals = [],
 }: {
     children: React.ReactNode;
     user: User;
     settings: CompanySettings | null;
+    pendingApprovals?: any[];
 }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUpdatingRole, setIsUpdatingRole] = useState(false);
@@ -239,6 +243,30 @@ export default function DashboardLayoutClient({
 
             {/* Main Content */}
             <div className="flex flex-1 flex-col overflow-hidden">
+                {pendingApprovals && pendingApprovals.length > 0 && (
+                    <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
+                        <div className="flex items-center gap-2.5 font-medium">
+                            <span className="flex h-2.5 w-2.5 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                            </span>
+                            <span className="font-black text-amber-400 uppercase tracking-widest text-[11px]">Owner Action Required:</span>
+                            <span>{pendingApprovals.length} quotation(s) exceeding R50,000 awaiting your 1-click approval</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {pendingApprovals.slice(0, 3).map((q: any) => (
+                                <Link
+                                    key={q.id}
+                                    href={`/invoices/${q.id}`}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold border border-amber-500/30 transition-all text-[11px]"
+                                >
+                                    <span>{q.quoteNumber || 'Quote'} ({q.clientName} – R{q.total.toLocaleString()})</span>
+                                    <span>→</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <main className="flex-1 p-3 md:p-4 overflow-auto">
                     {children}
                 </main>

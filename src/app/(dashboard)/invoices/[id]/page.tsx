@@ -12,7 +12,8 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     const companyId = await ensureAuth();
     const supabase = (await import("@/lib/supabase/server")).createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const dbUser = user ? await prisma.user.findUnique({ where: { id: user.id }, select: { role: true } }) : null;
+    const dbUser = user ? await prisma.user.findUnique({ where: { id: user.id }, select: { role: true, isOwner: true } }) : null;
+    const isOwner = (dbUser as any)?.isOwner === true;
     const isAdmin = dbUser?.role === 'ADMIN';
 
     const [invoice, companySettings, projects, tenders, termsTemplates] = await Promise.all([
@@ -105,6 +106,8 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                 tenders={isTendersEnabled ? (tenders as any[]) : []}
                 termsTemplates={termsTemplates as any[]}
                 isAdmin={isAdmin}
+                isOwner={isOwner}
+                currentUserEmail={user?.email || ''}
             />
         </div>
     )
