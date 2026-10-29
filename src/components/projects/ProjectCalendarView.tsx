@@ -44,6 +44,14 @@ export function ProjectCalendarView({
     company,
     onDateClick
 }: ProjectCalendarViewProps) {
+    const isAeroWash = Boolean(
+        company?.id === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' ||
+        company?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' ||
+        company?.theme === 'dark-orange' ||
+        company?.settings?.theme === 'dark-orange' ||
+        company?.name?.toLowerCase().includes('aerowash') ||
+        company?.settings?.name?.toLowerCase().includes('aerowash')
+    )
     const [currentDate, setCurrentDate] = useState(new Date())
     const [mode, setMode] = useState<CalendarMode>("MONTH")
     const [showPrices, setShowPrices] = useState(false)
@@ -197,7 +205,7 @@ export function ProjectCalendarView({
         try {
             const doc = await generateMonthCalendarPdf(projects, quotes, currentDate, company, { showPrices })
             const monthName = currentDate.toLocaleDateString("en-ZA", { month: "short", year: "numeric" }).replace(/\s+/g, "_")
-            doc.save(`AeroWash_Calendar_${monthName}.pdf`)
+            doc.save(`${isAeroWash ? "AeroWash" : "Operations"}_Calendar_${monthName}.pdf`)
         } catch (e) {
             console.error("Print Month Calendar error:", e)
             alert("Failed to generate Month Calendar PDF")
@@ -573,7 +581,13 @@ export function ProjectCalendarView({
                                             <span className="truncate">{p.site || p.client?.address || "Site on file"}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-1 border-t border-white/5">
-                                            <span>Crew: {p.crew || "Flight Alpha"}</span>
+                                            {(() => {
+                                                const crewVal = isAeroWash
+                                                    ? (p.crew || "Flight Alpha")
+                                                    : (p.assignedTeam || p.team || p.crew)
+                                                if (!crewVal) return null
+                                                return <span>{isAeroWash ? "Crew: " : "Team: "}{crewVal}</span>
+                                            })()}
                                             {showPrices && p.invoices?.[0]?.total && (
                                                 <span className="text-emerald-400 font-mono font-bold">
                                                     R {Number(p.invoices[0].total).toLocaleString()}

@@ -67,7 +67,12 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
         setOpenGroups(prev => prev.includes(title) ? prev.filter(g => g !== title) : [...prev, title]);
     }
 
-    const isDroneEnabled = settings?.layoutPreferences?.dashboardView === "drone";
+    const isAeroWash = Boolean(
+        settings?.companyId === "70af7281-072d-4ed5-9f2e-af4d93e99ea9" ||
+        settings?.theme === "dark-orange" ||
+        settings?.name?.toLowerCase().includes("aerowash")
+    );
+    const isDroneEnabled = isAeroWash && settings?.layoutPreferences?.dashboardView === "drone";
     const isTendersEnabled = settings?.tendersEnabled === true;
 
     const dynamicNavigation = navigation.map(group => {
@@ -96,7 +101,7 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
             };
         }
         if (group.title === "System") {
-            const isAeroWash = isDroneEnabled || settings?.theme === "dark-orange" || settings?.companyId === "70af7281-072d-4ed5-9f2e-af4d93e99ea9";
+
             if (isAeroWash && !group.items.some(item => item.title === "AeroWash Catalogue")) {
                 return {
                     ...group,

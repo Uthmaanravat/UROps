@@ -308,6 +308,12 @@ export async function createRecurringProjectAction(data: {
             // If price per visit provided, attach initial quote/invoice
             if (data.pricePerVisit && data.pricePerVisit > 0) {
                 try {
+                    const isAeroWash = companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9'
+                    const prefix = isAeroWash ? 'AW-VISIT' : 'LR-VISIT'
+                    const itemDesc = isAeroWash
+                        ? `Routine scheduled exterior facade wash - ${visitName}`
+                        : `Scheduled contract maintenance visit - ${visitName}`
+
                     await prisma.invoice.create({
                         data: {
                             companyId,
@@ -315,7 +321,7 @@ export async function createRecurringProjectAction(data: {
                             projectId: visit.id,
                             type: 'QUOTE',
                             status: 'DRAFT',
-                            quoteNumber: `AW-VISIT-${visit.id.substring(0, 6).toUpperCase()}`,
+                            quoteNumber: `${prefix}-${visit.id.substring(0, 6).toUpperCase()}`,
                             total: data.pricePerVisit,
                             subtotal: data.pricePerVisit / 1.15,
                             taxAmount: data.pricePerVisit - (data.pricePerVisit / 1.15),
@@ -323,7 +329,7 @@ export async function createRecurringProjectAction(data: {
                             items: {
                                 create: [
                                     {
-                                        description: `Routine scheduled exterior facade drone wash - ${visitName}`,
+                                        description: itemDesc,
                                         quantity: 1,
                                         unitPrice: data.pricePerVisit / 1.15,
                                         total: data.pricePerVisit / 1.15,

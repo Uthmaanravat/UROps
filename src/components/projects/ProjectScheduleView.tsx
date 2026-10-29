@@ -40,6 +40,14 @@ interface WeekColumn {
 }
 
 export function ProjectScheduleView({ projects, company, onJobClick }: ProjectScheduleViewProps) {
+    const isAeroWash = Boolean(
+        company?.id === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' ||
+        company?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' ||
+        company?.theme === 'dark-orange' ||
+        company?.settings?.theme === 'dark-orange' ||
+        company?.name?.toLowerCase().includes('aerowash') ||
+        company?.settings?.name?.toLowerCase().includes('aerowash')
+    )
     const [range, setRange] = useState<HorizonRange>("2_MONTHS")
     const [showPrices, setShowPrices] = useState(false)
     const [isPrinting, setIsPrinting] = useState(false)
@@ -145,7 +153,7 @@ export function ProjectScheduleView({ projects, company, onJobClick }: ProjectSc
                 rangeMonths: numMonths,
                 showPrices
             })
-            doc.save(`aerowash_operations_schedule_${numMonths}_months.pdf`)
+            doc.save(`${isAeroWash ? "aerowash" : "operations"}_schedule_${numMonths}_months.pdf`)
         } catch (e) {
             console.error("Print Schedule error:", e)
         } finally {
@@ -370,7 +378,12 @@ export function ProjectScheduleView({ projects, company, onJobClick }: ProjectSc
                                                                         <div className="text-[9px] font-medium opacity-80 mt-0.5 truncate">
                                                                             {project.startDate
                                                                                 ? new Date(project.startDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
-                                                                                : "Scheduled"} · {project.crew || "Flight Alpha"}
+                                                                                : "Scheduled"}{(() => {
+                                                                                    const c = isAeroWash
+                                                                                        ? (project.crew || "Flight Alpha")
+                                                                                        : (project.assignedTeam || project.team || project.crew)
+                                                                                    return c ? ` · ${c}` : ""
+                                                                                })()}
                                                                         </div>
                                                                     </div>
                                                                 </Link>

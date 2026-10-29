@@ -283,10 +283,14 @@ export async function generateAeroWashQuotePdf({
     doc.text(`${companyPhone}  ·  ${companyEmail}`, 14, fromY);
     fromY += 4.2;
 
-    const companyReg = company.registrationNumber ? `Reg. ${company.registrationNumber}` : "Reg. 2026/475172/07";
-    const companyWeb = company.website || "www.aerowash.co.za";
-    doc.text(`${companyWeb}  ·  ${companyReg}`, 14, fromY);
-    fromY += 4.2;
+    const isAeroWashCo = (company as any).id === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || company.name?.toLowerCase().includes("aerowash");
+    const companyReg = company.registrationNumber ? `Reg. ${company.registrationNumber}` : (isAeroWashCo ? "Reg. 2026/475172/07" : "");
+    const companyWeb = company.website || (isAeroWashCo ? "www.aerowash.co.za" : "");
+    const webAndReg = [companyWeb, companyReg].filter(Boolean).join("  ·  ");
+    if (webAndReg) {
+        doc.text(webAndReg, 14, fromY);
+        fromY += 4.2;
+    }
 
     if (company.vatNumber && isVatActive) {
         doc.text(`VAT No. ${company.vatNumber}`, 14, fromY);

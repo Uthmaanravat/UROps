@@ -30,6 +30,16 @@ export function getThemePrimaryHex(theme?: string): string {
     return "#84cc16"
 }
 
+export function isAeroWashCompany(company: any): boolean {
+    if (!company) return false
+    const id = company.id || company.companyId
+    if (id === '70af7281-072d-4ed5-9f2e-af4d93e99ea9') return true
+    const theme = company.theme || company.settings?.theme || ""
+    if (theme === 'dark-orange') return true
+    const name = company.name || company.settings?.name || ""
+    return name.toLowerCase().includes('aerowash')
+}
+
 export const DEFAULT_JOB_SPECS = {
     surfaces: "External facade cladding, glass panels, louvers, window frames & rooftop solar array",
     method: "Drone SoftWash Low-Pressure Chemical Application (< 10 bar) + Demineralized Deionized Pure Water Spot-Free Rinse",
@@ -42,6 +52,20 @@ export const DEFAULT_JOB_SPECS = {
     drone: "Industrial SoftWash Drone System (AeroWash Fleet)",
     rocOperator: "ABEOD Commercial Aviation ROC",
     airspace: "ATNS Flight Logging / VFR Daylight Operations Verified"
+}
+
+export const DEFAULT_LR_JOB_SPECS = {
+    surfaces: "Building structure, masonry, interior/exterior finishes & site perimeter",
+    method: "Standard construction & maintenance execution per approved scope and architectural specs",
+    chemicals: "Approved industrial construction materials, sealants & non-hazardous cleaning agents",
+    waterPoint: "Site water connection / contractor bulk water supply on site",
+    powerSupply: "Single/three phase on-site power or portable generator staging",
+    parking: "Contractor vehicle & equipment staging area on designated site grounds",
+    groundZone: "Safe perimeter hoarding, safety cones & caution barricading per OHS guidelines",
+    pilot: "Site Foreman / Project Lead",
+    drone: "Construction Equipment & Tooling",
+    rocOperator: "LR Builders Operations Team",
+    airspace: "SANS 10400 & OHS Act Standard Compliance"
 }
 
 /**
@@ -62,11 +86,12 @@ export async function generateSchedulePdf(
     const pageWidth = 297
     const theme = company?.theme || company?.settings?.theme || ""
     const [primaryR, primaryG, primaryB] = getThemePrimaryRGB(theme)
+    const isAeroWash = isAeroWashCompany(company)
 
-    const companyName = company?.name || company?.settings?.name || "AeroWash (Pty) Ltd"
-    const companyPhone = company?.phone || company?.settings?.phone || "067 829 3350"
-    const companyEmail = company?.email || company?.settings?.email || "info@aerowash.co.za"
-    const regNumber = company?.registrationNumber || company?.settings?.registrationNumber || "2026/475172/07"
+    const companyName = company?.settings?.name || company?.name || (isAeroWash ? "AeroWash (Pty) Ltd" : "LR Builders (Pty) Ltd")
+    const companyPhone = company?.settings?.phone || company?.phone || ""
+    const companyEmail = company?.settings?.email || company?.email || ""
+    const regNumber = company?.settings?.registrationNumber || company?.registrationNumber || (isAeroWash ? "2026/475172/07" : "")
     const logoUrl = company?.logoUrl || company?.settings?.logoUrl
     const showPrices = options?.showPrices ?? false
 
@@ -79,6 +104,7 @@ export async function generateSchedulePdf(
     // Left: Real Logo from Settings
     const headerY = 14
     let logoWidthMm = 28
+    const fallbackInitials = isAeroWash ? "AW" : ((companyName.replace(/[^A-Za-z0-9]/g, "").slice(0, 2) || "LR").toUpperCase())
     if (logoUrl) {
         try {
             const isPng = logoUrl.includes("image/png") || logoUrl.toLowerCase().includes(".png")
@@ -90,7 +116,7 @@ export async function generateSchedulePdf(
             doc.setTextColor(255, 255, 255)
             doc.setFontSize(10)
             doc.setFont("helvetica", "bold")
-            doc.text("AW", 24, headerY + 8.5, { align: "center" })
+            doc.text(fallbackInitials, 24, headerY + 8.5, { align: "center" })
             logoWidthMm = 22
         }
     } else {
@@ -99,7 +125,7 @@ export async function generateSchedulePdf(
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(10)
         doc.setFont("helvetica", "bold")
-        doc.text("AW", 24, headerY + 8.5, { align: "center" })
+        doc.text(fallbackInitials, 24, headerY + 8.5, { align: "center" })
         logoWidthMm = 22
     }
 
@@ -113,8 +139,15 @@ export async function generateSchedulePdf(
     doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(100, 116, 139)
-    doc.text(`Reg: ${regNumber}  ·  Tel: ${companyPhone}`, leftX, headerY + 8.5)
-    doc.text(`Email: ${companyEmail}`, leftX, headerY + 12.5)
+    const regLineParts: string[] = []
+    if (regNumber && regNumber.trim()) regLineParts.push(`Reg: ${regNumber.trim()}`)
+    if (companyPhone && companyPhone.trim()) regLineParts.push(`Tel: ${companyPhone.trim()}`)
+    if (regLineParts.length > 0) {
+        doc.text(regLineParts.join("  ·  "), leftX, headerY + 8.5)
+    }
+    if (companyEmail && companyEmail.trim()) {
+        doc.text(`Email: ${companyEmail.trim()}`, leftX, headerY + 12.5)
+    }
 
     // Right: Document Title & Metadata
     doc.setFontSize(14)
@@ -131,7 +164,9 @@ export async function generateSchedulePdf(
     doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(100, 116, 139)
-    doc.text(`Generated: ${new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}  ·  AeroWash Flight Ops`, pageWidth - 14, headerY + 13, { align: "right" })
+    const cleanCompanyShort = companyName.replace(/\s*\(Pty\)\s*Ltd/i, "").trim()
+    const opsLabel = isAeroWash ? "AeroWash Flight Ops" : `${cleanCompanyShort || "LR Builders"} Operations`
+    doc.text(`Generated: ${new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}  ·  ${opsLabel}`, pageWidth - 14, headerY + 13, { align: "right" })
 
     // Divider line
     doc.setDrawColor(226, 232, 240)
@@ -140,20 +175,32 @@ export async function generateSchedulePdf(
 
     // Build Table
     const tableStartY = headerY + 20
+    const crewHeader = isAeroWash ? "Flight Crew / Pilot" : "Team / Foreman"
 
     const tableHeaders = showPrices
-        ? ["Target Week", "Client / Partner", "Site Address", "Client PO #", "Flight Crew / Pilot", "Contract Type", "Status", "Value (ZAR)"]
-        : ["Target Week", "Client / Partner", "Site Address", "Client PO #", "Flight Crew / Pilot", "Contract Type", "Status"]
+        ? ["Target Week", "Client / Partner", "Site Address", "Client PO #", crewHeader, "Contract Type", "Status", "Value (ZAR)"]
+        : ["Target Week", "Client / Partner", "Site Address", "Client PO #", crewHeader, "Contract Type", "Status"]
 
     const rows = (projects || []).map((p: any) => {
-        const d = p.startDate
-            ? new Date(p.startDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
-            : (p.status === "IN_PROGRESS" ? "In Progress" : "Pending")
+        let d = "Not scheduled"
+        if (p.startDate) {
+            d = new Date(p.startDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+        } else if (p.endDate) {
+            d = new Date(p.endDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+        } else if (p.invoices?.[0]?.date) {
+            d = new Date(p.invoices[0].date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+        } else if (p.status === "IN_PROGRESS") {
+            d = "In Progress"
+        } else if (p.status === "COMPLETED" || p.status === "INVOICED" || p.status === "PAID") {
+            d = p.updatedAt
+                ? new Date(p.updatedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+                : (p.status === "PAID" ? "Paid" : p.status === "INVOICED" ? "Invoiced" : "Completed")
+        }
 
         const clientName = p.client?.name || "Client"
         const site = p.site || p.client?.address || p.name || "Site on file"
         const po = p.poNumber || p.clientPoNumber || p.invoices?.[0]?.clientPoNumber || p.invoices?.[0]?.reference || "PO-Awaiting"
-        const crew = p.crew || "Flight Alpha"
+        const crew = p.assignedTeam || p.team || p.crew || (isAeroWash ? "Flight Alpha" : "—")
         const type = p.isRecurring || p.parentProjectId ? "Recurring Contract" : "Direct Work Order"
         const status = p.status?.replace(/_/g, " ") || "SCHEDULED"
         const val = p.invoices?.[0]?.total ? `R ${Number(p.invoices[0].total).toLocaleString()}` : "—"
@@ -198,7 +245,7 @@ export async function generateSchedulePdf(
     const finalY = doc.lastAutoTable.finalY + 8
     doc.setFontSize(7)
     doc.setTextColor(148, 163, 184)
-    doc.text(`Total Scheduled Jobs: ${projects.length}  ·  Confidential Commercial Schedule  ·  AeroWash (Pty) Ltd`, 14, Math.min(finalY, 200))
+    doc.text(`Total Scheduled Jobs: ${projects.length}  ·  Confidential Commercial Schedule  ·  ${companyName}`, 14, Math.min(finalY, 200))
 
     return doc
 }
@@ -216,15 +263,17 @@ export async function generateJobSheetPdf(
     const pageWidth = 210
     const theme = company?.theme || company?.settings?.theme || ""
     const [primaryR, primaryG, primaryB] = getThemePrimaryRGB(theme)
+    const isAeroWash = isAeroWashCompany(company)
 
-    const companyName = company?.name || company?.settings?.name || "AeroWash (Pty) Ltd"
-    const companyPhone = company?.phone || company?.settings?.phone || "067 829 3350"
-    const companyEmail = company?.email || company?.settings?.email || "info@aerowash.co.za"
-    const regNumber = company?.registrationNumber || company?.settings?.registrationNumber || "2026/475172/07"
+    const companyName = company?.settings?.name || company?.name || (isAeroWash ? "AeroWash (Pty) Ltd" : "LR Builders (Pty) Ltd")
+    const companyPhone = company?.settings?.phone || company?.phone || ""
+    const companyEmail = company?.settings?.email || company?.email || ""
+    const regNumber = company?.settings?.registrationNumber || company?.registrationNumber || (isAeroWash ? "2026/475172/07" : "")
     const logoUrl = company?.logoUrl || company?.settings?.logoUrl
 
+    const defaultSpecs = isAeroWash ? DEFAULT_JOB_SPECS : DEFAULT_LR_JOB_SPECS
     const specs = {
-        ...DEFAULT_JOB_SPECS,
+        ...defaultSpecs,
         ...(project.jobSpecs || {})
     }
 
@@ -237,6 +286,7 @@ export async function generateJobSheetPdf(
     // Left: Real Logo from Settings
     const headerY = 14
     let logoWidthMm = 28
+    const fallbackInitials = isAeroWash ? "AW" : ((companyName.replace(/[^A-Za-z0-9]/g, "").slice(0, 2) || "LR").toUpperCase())
     if (logoUrl) {
         try {
             const isPng = logoUrl.includes("image/png") || logoUrl.toLowerCase().includes(".png")
@@ -248,7 +298,7 @@ export async function generateJobSheetPdf(
             doc.setTextColor(255, 255, 255)
             doc.setFontSize(10)
             doc.setFont("helvetica", "bold")
-            doc.text("AW", 24, headerY + 8.5, { align: "center" })
+            doc.text(fallbackInitials, 24, headerY + 8.5, { align: "center" })
             logoWidthMm = 22
         }
     } else {
@@ -257,7 +307,7 @@ export async function generateJobSheetPdf(
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(10)
         doc.setFont("helvetica", "bold")
-        doc.text("AW", 24, headerY + 8.5, { align: "center" })
+        doc.text(fallbackInitials, 24, headerY + 8.5, { align: "center" })
         logoWidthMm = 22
     }
 
@@ -271,8 +321,15 @@ export async function generateJobSheetPdf(
     doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(100, 116, 139)
-    doc.text(`Reg: ${regNumber}  ·  Tel: ${companyPhone}`, leftX, headerY + 8.5)
-    doc.text(`Email: ${companyEmail}`, leftX, headerY + 12.5)
+    const regLineParts: string[] = []
+    if (regNumber && regNumber.trim()) regLineParts.push(`Reg: ${regNumber.trim()}`)
+    if (companyPhone && companyPhone.trim()) regLineParts.push(`Tel: ${companyPhone.trim()}`)
+    if (regLineParts.length > 0) {
+        doc.text(regLineParts.join("  ·  "), leftX, headerY + 8.5)
+    }
+    if (companyEmail && companyEmail.trim()) {
+        doc.text(`Email: ${companyEmail.trim()}`, leftX, headerY + 12.5)
+    }
 
     // Right: Document Title & Job Ref
     doc.setFontSize(14)
@@ -402,10 +459,14 @@ export async function generateJobSheetPdf(
 
     y += 16
 
-    // Section 3 & 4: Access & Logistics + Flight & ABEOD ROC Operations side by side
+    // Section 3 & 4: Access & Logistics + Flight / Site Crew Operations side by side
     const colMid = 105
     drawSectionHeader("3. Site Access & Logistics", y, 88, 14)
-    drawSectionHeader("4. Flight & ABEOD ROC Operations", y, 89, colMid + 3)
+    if (isAeroWash) {
+        drawSectionHeader("4. Flight & ABEOD ROC Operations", y, 89, colMid + 3)
+    } else {
+        drawSectionHeader("4. Site Crew & Operations", y, 89, colMid + 3)
+    }
     y += 7.5
 
     doc.setFontSize(7.5)
@@ -416,16 +477,27 @@ export async function generateJobSheetPdf(
     doc.text(`• Vehicle Staging: ${specs.parking}`, 18, y + 11)
     doc.text(`• Ground Cordon: ${specs.groundZone}`, 18, y + 15.5)
 
-    // Right: Flight & ABEOD ROC Operations
-    doc.text(`• Pilot in Command (PIC): ${specs.pilot}`, colMid + 6, y + 2)
-    doc.text(`• Aircraft: ${specs.drone}`, colMid + 6, y + 6.5)
-    doc.text(`• Commercial ROC Operator: ${specs.rocOperator}`, colMid + 6, y + 11)
-    doc.text(`• Airspace Compliance: ${specs.airspace}`, colMid + 6, y + 15.5)
+    // Right: Crew / Operations
+    if (isAeroWash) {
+        doc.text(`• Pilot in Command (PIC): ${specs.pilot}`, colMid + 6, y + 2)
+        doc.text(`• Aircraft: ${specs.drone}`, colMid + 6, y + 6.5)
+        doc.text(`• Commercial ROC Operator: ${specs.rocOperator}`, colMid + 6, y + 11)
+        doc.text(`• Airspace Compliance: ${specs.airspace}`, colMid + 6, y + 15.5)
+    } else {
+        const assignedTeam = project.assignedTeam || project.team || project.crew || "Site Team"
+        doc.text(`• Assigned Team: ${assignedTeam}`, colMid + 6, y + 2)
+        doc.text(`• Work Classification: ${project.workClassification || (project.clientPoNumber ? "Contract Work Order" : "General Building Works")}`, colMid + 6, y + 6.5)
+        doc.text(`• Foreman / Site Lead: ${specs.pilot}`, colMid + 6, y + 11)
+        doc.text(`• Compliance Standard: SANS 10400 / OHS Act Compliance`, colMid + 6, y + 15.5)
+    }
 
     y += 21
 
-    // Section 5: Pre-Flight Safety & Weather Checklist
-    y = drawSectionHeader("5. Pre-Flight Safety & Aviation Weather Checklist (Tick Before Take-Off)", y)
+    // Section 5: Safety Checklist
+    const sec5Title = isAeroWash
+        ? "5. Pre-Flight Safety & Aviation Weather Checklist (Tick Before Take-Off)"
+        : "5. On-Site Health & Safety Checklist (Tick Before Commencing Work)"
+    y = drawSectionHeader(sec5Title, y)
 
     const drawCheckbox = (label: string, curX: number, curY: number) => {
         doc.rect(curX, curY - 2.8, 3.2, 3.2)
@@ -435,13 +507,23 @@ export async function generateJobSheetPdf(
         doc.text(label, curX + 5, curY)
     }
 
-    drawCheckbox("Weather: Wind < 15 knots, no rain, visibility > 5km", 18, y + 2.5)
-    drawCheckbox("Exclusion zone: Cones & caution tape placed on ground", 18, y + 7.5)
-    drawCheckbox("PPE: Helmets, eye protection & hi-vis vests on crew", 18, y + 12.5)
+    if (isAeroWash) {
+        drawCheckbox("Weather: Wind < 15 knots, no rain, visibility > 5km", 18, y + 2.5)
+        drawCheckbox("Exclusion zone: Cones & caution tape placed on ground", 18, y + 7.5)
+        drawCheckbox("PPE: Helmets, eye protection & hi-vis vests on crew", 18, y + 12.5)
 
-    drawCheckbox("Spotter / Safety Officer on comms with PIC", colMid + 6, y + 2.5)
-    drawCheckbox("Aircraft check: Props tight, battery 100%, RTH set", colMid + 6, y + 7.5)
-    drawCheckbox("Water hose & pump line pressurized with no leaks", colMid + 6, y + 12.5)
+        drawCheckbox("Spotter / Safety Officer on comms with PIC", colMid + 6, y + 2.5)
+        drawCheckbox("Aircraft check: Props tight, battery 100%, RTH set", colMid + 6, y + 7.5)
+        drawCheckbox("Water hose & pump line pressurized with no leaks", colMid + 6, y + 12.5)
+    } else {
+        drawCheckbox("Site barricading & safety signage placed around area", 18, y + 2.5)
+        drawCheckbox("PPE: Hard hats, steel-toe boots & hi-vis vests on crew", 18, y + 7.5)
+        drawCheckbox("Scaffolding / Ladders inspected and safety-tagged", 18, y + 12.5)
+
+        drawCheckbox("Power tools, cables & equipment inspected (no defects)", colMid + 6, y + 2.5)
+        drawCheckbox("First aid kit & fire extinguisher accessible on site", colMid + 6, y + 7.5)
+        drawCheckbox("Working area clear of unauthorized personnel / hazards", colMid + 6, y + 12.5)
+    }
 
     y += 18
 
@@ -470,7 +552,8 @@ export async function generateJobSheetPdf(
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(71, 85, 105)
-    doc.text("LEAD PILOT / CREW LEADER SIGNATURE:", 18, y + 5)
+    const signOffLeaderTitle = isAeroWash ? "LEAD PILOT / CREW LEADER SIGNATURE:" : "FOREMAN / SITE SUPERVISOR SIGNATURE:"
+    doc.text(signOffLeaderTitle, 18, y + 5)
     doc.setFont("helvetica", "normal")
     doc.text("Name: ___________________________________________", 18, y + 11)
     doc.text("Signature: _______________________ Date: _________", 18, y + 17)
@@ -638,11 +721,12 @@ export async function generateMonthCalendarPdf(
     const pageHeight = 210
     const theme = company?.theme || company?.settings?.theme || ''
     const [primaryR, primaryG, primaryB] = getThemePrimaryRGB(theme)
+    const isAeroWash = isAeroWashCompany(company)
 
-    const companyName = company?.name || company?.settings?.name || 'AeroWash (Pty) Ltd'
-    const companyPhone = company?.phone || company?.settings?.phone || '067 829 3350'
-    const companyEmail = company?.email || company?.settings?.email || 'info@aerowash.co.za'
-    const regNumber = company?.registrationNumber || company?.settings?.registrationNumber || '2026/475172/07'
+    const companyName = company?.settings?.name || company?.name || (isAeroWash ? 'AeroWash (Pty) Ltd' : 'LR Builders (Pty) Ltd')
+    const companyPhone = company?.settings?.phone || company?.phone || ''
+    const companyEmail = company?.settings?.email || company?.email || ''
+    const regNumber = company?.settings?.registrationNumber || company?.registrationNumber || (isAeroWash ? '2026/475172/07' : '')
     const logoUrl = company?.logoUrl || company?.settings?.logoUrl
     const showPrices = options?.showPrices ?? false
 
@@ -655,6 +739,7 @@ export async function generateMonthCalendarPdf(
     // Left: Real Logo
     const headerY = 14
     let logoWidthMm = 28
+    const fallbackInitials = isAeroWash ? "AW" : ((companyName.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || 'LR').toUpperCase())
     if (logoUrl) {
         try {
             const isPng = logoUrl.includes('image/png') || logoUrl.toLowerCase().includes('.png')
@@ -666,7 +751,7 @@ export async function generateMonthCalendarPdf(
             doc.setTextColor(255, 255, 255)
             doc.setFontSize(10)
             doc.setFont('helvetica', 'bold')
-            doc.text('AW', 24, headerY + 8.5, { align: 'center' })
+            doc.text(fallbackInitials, 24, headerY + 8.5, { align: 'center' })
             logoWidthMm = 22
         }
     } else {
@@ -675,7 +760,7 @@ export async function generateMonthCalendarPdf(
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(10)
         doc.setFont('helvetica', 'bold')
-        doc.text('AW', 24, headerY + 8.5, { align: 'center' })
+        doc.text(fallbackInitials, 24, headerY + 8.5, { align: 'center' })
         logoWidthMm = 22
     }
 
@@ -688,8 +773,15 @@ export async function generateMonthCalendarPdf(
     doc.setFontSize(7)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(100, 116, 139)
-    doc.text(`Reg: ${regNumber}  ·  Tel: ${companyPhone}`, leftX, headerY + 8.5)
-    doc.text(`Email: ${companyEmail}`, leftX, headerY + 12.5)
+    const regLineParts: string[] = []
+    if (regNumber && regNumber.trim()) regLineParts.push(`Reg: ${regNumber.trim()}`)
+    if (companyPhone && companyPhone.trim()) regLineParts.push(`Tel: ${companyPhone.trim()}`)
+    if (regLineParts.length > 0) {
+        doc.text(regLineParts.join('  ·  '), leftX, headerY + 8.5)
+    }
+    if (companyEmail && companyEmail.trim()) {
+        doc.text(`Email: ${companyEmail.trim()}`, leftX, headerY + 12.5)
+    }
 
     // Right: Month Title
     const monthTitle = targetDate.toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' }).toUpperCase()
@@ -701,7 +793,8 @@ export async function generateMonthCalendarPdf(
     doc.setFontSize(7.5)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(30, 41, 59)
-    doc.text('OPERATIONAL FLIGHT CALENDAR', pageWidth - 14, headerY + 9.5, { align: 'right' })
+    const calendarSubTitle = isAeroWash ? 'OPERATIONAL FLIGHT CALENDAR' : 'OPERATIONS CALENDAR'
+    doc.text(calendarSubTitle, pageWidth - 14, headerY + 9.5, { align: 'right' })
 
     doc.setFontSize(7)
     doc.setFont('helvetica', 'normal')

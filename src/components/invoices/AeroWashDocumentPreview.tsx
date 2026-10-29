@@ -198,7 +198,7 @@ export function AeroWashDocumentPreview({
                                 <div>{company.address || "15 Culemborg Street, Parow, Cape Town, 7500"}</div>
                                 <div>{company.phone || "067 829 3350"}  ·  {company.email || "info@aerowash.co.za"}</div>
                                 <div>
-                                    {(company.website || "www.aerowash.co.za")}  ·  Reg. {company.registrationNumber || "2026/475172/07"}
+                                    {(company.website || "www.aerowash.co.za")}{company.registrationNumber ? `  ·  Reg. ${company.registrationNumber}` : (company.id === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' ? "  ·  Reg. 2026/475172/07" : "")}
                                 </div>
                                 {company.vatNumber && isVatRegistered && (
                                     <div className="font-semibold text-zinc-800">VAT No. {company.vatNumber}</div>

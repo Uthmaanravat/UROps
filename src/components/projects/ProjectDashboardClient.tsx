@@ -37,6 +37,7 @@ import { generateSchedulePdf, generateJobSheetPdf } from "@/lib/project-print-ut
 import { ProjectScheduleView } from "@/components/projects/ProjectScheduleView"
 import { ProjectCalendarView } from "@/components/projects/ProjectCalendarView"
 import { ProjectRecurrenceModal } from "@/components/projects/ProjectRecurrenceModal"
+import { ProjectSchedulePrintModal } from "@/components/projects/ProjectSchedulePrintModal"
 
 // PART 5 REQUIREMENT: Scheduled -> In Progress -> Completed -> Invoiced -> Paid
 const COLUMNS = [
@@ -96,6 +97,14 @@ export function ProjectDashboardClient({
 }) {
     const isTendersEnabled = tendersEnabled ?? (company?.settings?.tendersEnabled === true)
     const isReactiveEnabled = reactiveEnabled ?? (company?.settings?.reactiveEnabled === true)
+    const isAeroWash = Boolean(
+        company?.id === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' ||
+        company?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' ||
+        company?.theme === 'dark-orange' ||
+        company?.settings?.theme === 'dark-orange' ||
+        company?.name?.toLowerCase().includes('aerowash') ||
+        company?.settings?.name?.toLowerCase().includes('aerowash')
+    )
 
     const [view, setView] = useState<'KANBAN' | 'LIST' | 'SCHEDULE' | 'CALENDAR'>('KANBAN')
     const [projects, setProjects] = useState(initialProjects || [])
@@ -105,7 +114,51 @@ export function ProjectDashboardClient({
 
     // Modals
     const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
+    const [lrScheduleModalOpen, setLrScheduleModalOpen] = useState(false)
     const [recurrenceModalOpen, setRecurrenceModalOpen] = useState(false)
+    const [showPaid, setShowPaid] = useState<boolean>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('urops_projects_show_paid')
+            return saved !== null ? saved === 'true' : false
+        }
+        return false
+    })
+    const [hideCompleted, setHideCompleted] = useState<boolean>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('urops_projects_hide_completed')
+            return saved !== null ? saved === 'true' : false
+        }
+        return false
+    })
+
+    const toggleShowPaid = () => {
+        setShowPaid(prev => {
+            const next = !prev
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('urops_projects_show_paid', String(next))
+            }
+            return next
+        })
+    }
+
+    const toggleHideCompleted = () => {
+        setHideCompleted(prev => {
+            const next = !prev
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('urops_projects_hide_completed', String(next))
+            }
+            return next
+        })
+    }
+
+    const paidCount = projects.filter(p => p.status === 'PAID').length
+    const completedCount = projects.filter(p => p.status === 'COMPLETED').length
+
+    const activeColumns = COLUMNS.filter(col => {
+        if (col.id === 'PAID' && !showPaid) return false
+        if (col.id === 'COMPLETED' && hideCompleted) return false
+        return true
+    })
     const [showPricesOnSchedule, setShowPricesOnSchedule] = useState(false)
     const [scheduleRangeMonths, setScheduleRangeMonths] = useState<number>(2)
     const [isPrintingSchedule, setIsPrintingSchedule] = useState(false)
@@ -117,6 +170,8 @@ export function ProjectDashboardClient({
 
     // Filter projects
     const displayedProjects = projects.filter(p => {
+        if (!showPaid && p.status === 'PAID') return false
+        if (hideCompleted && p.status === 'COMPLETED') return false
         if (!isTendersEnabled && p.workType === 'TENDER') return false
         if (!isReactiveEnabled && (p.commercialStatus === 'REACTIVE_WORK' || p.commercialStatus === 'EMERGENCY_WORK') && filterCategory === 'REACTIVE') return false
         if (filterCategory === 'WAITING_PO') return p.commercialStatus === 'AWAITING_PO'
@@ -222,7 +277,13 @@ export function ProjectDashboardClient({
 
                     {/* Button 1: Print Schedule */}
                     <Button
-                        onClick={() => setScheduleModalOpen(true)}
+                        onClick={() => {
+                            if (isAeroWash) {
+                                setScheduleModalOpen(true)
+                            } else {
+                                setLrScheduleModalOpen(true)
+                            }
+                        }}
                         className="bg-[#14141E] text-white border border-primary/40 hover:border-primary hover:bg-primary/10 font-bold shadow-sm text-xs flex items-center gap-2 h-9 px-4 transition-all"
                     >
                         <Printer className="h-4 w-4 text-primary" />
@@ -338,6 +399,35 @@ export function ProjectDashboardClient({
                         <FileText className="h-3.5 w-3.5" /> Credit Notes ↗
                     </Link>
                 </div>
+
+                {/* Show Paid & Hide Completed Toggles (Both Companies, remembered per user) */}
+                <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/5">
+                    <button
+                        type="button"
+                        onClick={toggleShowPaid}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            showPaid
+                                ? 'bg-zinc-700 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                        }`}
+                        title={showPaid ? 'Click to hide Paid column' : 'Click to show Paid column'}
+                    >
+                        <span>{showPaid ? 'Hide Paid' : `Show Paid (${paidCount})`}</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={toggleHideCompleted}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            hideCompleted
+                                ? 'bg-teal-950 text-teal-300 border border-teal-800'
+                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                        }`}
+                        title={hideCompleted ? 'Click to show Completed jobs' : 'Click to hide Completed jobs'}
+                    >
+                        <span>{hideCompleted ? 'Show Completed' : 'Hide Completed'}</span>
+                    </button>
+                </div>
             </div>
 
             {/* 1. SCHEDULE HORIZON VIEW */}
@@ -364,7 +454,7 @@ export function ProjectDashboardClient({
             {view === 'KANBAN' && (
                 <div className="overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
                     <div className="flex gap-4 min-w-full pt-2">
-                        {COLUMNS.map(col => {
+                        {activeColumns.map(col => {
                             const colProjects = displayedProjects.filter(p => col.statuses.includes(p.status))
 
                             return (
@@ -462,9 +552,17 @@ export function ProjectDashboardClient({
                                                                     : "Scheduled"}
                                                             </span>
                                                         </div>
-                                                        <span className="text-zinc-500 text-[9px] font-mono">
-                                                            {project.crew || "Flight Alpha"}
-                                                        </span>
+                                                        {(() => {
+                                                            const crewOrTeam = isAeroWash
+                                                                ? (project.crew || "Flight Alpha")
+                                                                : (project.assignedTeam || project.team || project.crew || "")
+                                                            if (!crewOrTeam) return null
+                                                            return (
+                                                                <span className="text-zinc-500 text-[9px] font-mono">
+                                                                    {crewOrTeam}
+                                                                </span>
+                                                            )
+                                                        })()}
                                                     </div>
 
                                                     {/* Value & PO Number */}
@@ -524,7 +622,7 @@ export function ProjectDashboardClient({
                                     <th className="p-3.5">Client</th>
                                     <th className="p-3.5">Site Address</th>
                                     <th className="p-3.5">Date</th>
-                                    <th className="p-3.5">Crew / Pilot</th>
+                                    <th className="p-3.5">{isAeroWash ? "Flight Crew / Pilot" : "Team / Foreman"}</th>
                                     <th className="p-3.5">Status</th>
                                     <th className="p-3.5">PO #</th>
                                     <th className="p-3.5 text-right">Value</th>
@@ -547,7 +645,7 @@ export function ProjectDashboardClient({
                                         const dateStr = p.startDate
                                             ? new Date(p.startDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
                                             : "This Week"
-                                        const crew = p.crew || "Flight Crew 1"
+                                        const crew = p.assignedTeam || p.team || p.crew || (isAeroWash ? "Flight Alpha" : "—")
                                         const isPrinting = printingJobSheetId === p.id
 
                                         return (
@@ -677,6 +775,17 @@ export function ProjectDashboardClient({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* LR Builders Operations & Works Schedule Generator */}
+            {!isAeroWash && (
+                <ProjectSchedulePrintModal
+                    isOpen={lrScheduleModalOpen}
+                    onClose={() => setLrScheduleModalOpen(false)}
+                    projects={projects}
+                    company={company}
+                    initialWorkType={filterCategory === 'TENDER' ? 'TENDER' : 'ALL'}
+                />
+            )}
 
             {/* Recurring Contract Creation Modal */}
             <ProjectRecurrenceModal

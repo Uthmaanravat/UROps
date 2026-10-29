@@ -307,7 +307,13 @@ export function ProjectSchedulePrintModal({
         doc.setFont("helvetica", "normal")
         doc.setFontSize(8.5)
         doc.setTextColor(100, 116, 139)
-        doc.text(`Phone: ${companyPhone}  |  Email: ${companyEmail}`, 14, 26)
+        const contactParts: string[] = []
+        if (companyReg && companyReg.trim()) contactParts.push(`Reg: ${companyReg.trim()}`)
+        if (companyPhone && companyPhone.trim()) contactParts.push(`Phone: ${companyPhone.trim()}`)
+        if (companyEmail && companyEmail.trim()) contactParts.push(`Email: ${companyEmail.trim()}`)
+        if (contactParts.length > 0) {
+            doc.text(contactParts.join("  |  "), 14, 26)
+        }
 
         // Document Title on Right
         doc.setFont("helvetica", "bold")
