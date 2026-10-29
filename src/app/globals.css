@@ -11,19 +11,19 @@
     --card-foreground: 0 0% 98%;
     --popover: 230 40% 13%;
     --popover-foreground: 0 0% 98%;
-    --primary: 85 100% 50%; /* Lime #A3FF00 */
+    --primary: 215 20% 65%; /* Neutral Slate Fallback */
     --primary-foreground: 230 40% 10%;
     --secondary: 230 40% 18%;
     --secondary-foreground: 0 0% 98%;
     --muted: 230 40% 18%;
     --muted-foreground: 215 20% 65%;
-    --accent: 85 100% 50%; /* Lime Accent */
+    --accent: 215 20% 65%; /* Neutral Slate Fallback */
     --accent-foreground: 230 40% 10%;
     --destructive: 0 62.8% 50%;
     --destructive-foreground: 0 0% 98%;
     --border: 230 40% 20%;
     --input: 230 40% 20%;
-    --ring: 85 100% 50%;
+    --ring: 215 20% 65%;
     --radius: 0.75rem;
   }
 
@@ -47,7 +47,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 230 40% 20%;
     --input: 230 40% 20%;
-    --ring: 85 100% 50%;
+    --ring: 215 20% 65%;
   }
 }
 
@@ -70,6 +70,13 @@
     --primary: 221 83% 53%;
     --ring: 221 83% 53%;
     --accent: 221 83% 53%;
+  }
+  .theme-lime {
+    --primary: 215 20% 65%; /* Neutral Slate Fallback */
+    --primary-foreground: 230 40% 10%;
+    --ring: 215 20% 65%;
+    --accent: 85 100% 50%;
+    --accent-foreground: 230 40% 10%;
   }
   .theme-orange {
     --primary: 27 100% 41%; /* AeroWash Brand Orange #D05E00 */

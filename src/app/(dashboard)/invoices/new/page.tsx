@@ -73,6 +73,7 @@ export default async function NewQuotePage({
                 catalogueItems={catalogueItems}
                 isAdmin={authUser?.role === 'ADMIN'}
                 currentUserEmail={authUser?.email || ''}
+                isOwner={Boolean(authUser?.isOwner)}
             />
         </div>
     )

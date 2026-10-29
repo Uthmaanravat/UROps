@@ -139,7 +139,7 @@ export async function rejectQuoteAction(quoteId: string) {
     revalidatePath(`/dashboard`)
 }
 
-export async function approveQuoteAction(quoteId: string) {
+export async function convertApprovedQuoteToInvoiceAction(quoteId: string) {
     const companyId = await ensureAuth()
     // 1. Convert to Invoice using the centralized logic (creates separate record)
     const invoiceId = await convertToInvoiceAction(quoteId)

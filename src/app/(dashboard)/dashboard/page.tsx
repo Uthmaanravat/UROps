@@ -25,6 +25,7 @@ export default async function DashboardPage() {
             quoteCount,
             invoicedCount,
             paidCount,
+            activeQuotes,
             transactions
         ] = await Promise.all([
             prisma.client.count({ where: { companyId } }),
@@ -80,6 +81,11 @@ export default async function DashboardPage() {
             prisma.invoice.count({ where: { companyId, type: 'QUOTE' } }),
             prisma.invoice.count({ where: { companyId, type: 'INVOICE', status: { notIn: ['DRAFT', 'CANCELLED'] } } }),
             prisma.invoice.count({ where: { companyId, status: 'PAID' } }),
+                        prisma.invoice.findMany({
+                where: { companyId, type: 'QUOTE', status: { notIn: ['ACCEPTED', 'CANCELLED', 'PAID'] } },
+                include: { client: true },
+                orderBy: { date: 'asc' }
+            }),
             prisma.transaction.findMany({
                 where: { companyId },
                 orderBy: { date: 'desc' }
@@ -148,6 +154,33 @@ export default async function DashboardPage() {
         const clientOutstanding = Object.values(clientOutstandingMap).sort((a, b) => b.outstanding - a.outstanding);
 
         // Calculate Trend Data (last 6 months)
+        
+        const quoteFollowUps = (activeQuotes || []).map((q: any) => {
+            const qDate = new Date(q.date || q.createdAt);
+            const ageDays = Math.floor((now.getTime() - qDate.getTime()) / (1000 * 60 * 60 * 24));
+            const validity = q.validityDays || 30;
+            const isExpired = ageDays > validity;
+            let followUpStage: '7_DAY' | '21_DAY' | 'EXPIRED' | null = null;
+            if (isExpired) {
+                followUpStage = 'EXPIRED';
+            } else if (ageDays >= 21) {
+                followUpStage = '21_DAY';
+            } else if (ageDays >= 7) {
+                followUpStage = '7_DAY';
+            }
+
+            return {
+                id: q.id,
+                quoteNumber: q.quoteNumber || `Quote #${q.number}`,
+                clientName: q.client?.name || 'Client',
+                clientPhone: q.client?.phone || '',
+                total: q.total,
+                date: q.date,
+                ageDays,
+                followUpStage
+            };
+        }).filter((q: any) => q.followUpStage !== null);
+
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const trendData = [];
         for (let i = 5; i >= 0; i--) {

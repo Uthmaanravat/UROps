@@ -13,7 +13,8 @@ import {
     revokeInviteAction,
     updateUserRoleAction,
     removeUserAction,
-    transferOwnershipAction
+    transferOwnershipAction,
+    updateUserNotificationEmailAction
 } from "@/app/(dashboard)/settings/team/actions"
 import { Role } from "@prisma/client"
 import {
@@ -34,6 +35,8 @@ interface UserItem {
     id: string
     name: string | null
     email: string
+    notificationEmail?: string | null
+    isOwner?: boolean
     role: Role
     createdAt: Date
 }
@@ -87,6 +90,23 @@ export function TeamManager({
 
     // Action loading states
     const [actionLoading, setActionLoading] = useState<string | null>(null)
+    const [editingNotificationUserId, setEditingNotificationUserId] = useState<string | null>(null);
+    const [notificationEmailInput, setNotificationEmailInput] = useState<string>("");
+    const [savingNotification, setSavingNotification] = useState<boolean>(false);
+
+    const handleSaveNotificationEmail = async (userId: string) => {
+        try {
+            setSavingNotification(true);
+            await updateUserNotificationEmailAction(userId, notificationEmailInput);
+            router.refresh();
+            setEditingNotificationUserId(null);
+        } catch (e: any) {
+            alert(e?.message || "Failed to update notification email");
+        } finally {
+            setSavingNotification(false);
+        }
+    };
+
     const [globalError, setGlobalError] = useState<string | null>(null)
 
     const adminCount = users.filter(u => u.role === Role.ADMIN).length
@@ -354,10 +374,61 @@ export function TeamManager({
                                                 </Badge>
                                             )}
                                         </div>
-                                        <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                                            <span>{user.email}</span>
-                                            <span>•</span>
-                                            <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
+                                        <div className="text-xs text-muted-foreground flex flex-col gap-1 mt-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span>Login: <strong className="text-white">{user.email}</strong></span>
+                                                {user.isOwner && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">OWNER</span>
+                                                )}
+                                                <span>•</span>
+                                                <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs flex-wrap">
+                                                <span className="text-gray-400">Notification email:</span>
+                                                {editingNotificationUserId === user.id ? (
+                                                    <div className="flex items-center gap-1.5 mt-1">
+                                                        <Input
+                                                            type="email"
+                                                            value={notificationEmailInput}
+                                                            onChange={(e) => setNotificationEmailInput(e.target.value)}
+                                                            placeholder={user.email}
+                                                            className="h-7 text-xs w-56 bg-white/5 border-white/20"
+                                                        />
+                                                        <Button
+                                                            size="sm"
+                                                            disabled={savingNotification}
+                                                            onClick={() => handleSaveNotificationEmail(user.id)}
+                                                            className="h-7 px-2.5 text-xs font-bold bg-primary text-black"
+                                                        >
+                                                            {savingNotification ? "..." : "Save"}
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => setEditingNotificationUserId(null)}
+                                                            className="h-7 px-2 text-xs text-gray-400"
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <strong className={user.notificationEmail ? "text-amber-300" : "text-gray-300 font-normal"}>
+                                                            {user.notificationEmail ? user.notificationEmail : `${user.email} (default)`}
+                                                        </strong>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditingNotificationUserId(user.id);
+                                                                setNotificationEmailInput(user.notificationEmail || "");
+                                                            }}
+                                                            className="text-[10px] text-primary hover:underline font-bold"
+                                                        >
+                                                            [Edit]
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

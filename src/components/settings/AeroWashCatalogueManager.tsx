@@ -80,6 +80,9 @@ export function AeroWashCatalogueManager({ initialItems }: AeroWashCatalogueMana
     const [editCategory, setEditCategory] = useState("CLEANING")
     const [editPricingMethod, setEditPricingMethod] = useState("PRICE_ON_QUOTE")
     const [editInternalNotes, setEditInternalNotes] = useState("")
+    const [editAdminHelpText, setEditAdminHelpText] = useState("")
+    const [editHandCleanHeight, setEditHandCleanHeight] = useState(3)
+    const [editHandCleanRate, setEditHandCleanRate] = useState(16)
     const [editRates, setEditRates] = useState<any>({})
 
     // Add Item Modal State
@@ -133,6 +136,10 @@ export function AeroWashCatalogueManager({ initialItems }: AeroWashCatalogueMana
 
         // Initialize rates from item metadata or defaults
         const meta = (item.metadata as any) || {}
+        setEditAdminHelpText(meta?.adminHelpText || (item as any).adminHelpText || "")
+        setEditHandCleanHeight(meta?.handCleanHeight ?? 3)
+        setEditHandCleanRate(meta?.handCleanRate ?? 16)
+
         setEditRates({
             bandA: meta?.rates?.A ?? 16,
             bandB: meta?.rates?.B ?? 20,
@@ -171,6 +178,9 @@ export function AeroWashCatalogueManager({ initialItems }: AeroWashCatalogueMana
                 client: Number(editRates.solarClient) || 6,
                 aerowash: Number(editRates.solarAeroWash) || 10
             },
+            adminHelpText: editAdminHelpText.trim(),
+            handCleanHeight: Number(editHandCleanHeight) || 3,
+            handCleanRate: Number(editHandCleanRate) || 16,
             waterRates: {
                 atlantis: Number(editRates.waterAtlantis) || 0.30,
                 simons_town: Number(editRates.waterSimonsTown) || 0.85
@@ -691,6 +701,52 @@ export function AeroWashCatalogueManager({ initialItems }: AeroWashCatalogueMana
                                 className="bg-[#14141E] border-white/10 text-xs text-white"
                             />
                         </div>
+
+                        {/* Admin Help Text */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-white flex items-center gap-1.5">
+                                <Info className="w-3.5 h-3.5 text-primary" />
+                                Admin Help Text (&quot;?&quot; tooltip in quote builder)
+                            </Label>
+                            <Textarea
+                                rows={2}
+                                value={editAdminHelpText}
+                                onChange={e => setEditAdminHelpText(e.target.value)}
+                                placeholder="Plain English guidance shown when hovering over '?' next to this item in the builder."
+                                className="bg-[#14141E] border-white/10 text-xs text-white resize-y"
+                            />
+                        </div>
+
+                        {/* Special Config for Item 23 (Hand Clean) */}
+                        {editingItem?.itemNumber === 23 && (
+                            <div className="p-3 rounded-xl bg-primary/10 border border-primary/30 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-white">Low-Level &amp; Detail Hand Clean Defaults</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">(rate under review)</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] text-gray-300">Default Height (m):</Label>
+                                        <Input
+                                            type="number"
+                                            step="0.5"
+                                            value={editHandCleanHeight}
+                                            onChange={e => setEditHandCleanHeight(parseFloat(e.target.value) || 3)}
+                                            className="h-8 bg-[#14141E] border-white/10 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] text-gray-300">Base Rate (R/m²):</Label>
+                                        <Input
+                                            type="number"
+                                            value={editHandCleanRate}
+                                            onChange={e => setEditHandCleanRate(parseFloat(e.target.value) || 16)}
+                                            className="h-8 bg-[#14141E] border-white/10 text-xs font-mono"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <DialogFooter className="gap-2">

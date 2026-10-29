@@ -1079,7 +1079,35 @@ export async function recordPaymentAction(data: {
         }
 
         if (invoice.projectId) {
-            if (newStatus === 'PAID') {
+            const isDepositInvoice = (invoice.metadata as any)?.isDepositInvoice || invoice.firstPaymentPercentage === 60 || invoice.paymentNotes?.toLowerCase().includes('deposit');
+            if (isDepositInvoice) {
+                await prisma.project.update({
+                    where: { id: invoice.projectId },
+                    data: {
+                        status: 'SCHEDULED',
+                        commercialStatus: 'PO_RECEIVED',
+                        description: `Ready to schedule - Deposit payment of R${data.amount} recorded on ${new Date().toLocaleDateString()}`
+                    }
+                });
+
+                try {
+                    const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+                    const ownerEmails = ['uthmaan@aerowash.co.za'];
+                    if (settings?.copyNotificationsTo && !ownerEmails.includes(settings.copyNotificationsTo)) {
+                        ownerEmails.push(settings.copyNotificationsTo);
+                    }
+                    const { sendRealEmail } = await import("@/lib/email");
+                    await sendRealEmail({
+                        to: ownerEmails,
+                        from: 'AeroWash Payments <info@aerowash.co.za>',
+                        replyTo: 'info@aerowash.co.za',
+                        subject: `Deposit Paid: Project Ready to Schedule (${invoice.quoteNumber || invoice.number} — R${data.amount})`,
+                        body: `Hello Uthmaan,\n\nA deposit payment of R${data.amount.toFixed(2)} has been recorded against invoice ${invoice.quoteNumber || invoice.number}.\n\nThe linked project is now marked "Ready to schedule" in your operations queue.\n\nView Project:\n${process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'}/projects/${invoice.projectId}\n\nUROps Automated Workflow`
+                    });
+                } catch (notifErr) {
+                    console.error("Deposit payment notification error:", notifErr);
+                }
+            } else if (newStatus === 'PAID') {
                 await updateProjectStatus(invoice.projectId, 'COMPLETED')
             } else {
                 await updateProjectStatus(invoice.projectId, 'PAID')

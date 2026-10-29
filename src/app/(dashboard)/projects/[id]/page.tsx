@@ -82,6 +82,21 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 <div className="flex items-center justify-between">
                     <h1 className="text-4xl font-black tracking-tight text-white">{project.name}</h1>
                     <div className="flex gap-2">
+                        {project.status === 'COMPLETED' && (
+                            <form action={async () => {
+                                'use server'
+                                const { createProjectCompletionReportAction } = await import("@/app/actions/reports");
+                                const res = await createProjectCompletionReportAction(project.id);
+                                if (res.success && res.reportId) {
+                                    const { redirect } = await import("next/navigation");
+                                    redirect(`/reports/${res.reportId}`);
+                                }
+                            }}>
+                                <Button className="bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold shadow-lg shadow-orange-500/20">
+                                    <FileText className="mr-2 h-4 w-4" /> Create Completion Report
+                                </Button>
+                            </form>
+                        )}
                         {project.status !== 'COMPLETED' && isAdmin && (
                             <form action={async () => {
                                 'use server'

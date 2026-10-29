@@ -5,7 +5,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS, isReasonAlreadyInDescription } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3, ListFilter, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3, ListFilter, ShieldCheck, ChevronDown, ChevronUp, RotateCcw, History, MessageSquare } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import { LineItemEditor } from "@/components/invoices/LineItemEditor"
 import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
@@ -20,8 +20,8 @@ import autoTable from "jspdf-autotable"
 import ExcelJS from "exceljs"
 import { saveAs } from "file-saver"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
-import { sendInvoiceEmail, requestQuoteApprovalAction, ownerApproveQuoteAction, verifyQuoteActionPermission, getQuoteShareLinkAction } from "@/app/(dashboard)/invoices/email-actions"
-import { updateInvoiceItemsAction, finalizeQuoteAction, approveQuoteAction, updateInvoiceNoteAction, getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
+import { sendInvoiceEmail, requestQuoteApprovalAction, ownerApproveQuoteAction, verifyQuoteActionPermission, getQuoteShareLinkAction, sendBackQuoteAction, resubmitQuoteApprovalAction } from "@/app/(dashboard)/invoices/email-actions"
+import { updateInvoiceItemsAction, finalizeQuoteAction, updateInvoiceNoteAction, getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction, renameProjectAction } from "@/app/(dashboard)/invoices/project-actions"
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react"
 import { useRouter } from "next/navigation"
@@ -37,6 +37,7 @@ import { CreateCreditNoteModal } from "@/components/credit-notes/CreateCreditNot
 import { parseClauses, buildNumberedClauses } from "@/lib/terms-utils"
 import { saveQuoteTermsAction, saveCustomTermsAsTemplateAction } from "@/app/(dashboard)/settings/terms/actions"
 import { AeroWashDocumentPreview } from "./AeroWashDocumentPreview"
+import { AeroWashQuoteBuilder } from "./AeroWashQuoteBuilder"
 import { generateAeroWashQuotePdf } from "@/lib/aerowash-quote-pdf"
 
 export function InvoiceViewer({ 
@@ -814,7 +815,9 @@ export function InvoiceViewer({
                 const currentPresentation = invoice.type === 'INVOICE' ? (showDetailedBreakdown ? 'DETAILED' : 'AS_PER_QUOTATION') : undefined;
                 const presentationChanged = invoice.type === 'INVOICE' && invoice.paymentNotes !== currentPresentation;
 
-                if (site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed || workTypeChanged || tenderIdChanged || rateYearChanged || presentationChanged) {
+                const metaChanged = isAeroWashDocument && aeroWashMetadata && JSON.stringify(aeroWashMetadata) !== JSON.stringify(invoice.metadata);
+
+                if (metaChanged || site !== invoice.site || reference !== invoice.reference || quoteNumber !== invoice.quoteNumber || date !== new Date(invoice.date).toISOString().split('T')[0] || finalPct !== dbPct || contactId !== (invoice.contactId || "") || attentionTo !== (invoice.attentionTo || "") || isProjectRenamed || workTypeChanged || tenderIdChanged || rateYearChanged || presentationChanged) {
                     promises.push(updateInvoiceDetailsAction(invoice.id, { 
                         site, 
                         reference, 
@@ -827,7 +830,8 @@ export function InvoiceViewer({
                         workType,
                         tenderId: workType === 'TENDER' ? selectedTenderId : null,
                         rateYear: effectiveRateYear,
-                        paymentNotes: currentPresentation
+                        paymentNotes: currentPresentation,
+                        metadata: isAeroWashDocument ? aeroWashMetadata : undefined
                     }));
                 }
 
@@ -967,11 +971,23 @@ export function InvoiceViewer({
         website: (companySettings as any)?.website || "www.aerowash.co.za"
     };
 
+    const [aeroWashViewMode, setAeroWashViewMode] = useState<"BUILDER" | "PREVIEW">("PREVIEW");
+    const [aeroWashMetadata, setAeroWashMetadata] = useState<any>(invoice.metadata || null);
     const isAeroWashDocument = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash'));
     const totalDue = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-    const isQuoteOverLimit = isAeroWashDocument && invoice.type === 'QUOTE' && (totalDue > 50000 || (Number(invoice.total) || 0) > 50000);
+    const threshold = (companySettings as any)?.approvalThreshold;
+    const hasApprovalThreshold = typeof threshold === 'number' && threshold > 0;
+    const isQuoteOverLimit = hasApprovalThreshold && invoice.type === 'QUOTE' && (totalDue > threshold || (Number(invoice.total) || 0) > threshold);
+    const thresholdFormatted = hasApprovalThreshold ? ("R" + threshold.toLocaleString()) : "R50,000";
+
+    const [latestOwnerNote, setLatestOwnerNote] = useState<string>((invoice.metadata as any)?.latestOwnerNote || '');
+    const [approvalHistory, setApprovalHistory] = useState<any[]>((invoice.metadata as any)?.approvalHistory || []);
+    const [isSendBackOpen, setIsSendBackOpen] = useState(false);
+    const [sendBackNote, setSendBackNote] = useState('');
+    const [isSendingBack, setIsSendingBack] = useState(false);
     const [approvalStatus, setApprovalStatus] = useState<string>((invoice.metadata as any)?.approvalStatus || 'NONE');
-    const [isApproving, setIsApproving] = useState(false);
+    const [isApproving, setIsApproving] = useState(false)
+    const [isReissuing, setIsReissuing] = useState(false);
     const [isRequestingApproval, setIsRequestingApproval] = useState(false);
     const isApproved = approvalStatus === 'APPROVED';
 
@@ -1012,7 +1028,7 @@ export function InvoiceViewer({
     const generatePDF = async () => {
         // Server-side permission verification for over-R50k quotes
         if (isQuoteOverLimit && !isApproved && !isOwner) {
-            alert("This quotation exceeds R50,000 and requires owner approval before downloading.");
+            alert(`This quotation exceeds ${thresholdFormatted} and requires owner approval before downloading.`);
             return;
         }
         const perm = await verifyQuoteActionPermission(invoice.id, 'DOWNLOAD_PDF');
@@ -1675,6 +1691,15 @@ export function InvoiceViewer({
     }
 
     const generateExcel = async () => {
+        if (isQuoteOverLimit && !isApproved && !isOwner) {
+            alert(`This quotation exceeds ${thresholdFormatted} and requires owner approval before exporting to Excel.`);
+            return;
+        }
+        const perm = await verifyQuoteActionPermission(invoice.id, 'EXPORT_EXCEL');
+        if (!perm.allowed) {
+            alert(perm.error || "Cannot export to Excel: Requires owner approval.");
+            return;
+        }
         setLoading(true);
         try {
             const themeHex = getThemePrimaryHex(companySettings?.theme);
@@ -2204,17 +2229,23 @@ export function InvoiceViewer({
                             size="sm"
                             disabled={isApproving}
                             onClick={async () => {
-                                setIsApproving(true);
-                                const res = await ownerApproveQuoteAction(invoice.id);
-                                setIsApproving(false);
-                                if (res.success) {
+        try {
+            setIsApproving(true);
+            const res = await ownerApproveQuoteAction(invoice.id);
+            if (res.success) {
                                     setApprovalStatus('APPROVED');
                                     alert("Quotation approved! Email, PDF, and share link are now unlocked.");
                                     router.refresh();
                                 } else {
                                     alert(res.error || "Failed to approve quotation");
                                 }
-                            }}
+        } catch (err: any) {
+            console.error("Approve quote error:", err);
+            alert(err?.message || "Failed to approve quotation");
+        } finally {
+            setIsApproving(false);
+        }
+    }}
                             className="bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 shrink-0 px-5 h-10"
                         >
                             {isApproving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
@@ -2225,16 +2256,22 @@ export function InvoiceViewer({
                             size="sm"
                             disabled={isRequestingApproval || approvalStatus === 'PENDING'}
                             onClick={async () => {
-                                setIsRequestingApproval(true);
-                                const res = await requestQuoteApprovalAction(invoice.id);
-                                setIsRequestingApproval(false);
-                                if (res.success) {
+        try {
+            setIsRequestingApproval(true);
+            const res = await requestQuoteApprovalAction(invoice.id);
+            if (res.success) {
                                     setApprovalStatus('PENDING');
                                     alert("Approval requested! Company owner has been notified via email and in-app alert.");
                                 } else {
                                     alert(res.error || "Failed to request approval");
                                 }
-                            }}
+        } catch (err: any) {
+            console.error("Request approval error:", err);
+            alert(err?.message || "Failed to request approval");
+        } finally {
+            setIsRequestingApproval(false);
+        }
+    }}
                             className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-xs rounded-xl shadow flex items-center gap-2 shrink-0 px-4 h-10"
                         >
                             {isRequestingApproval ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4 text-amber-400" />}
@@ -2267,27 +2304,45 @@ export function InvoiceViewer({
                     <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 shadow-inner">
                         {isQuoteOverLimit && !isApproved ? (
                             isOwner ? (
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1.5">
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         disabled={isApproving}
                                         onClick={async () => {
-                                            setIsApproving(true);
-                                            const res = await ownerApproveQuoteAction(invoice.id);
-                                            setIsApproving(false);
-                                            if (res.success) {
+        try {
+            setIsApproving(true);
+            const res = await ownerApproveQuoteAction(invoice.id);
+            if (res.success) {
                                                 setApprovalStatus('APPROVED');
                                                 alert("Quotation approved! You can now dispatch it to the client.");
                                                 router.refresh();
                                             } else {
                                                 alert(res.error || "Failed to approve quotation");
                                             }
-                                        }}
+        } catch (err: any) {
+            console.error("Approve quote error:", err);
+            alert(err?.message || "Failed to approve quotation");
+        } finally {
+            setIsApproving(false);
+        }
+    }}
                                         className="h-10 px-4 rounded-lg bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold text-xs flex items-center gap-2"
                                     >
                                         {isApproving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                                         <span>Approve Quote (1-click)</span>
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setSendBackNote(latestOwnerNote);
+                                            setIsSendBackOpen(true);
+                                        }}
+                                        className="h-10 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 font-bold text-xs border border-amber-500/30 flex items-center gap-1.5"
+                                    >
+                                        <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                                        <span>Send back with note</span>
                                     </Button>
                                     <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
                                         <DialogTrigger asChild>
@@ -2324,26 +2379,42 @@ export function InvoiceViewer({
                                         </DialogContent>
                                     </Dialog>
                                 </div>
+                            ) : approvalStatus === 'CHANGES_REQUESTED' ? (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled
+                                    className="h-10 px-4 rounded-lg bg-rose-500/10 text-rose-300 font-bold text-xs flex items-center gap-2 border border-rose-500/30 cursor-not-allowed opacity-90"
+                                >
+                                    <RotateCcw className="w-4 h-4 text-rose-400" />
+                                    <span>Changes Requested (Edit & Save to Resubmit)</span>
+                                </Button>
                             ) : (
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     disabled={isRequestingApproval || approvalStatus === 'PENDING'}
                                     onClick={async () => {
-                                        setIsRequestingApproval(true);
-                                        const res = await requestQuoteApprovalAction(invoice.id);
-                                        setIsRequestingApproval(false);
-                                        if (res.success) {
+        try {
+            setIsRequestingApproval(true);
+            const res = await requestQuoteApprovalAction(invoice.id);
+            if (res.success) {
                                             setApprovalStatus('PENDING');
                                             alert("Approval requested! Company owner has been notified via email and in-app alert.");
                                         } else {
                                             alert(res.error || "Failed to request approval");
                                         }
-                                    }}
+        } catch (err: any) {
+            console.error("Request approval error:", err);
+            alert(err?.message || "Failed to request approval");
+        } finally {
+            setIsRequestingApproval(false);
+        }
+    }}
                                     className="h-10 px-4 rounded-lg bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold text-xs flex items-center gap-2 border border-amber-500/30"
                                 >
                                     {isRequestingApproval ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4 text-amber-400" />}
-                                    <span>{approvalStatus === 'PENDING' ? 'Approval Requested (Pending Owner Sign-Off)' : 'Needs approval (> R50,000)'}</span>
+                                    <span>{approvalStatus === 'PENDING' ? 'Approval Requested (Pending Owner Sign-Off)' : `Needs approval (> ${thresholdFormatted})`}</span>
                                 </Button>
                             )
                         ) : (
@@ -2361,6 +2432,14 @@ export function InvoiceViewer({
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="grid gap-6 py-6">
+                                        {isAeroWashDocument && (
+                                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
+                                                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                                <div className="leading-relaxed">
+                                                    <strong className="text-amber-300">Resend DNS Verification Notice:</strong> The domain <span className="font-mono text-white text-[11px] bg-black/40 px-1 py-0.5 rounded">aerowash.co.za</span> is pending DNS record verification in Resend. Outgoing emails are routed via fallback sender with reply-to set to <span className="font-mono text-white text-[11px] bg-black/40 px-1 py-0.5 rounded">info@aerowash.co.za</span> until DNS records are active.
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="space-y-3">
                                             <Label htmlFor="emails" className="text-[10px] font-black uppercase tracking-widest text-primary">Recipient Emails</Label>
                                             <Input
@@ -2383,13 +2462,101 @@ export function InvoiceViewer({
                             </Dialog>
                         )}
 
+                        {/* Send Back with Note Dialog (Owner only) */}
+                        <Dialog open={isSendBackOpen} onOpenChange={setIsSendBackOpen}>
+                            <DialogContent className="bg-[#14141E] border border-amber-500/40 text-white max-w-lg shadow-2xl">
+                                <DialogHeader>
+                                    <DialogTitle className="text-xl font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                                        <RotateCcw className="w-5 h-5 text-amber-400" />
+                                        Send Back Quote for Revision
+                                    </DialogTitle>
+                                    <DialogDescription className="text-gray-300 text-xs">
+                                        Enter the required changes or corrections. The quote will remain locked and the creator will be notified immediately to update it.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ownerSendBackNote" className="text-xs font-bold text-gray-200">
+                                            Reason / Required Changes <span className="text-red-400">*</span>
+                                        </Label>
+                                        <Textarea
+                                            id="ownerSendBackNote"
+                                            placeholder="e.g. Please reduce the elevation rate for East Elevation or confirm access equipment before submitting..."
+                                            value={sendBackNote}
+                                            onChange={(e) => setSendBackNote(e.target.value)}
+                                            rows={4}
+                                            className="bg-black/40 border-white/20 text-white text-xs placeholder:text-gray-500 focus:border-amber-400 focus:ring-amber-400"
+                                        />
+                                        <p className="text-[11px] text-gray-400">
+                                            This note will be emailed to the creator and displayed in a banner at the top of their workspace until resolved.
+                                        </p>
+                                    </div>
+                                </div>
+                                <DialogFooter className="flex gap-2 sm:justify-end">
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => setIsSendBackOpen(false)}
+                                        className="text-gray-400 hover:text-white text-xs font-bold"
+                                        disabled={isSendingBack}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        disabled={isSendingBack || !sendBackNote.trim()}
+                                        onClick={async () => {
+                                            if (!sendBackNote.trim()) return;
+                                            setIsSendingBack(true);
+                                            const res = await sendBackQuoteAction(invoice.id, sendBackNote.trim());
+                                            setIsSendingBack(false);
+                                            if (res.success) {
+                                                setApprovalStatus('CHANGES_REQUESTED');
+                                                setLatestOwnerNote(sendBackNote.trim());
+                                                setApprovalHistory(prev => [
+                                                    ...prev,
+                                                    {
+                                                        action: 'CHANGES_REQUESTED',
+                                                        note: sendBackNote.trim(),
+                                                        user: 'Owner',
+                                                        timestamp: new Date().toISOString()
+                                                    }
+                                                ]);
+                                                setIsSendBackOpen(false);
+                                                alert("Quotation sent back! The creator has been notified with your note.");
+                                                router.refresh();
+                                            } else {
+                                                alert(res.error || "Failed to send back quote.");
+                                            }
+                                        }}
+                                        className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-5 shadow-lg flex items-center gap-2"
+                                    >
+                                        {isSendingBack ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                                        Send Back with Note
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+
                         <div className="w-px h-6 bg-white/10 self-center mx-1" />
 
-                        <Button variant="ghost" size="sm" onClick={async () => {
-                            await saveChanges();
-                            await generateExcel();
-                        }} disabled={loading} className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs">
-                            <Download className="mr-2 h-4 w-4 text-emerald-500" /> Excel
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={async () => {
+                                if (isQuoteOverLimit && !isApproved && !isOwner) {
+                                    alert(`This quotation exceeds ${thresholdFormatted} and requires owner approval before exporting to Excel.`);
+                                    return;
+                                }
+                                await saveChanges();
+                                await generateExcel();
+                            }} 
+                            disabled={loading || (isQuoteOverLimit && !isApproved && !isOwner)} 
+                            className={cn(
+                                "h-10 px-4 rounded-lg text-white font-bold text-xs",
+                                (isQuoteOverLimit && !isApproved && !isOwner) ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-white/10"
+                            )}
+                            title={(isQuoteOverLimit && !isApproved && !isOwner) ? `Locked: Over ${thresholdFormatted} requires owner approval` : "Export Excel"}
+                        >
+                            {isQuoteOverLimit && !isApproved && !isOwner ? <Lock className="mr-2 h-4 w-4 text-amber-500" /> : <Download className="mr-2 h-4 w-4 text-emerald-500" />} Excel
                         </Button>
                         <Button
                             variant="ghost"
@@ -2397,7 +2564,7 @@ export function InvoiceViewer({
                             disabled={loading || (isQuoteOverLimit && !isApproved && !isOwner)}
                             onClick={async () => {
                                 if (isQuoteOverLimit && !isApproved && !isOwner) {
-                                    alert("This quotation exceeds R50,000 and requires owner approval before downloading.");
+                                    alert(`This quotation exceeds ${thresholdFormatted} and requires owner approval before downloading.`);
                                     return;
                                 }
                                 await saveChanges();
@@ -2407,7 +2574,7 @@ export function InvoiceViewer({
                                 "h-10 px-4 rounded-lg text-white font-bold text-xs",
                                 (isQuoteOverLimit && !isApproved && !isOwner) ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-white/10"
                             )}
-                            title={(isQuoteOverLimit && !isApproved && !isOwner) ? "Locked: Over R50,000 requires owner approval" : "Download PDF"}
+                            title={(isQuoteOverLimit && !isApproved && !isOwner) ? `Locked: Over ${thresholdFormatted} requires owner approval` : "Download PDF"}
                         >
                             {isQuoteOverLimit && !isApproved && !isOwner ? <Lock className="mr-2 h-4 w-4 text-amber-500" /> : <Download className="mr-2 h-4 w-4 text-rose-500" />} PDF
                         </Button>
@@ -2428,7 +2595,7 @@ export function InvoiceViewer({
                                 "h-10 px-4 rounded-lg text-white font-bold text-xs",
                                 (isQuoteOverLimit && !isApproved && !isOwner) ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-white/10"
                             )}
-                            title={(isQuoteOverLimit && !isApproved && !isOwner) ? "Locked: Over R50,000 requires owner approval" : "Share Client Link"}
+                            title={(isQuoteOverLimit && !isApproved && !isOwner) ? `Locked: Over ${thresholdFormatted} requires owner approval` : "Share Client Link"}
                         >
                             {isQuoteOverLimit && !isApproved && !isOwner ? <Lock className="mr-2 h-4 w-4 text-amber-500" /> : <Copy className="mr-2 h-4 w-4 text-blue-400" />} Share Link
                         </Button>
@@ -2529,6 +2696,14 @@ export function InvoiceViewer({
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="grid gap-6 py-6">
+                                        {isAeroWashDocument && (
+                                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
+                                                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                                <div className="leading-relaxed">
+                                                    <strong className="text-amber-300">Resend DNS Verification Notice:</strong> The domain <span className="font-mono text-white text-[11px] bg-black/40 px-1 py-0.5 rounded">aerowash.co.za</span> is pending DNS record verification in Resend. Outgoing emails are routed via fallback sender with reply-to set to <span className="font-mono text-white text-[11px] bg-black/40 px-1 py-0.5 rounded">info@aerowash.co.za</span> until DNS records are active.
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="space-y-3">
                                             <Label htmlFor="poNumber" className="text-[10px] font-black uppercase tracking-widest text-primary">Client PO Number (Optional)</Label>
                                             <Input
@@ -2805,6 +2980,7 @@ export function InvoiceViewer({
                             <InfoTooltip content="Basic details of the document. You can modify these inline to automatically update the document." />
                         </h3>
                         <div className="bg-[#1E293B] p-4 rounded-2xl w-full border border-white/5 space-y-2 group shadow-xl ring-1 ring-white/5">
+                            {!isAeroWashDocument && companySettings?.tendersEnabled && (
                             <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Work Type</span>
                                 <select
@@ -2824,6 +3000,7 @@ export function InvoiceViewer({
                                     <option value="TENDER" className="bg-[#1E293B]">Tender Work</option>
                                 </select>
                             </div>
+                            )}
                             {workType === "TENDER" && (
                                 <>
                                     {tenders.length > 1 && (
@@ -2985,8 +3162,8 @@ export function InvoiceViewer({
                                         >
                                             <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
                                             <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
-                                            <option value="EMERGENCY_WORK" className="bg-[#1E293B]">EMERGENCY WORK</option>
-                                            {isReactiveEnabled && <option value="REACTIVE_WORK" className="bg-[#1E293B]">REACTIVE WORK</option>}
+                                            {!isAeroWashDocument && <option value="EMERGENCY_WORK" className="bg-[#1E293B]">EMERGENCY WORK</option>}
+                                            {!isAeroWashDocument && isReactiveEnabled && <option value="REACTIVE_WORK" className="bg-[#1E293B]">REACTIVE WORK</option>}
                                         </select>
                                     </div>
                                     <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20 mt-2">
@@ -3127,8 +3304,86 @@ export function InvoiceViewer({
                     </div>
                 </div>
 
-                {/* Items Section - Modern Unified LineItemEditor */}
-                {isPricingMode ? (
+                {/* Items Section */}
+                {isAeroWashDocument ? (
+                    <div className="mb-10 min-h-[400px]">
+                        {/* AeroWash View Mode Switcher */}
+                        <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10 print:hidden">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-black uppercase tracking-widest text-[#D05E00]">AeroWash Quotation</span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                                    {aeroWashViewMode === "BUILDER" ? "Interactive Elevation Builder" : "Client Document View"}
+                                </span>
+                            </div>
+                            {!isLocked && (
+                                <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAeroWashViewMode("PREVIEW")}
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                                            aeroWashViewMode === "PREVIEW" ? "bg-[#D05E00] text-white shadow" : "text-gray-400 hover:text-white"
+                                        )}
+                                    >
+                                        Document Preview
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAeroWashViewMode("BUILDER")}
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                                            aeroWashViewMode === "BUILDER" ? "bg-[#D05E00] text-white shadow" : "text-gray-400 hover:text-white"
+                                        )}
+                                    >
+                                        Elevation &amp; Scope Builder
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {aeroWashViewMode === "BUILDER" && !isLocked ? (
+                            <AeroWashQuoteBuilder
+                                isOwner={isOwner}
+                                siteName={site}
+                                clientSelected={Boolean(invoice.clientId)}
+                                currencySymbol={currencySymbol}
+                                hasVatRegistration={isVatRegistered}
+                                vatRate={vatRate}
+                                termsTemplates={termsTemplates}
+                                initialData={invoice.metadata || invoice}
+                                onChange={(payload) => {
+                                    if (payload.items) {
+                                        updateItems(payload.items);
+                                    }
+                                    if (payload.metadata) {
+                                        setAeroWashMetadata(payload.metadata);
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <AeroWashDocumentPreview
+                                invoice={invoice}
+                                company={company}
+                                companySettings={companySettings}
+                                items={items}
+                                subtotal={subtotal}
+                                total={total}
+                                taxAmount={taxAmount}
+                                isVatRegistered={isVatRegistered}
+                                vatRate={vatRate}
+                                currencySymbol={currencySymbol}
+                                quoteNumber={quoteNumber}
+                                date={date}
+                                site={site}
+                                reference={reference}
+                                notes={note}
+                                attentionTo={attentionTo}
+                                isLocked={isLocked}
+                                onEditItems={() => setAeroWashViewMode("BUILDER")}
+                            />
+                        )}
+                    </div>
+                ) : isPricingMode ? (
                     <div className="mb-10 min-h-[400px]">
                         <div className="flex flex-col lg:flex-row gap-6 items-start">
                             <div className="flex-1 min-w-0 w-full">
@@ -3202,27 +3457,6 @@ export function InvoiceViewer({
                             )}
                         </div>
                     </div>
-                ) : isAeroWashDocument ? (
-                    <AeroWashDocumentPreview
-                        invoice={invoice}
-                        company={company}
-                        companySettings={companySettings}
-                        items={items}
-                        subtotal={subtotal}
-                        total={total}
-                        taxAmount={taxAmount}
-                        isVatRegistered={isVatRegistered}
-                        vatRate={vatRate}
-                        currencySymbol={currencySymbol}
-                        quoteNumber={quoteNumber}
-                        date={date}
-                        site={site}
-                        reference={reference}
-                        notes={note}
-                        attentionTo={attentionTo}
-                        isLocked={isLocked}
-                        onEditItems={() => setIsEditingInvoiceItems(true)}
-                    />
                 ) : (
                     <div className="mb-10 min-h-[400px] overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
                         {invoice.type === 'INVOICE' && (
@@ -3640,7 +3874,7 @@ export function InvoiceViewer({
                     </div>
                 )}
 
-                {(isPricingMode || (invoice.type === 'INVOICE' && !isLocked)) && (
+                {!isAeroWashDocument && (isPricingMode || (invoice.type === 'INVOICE' && !isLocked)) && (
                     <div className="mt-12 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 print:hidden">
                         <div className="flex items-center gap-2">
                             {isPricingMode ? (
@@ -3755,6 +3989,97 @@ export function InvoiceViewer({
                                 </Button>
                             )}
                         </div>
+                    </div>
+                )}
+
+                {/* Quotation Approval & Review Audit Trail */}
+                {(approvalHistory.length > 0 || isQuoteOverLimit) && (
+                    <div className="rounded-2xl bg-[#14141E] border border-white/10 p-6 shadow-xl print:hidden space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                                    <History className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                        Quotation Approval & Review History
+                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-gray-400 border border-white/10">
+                                            {approvalHistory.length} event{approvalHistory.length === 1 ? '' : 's'}
+                                        </span>
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        Audit log of submissions, owner reviews, requested changes, and approvals.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className={cn(
+                                    "text-[10px] font-black uppercase px-3 py-1 rounded-full border tracking-wider",
+                                    approvalStatus === 'APPROVED' ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" :
+                                    approvalStatus === 'CHANGES_REQUESTED' ? "bg-rose-500/20 text-rose-300 border-rose-500/40" :
+                                    approvalStatus === 'PENDING' ? "bg-amber-500/20 text-amber-300 border-amber-500/40" :
+                                    "bg-white/10 text-gray-400 border-white/10"
+                                )}>
+                                    Status: {approvalStatus === 'APPROVED' ? 'Approved' :
+                                              approvalStatus === 'CHANGES_REQUESTED' ? 'Changes Requested' :
+                                              approvalStatus === 'PENDING' ? 'Needs Approval' : 'Draft'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {approvalHistory.length === 0 ? (
+                            <p className="text-xs text-gray-500 italic py-3">
+                                No review events recorded yet. When this quotation is submitted for owner review, timestamped events will appear here.
+                            </p>
+                        ) : (
+                            <div className="relative pl-6 space-y-4 pt-2 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-white/10">
+                                {approvalHistory.map((item: any, idx: number) => {
+                                    const isApprovedEvent = item.action === 'APPROVED';
+                                    const isChangesEvent = item.action === 'CHANGES_REQUESTED';
+                                    const isResubmitEvent = item.action === 'RESUBMITTED';
+
+                                    return (
+                                        <div key={idx} className="relative flex items-start gap-3">
+                                            <span className={cn(
+                                                "absolute -left-6 top-1.5 w-3 h-3 rounded-full border-2 bg-[#14141E]",
+                                                isApprovedEvent ? "border-emerald-400 bg-emerald-400" :
+                                                isChangesEvent ? "border-rose-400 bg-rose-400" :
+                                                isResubmitEvent ? "border-blue-400 bg-blue-400" :
+                                                "border-amber-400 bg-amber-400"
+                                            )} />
+                                            <div className="flex-1 rounded-xl bg-white/5 border border-white/5 p-3.5 space-y-2">
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={cn(
+                                                            "text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-wider",
+                                                            isApprovedEvent ? "bg-emerald-500/20 text-emerald-300" :
+                                                            isChangesEvent ? "bg-rose-500/20 text-rose-300" :
+                                                            isResubmitEvent ? "bg-blue-500/20 text-blue-300" :
+                                                            "bg-amber-500/20 text-amber-300"
+                                                        )}>
+                                                            {isApprovedEvent ? 'Approved' :
+                                                             isChangesEvent ? 'Changes Requested' :
+                                                             isResubmitEvent ? 'Resubmitted' : 'Submitted for Approval'}
+                                                        </span>
+                                                        <span className="text-xs text-white font-medium">
+                                                            by <strong className="text-gray-200">{item.user || item.userEmail || 'User'}</strong>
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[11px] font-mono text-gray-400">
+                                                        {item.timestamp ? new Date(item.timestamp).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                                                    </span>
+                                                </div>
+                                                {item.note && (
+                                                    <div className="text-xs bg-black/40 rounded-lg p-3 border border-rose-500/20 text-rose-200 font-sans italic">
+                                                        &ldquo;{item.note}&rdquo;
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 )}
 

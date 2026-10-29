@@ -74,6 +74,7 @@ interface QuoteFormProps {
     hasVatRegistration?: boolean
     catalogueItems?: any[]
     currentUserEmail?: string
+    isOwner?: boolean
 }
 
 export function QuoteForm({
@@ -97,7 +98,8 @@ export function QuoteForm({
     companySettings,
     hasVatRegistration = false,
     catalogueItems = [],
-    currentUserEmail = ""
+    currentUserEmail = "",
+    isOwner = true
 }: QuoteFormProps) {
     const isTendersEnabled = tendersEnabled
     const router = useRouter()
@@ -718,6 +720,24 @@ export function QuoteForm({
         <div className={cn("w-full items-start", !isAeroWashWorkspace && "flex flex-col lg:flex-row gap-6")}>
             <div className={cn("w-full space-y-6", !isAeroWashWorkspace && "flex-1")}>
                 <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} action="#" className="space-y-6">
+                    {/* Owner's Changes Requested Note in Builder */}
+                    {(pendingDraft?.data?.latestOwnerNote || (aeroWashPayload as any)?.latestOwnerNote) && (
+                        <div className="p-4 rounded-2xl border-2 border-amber-500/60 bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-rose-500/10 shadow-2xl flex flex-col gap-2 text-amber-200">
+                            <div className="flex items-center gap-2">
+                                <RotateCcw className="w-5 h-5 text-amber-400" />
+                                <span className="font-black text-sm text-white uppercase tracking-wider">Changes Requested by Owner</span>
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-300 border border-amber-500/40">
+                                    Revision Required
+                                </span>
+                            </div>
+                            <div className="bg-black/40 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-100 font-sans italic">
+                                &ldquo;{pendingDraft?.data?.latestOwnerNote || (aeroWashPayload as any)?.latestOwnerNote}&rdquo;
+                            </div>
+                            <p className="text-xs text-amber-300/80">
+                                Please make the required adjustments below, then save this quotation to resubmit it for owner approval.
+                            </p>
+                        </div>
+                    )}
                     {/* Prompt to Resume Unsaved Draft */}
                     {pendingDraft && (
                         <div className="p-4 rounded-2xl border-2 border-[#D05E00]/60 bg-[#14141E] shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in slide-in-from-top-4">
@@ -1105,6 +1125,7 @@ export function QuoteForm({
                         {/* AeroWash Catalogue & Elevation Quote Builder OR Standard LineItemEditor */}
                         {isAeroWashWorkspace && docType === 'QUOTE' ? (
                             <AeroWashQuoteBuilder
+                                isOwner={isOwner}
                                 siteName={site}
                                 clientSelected={Boolean(clientId)}
                                 currencySymbol={selectedClient?.codePrefix ? "R" : "R"}

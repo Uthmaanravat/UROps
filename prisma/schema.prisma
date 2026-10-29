@@ -82,6 +82,7 @@ model User {
   email                  String   @unique
   name                   String?
   phone                  String?
+  notificationEmail      String?
   role                   Role     @default(MANAGER)
   isOwner                Boolean  @default(false)
   createdAt              DateTime @default(now())
@@ -123,6 +124,8 @@ model CompanySettings {
   vatRate              Float?   @default(15.0)
   justificationEnabled Boolean  @default(true)
   validityDays         Int?     @default(30)
+  approvalThreshold    Float?
+  copyNotificationsTo  String?
 }
 
 model Client {

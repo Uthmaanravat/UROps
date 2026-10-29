@@ -14,7 +14,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 function applyThemeClasses(t: string) {
     if (typeof window === "undefined") return
     const root = window.document.documentElement
-    root.classList.remove("light", "dark", "theme-blue", "theme-orange", "theme-violet")
+    root.classList.remove("light", "dark", "theme-blue", "theme-orange", "theme-violet", "theme-lime")
 
     if (t.includes("dark")) {
         root.classList.add("dark")
@@ -25,6 +25,7 @@ function applyThemeClasses(t: string) {
     if (t.includes("blue")) root.classList.add("theme-blue")
     if (t.includes("orange")) root.classList.add("theme-orange")
     if (t.includes("violet")) root.classList.add("theme-violet")
+    if (t.includes("lime") || t === "dark") root.classList.add("theme-lime")
 }
 
 export function ThemeProvider({

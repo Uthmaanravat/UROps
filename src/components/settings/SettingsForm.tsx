@@ -175,6 +175,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         address: initialSettings?.address || "",
         phone: initialSettings?.phone || "",
         email: initialSettings?.email || "",
+        copyNotificationsTo: initialSettings?.copyNotificationsTo || "",
         website: initialSettings?.website || "",
         slogan: initialSettings?.slogan || "",
         logoUrl: initialSettings?.logoUrl || "",

@@ -75,6 +75,7 @@ export interface CatalogueItemDef {
     requiresSiteVisitDone?: boolean;
     requiresContractorSpec?: boolean;
     settingsKeyRequired?: 'surveyCameraEnabled' | 'thermalCameraEnabled';
+    adminHelpText?: string;
 }
 
 export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
@@ -106,6 +107,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Cleaning of balcony soffits, window reveals, returns and balustrade glass on this face of the building.',
         category: 'CLEANING',
+        adminHelpText: 'Cleaning of balconies, window edges and balcony glass. Tick when this side has balconies: 10% = a few, 12% = about half the floors, 15% = nearly every floor.',
         pricingMethod: 'BALCONY_PERCENT',
         internalNotes: '% of that elevation area at its band rate, default 12% (range 10–15%).',
         requiresElevation: true
@@ -116,6 +118,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Pre-treatment of organic growth and surface staining before the maintenance clean, where soiling is heavier than routine. Staining that has penetrated the substrate cannot be removed by cleaning.',
         category: 'CLEANING',
+        adminHelpText: 'Treating green growth or dark stains before cleaning. Tick only when the building is dirtier than normal (green patches, black streaks, not cleaned in 1–2 years). Needs a site visit first. Not for normal dirt.',
         pricingMethod: 'PRE_TREATMENT_PERCENT',
         internalNotes: '% of the elevation price, default 25% (range 25–30%, PROVISIONAL). Requires "Site visit done" before the quote can be sent.',
         isProvisional: true,
@@ -162,6 +165,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Facade wash in preparation for painting or protective coating, to the contractor\'s written specification, which must be supplied before work starts. AeroWash is not responsible for coating adhesion or performance.',
         category: 'CLEANING',
+        adminHelpText: 'Washing a building before it gets painted. Tick only when a painting contractor/client asks for it. Needs their written specification.',
         pricingMethod: 'PRE_COATING_ELEVATION',
         internalNotes: 'Price as item 2 per elevation. Requires "Contractor specification received" tick before sending.',
         requiresContractorSpec: true,
@@ -232,6 +236,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Provision for additional treatment time where accumulated soiling exceeds routine maintenance levels, confirmed on site before work starts.',
         category: 'SITE CONDITIONS',
+        adminHelpText: 'Extra time for very heavy dirt, confirmed at the site visit. Do not tick together with Pre-Treatment on the same side.',
         pricingMethod: 'PRICE_ON_QUOTE',
         internalNotes: 'Price on quote. Warn if used with item 4 on the same elevation ("possible double charge"); allow override.'
     },
@@ -241,6 +246,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Service carried out outside standard working hours, during daylight, at the client\'s request.',
         category: 'SITE CONDITIONS',
+        adminHelpText: 'Tick when the building has active occupants, retail entrances, or open balconies requiring cordons and traffic marshals.',
         pricingMethod: 'PRICE_ON_QUOTE',
         internalNotes: 'Price on quote. Internal note: no night flying (no SACAA night approval).'
     },
@@ -250,6 +256,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Water supplied to site by AeroWash where no suitable point of supply is available within reach of the work area.',
         category: 'SITE CONDITIONS',
+        adminHelpText: 'Tick when operations must occur outside standard weekday hours (e.g. night work or weekend cleaning).',
         pricingMethod: 'PRICE_ON_QUOTE',
         internalNotes: 'Price on quote, NOT R0 default.'
     },
@@ -259,6 +266,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Additional water treatment for a spot-free finish where local water is high in dissolved solids.',
         category: 'SITE CONDITIONS',
+        adminHelpText: 'Additional water treatment for Atlantis (R0.30/L) or Simon\'s Town/desalination zones (R0.85/L).',
         pricingMethod: 'REGIONAL_WATER_PER_LITRE',
         internalNotes: 'Internal: Atlantis R0.30/L, Simon\'s Town & desalination zones R0.85/L.'
     },
@@ -268,6 +276,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Travel provision for sites beyond the standard service area (see Terms).',
         category: 'SITE CONDITIONS',
+        adminHelpText: 'Travel provision for sites beyond the standard service area.',
         pricingMethod: 'PRICE_ON_QUOTE'
     },
     {
@@ -294,7 +303,19 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         clientDescription:
             'Hand cleaning of ground-level glazing, entrances and detail areas that are not reachable by drone, completed as part of the same visit.',
         category: 'CLEANING',
-        pricingMethod: 'PRICE_ON_QUOTE'
+        pricingMethod: 'PRICE_ON_QUOTE',
+        adminHelpText: 'Hand cleaning of what the drone cannot reach: ground-floor glass below ~3 m, entrance doors, deep window recesses.'
+    },
+    {
+        itemNumber: 24,
+        name: 'Specialist Access Restoration Clean – [Elevation]',
+        clientDescription:
+            'Restoration clean of heavily soiled facade areas using specialist access methods, carried out ahead of the AeroWash maintenance programme.',
+        category: 'CLEANING',
+        pricingMethod: 'SUBCONTRACTOR_MARKUP',
+        internalNotes: 'Subcontractor cost + markup % (default 20%, editable in Settings), rounded up to next R50. Client sees only amount. Requires subcontractor name, quote reference, quote amount, and subcontractor insurance confirmed tick.',
+        requiresElevation: true,
+        adminHelpText: 'Restoration clean using specialist access (rope access / scaffolding) ahead of regular AeroWash maintenance. Use when elevation condition is Heavy.'
     }
 ];
 

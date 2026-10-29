@@ -344,3 +344,50 @@ export async function updateReportDetails(data: {
     return { success: false, error: "Failed to update report details" }
   }
 }
+
+export async function createProjectCompletionReportAction(projectId: string) {
+    try {
+        const companyId = await ensureAuth()
+        const project = await prisma.project.findUnique({
+            where: { id: projectId, companyId },
+            include: {
+                client: true,
+                invoices: {
+                    where: { type: 'QUOTE' },
+                    orderBy: { createdAt: 'desc' }
+                }
+            }
+        })
+        if (!project) throw new Error("Project not found")
+
+        const quote = project.invoices[0]
+        const quoteMeta = (quote?.metadata as any) || {}
+        const elevations = quoteMeta.elevations || []
+        const photos = quoteMeta.siteVisitPhotos || []
+
+        const report = await prisma.report.create({
+            data: {
+                companyId,
+                projectId: project.id,
+                clientId: project.clientId,
+                title: `Facade Maintenance Completion Report – ${project.name}`,
+                description: `Official completion inspection and handover report for facade maintenance work performed at ${quote?.site || project.name}.`,
+                date: new Date(),
+                type: 'AEROWASH_COMPLETION',
+                metadata: {
+                    elevations,
+                    beforePhotos: photos,
+                    quoteNumber: quote?.quoteNumber || quote?.number,
+                    site: quote?.site || project.name
+                }
+            }
+        })
+
+        revalidatePath(`/projects/${projectId}`)
+        revalidatePath(`/reports`)
+        return { success: true, reportId: report.id }
+    } catch (e: any) {
+        console.error("createProjectCompletionReportAction error:", e)
+        return { success: false, error: e.message || "Failed to create completion report" }
+    }
+}

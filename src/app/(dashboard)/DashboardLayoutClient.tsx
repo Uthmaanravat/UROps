@@ -18,11 +18,13 @@ export default function DashboardLayoutClient({
     user,
     settings,
     pendingApprovals = [],
+    changesRequestedQuotes = [],
 }: {
     children: React.ReactNode;
     user: User;
     settings: CompanySettings | null;
     pendingApprovals?: any[];
+    changesRequestedQuotes?: any[];
 }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUpdatingRole, setIsUpdatingRole] = useState(false);
@@ -251,7 +253,7 @@ export default function DashboardLayoutClient({
                                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
                             </span>
                             <span className="font-black text-amber-400 uppercase tracking-widest text-[11px]">Owner Action Required:</span>
-                            <span>{pendingApprovals.length} quotation(s) exceeding R50,000 awaiting your 1-click approval</span>
+                            <span>{pendingApprovals.length} quotation(s) exceeding R{(settings?.approvalThreshold || 50000).toLocaleString()} awaiting your 1-click approval</span>
                         </div>
                         <div className="flex items-center gap-2">
                             {pendingApprovals.slice(0, 3).map((q: any) => (
@@ -261,6 +263,31 @@ export default function DashboardLayoutClient({
                                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold border border-amber-500/30 transition-all text-[11px]"
                                 >
                                     <span>{q.quoteNumber || 'Quote'} ({q.clientName} – R{q.total.toLocaleString()})</span>
+                                    <span>→</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {changesRequestedQuotes && changesRequestedQuotes.length > 0 && (
+                    <div className="bg-gradient-to-r from-rose-500/20 via-amber-500/20 to-rose-500/10 border-b border-rose-500/30 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-200 shadow-md">
+                        <div className="flex items-center gap-2.5 font-medium">
+                            <span className="flex h-2.5 w-2.5 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                            </span>
+                            <span className="font-black text-rose-400 uppercase tracking-widest text-[11px]">Changes Requested:</span>
+                            <span>{changesRequestedQuotes.length} quotation(s) sent back by owner for revisions</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {changesRequestedQuotes.slice(0, 3).map((q: any) => (
+                                <Link
+                                    key={q.id}
+                                    href={`/invoices/${q.id}`}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold border border-rose-500/30 transition-all text-[11px]"
+                                    title={q.note}
+                                >
+                                    <span>{q.quoteNumber || 'Quote'} ({q.clientName}): &ldquo;{q.note.slice(0, 35)}...&rdquo;</span>
                                     <span>→</span>
                                 </Link>
                             ))}

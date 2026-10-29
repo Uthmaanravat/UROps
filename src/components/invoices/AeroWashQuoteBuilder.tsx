@@ -67,12 +67,23 @@ export interface ElevationState {
     balconyPercent: number; // 10 - 15, default 12
     hasPreTreatment: boolean;
     preTreatmentPercent: number; // 25 - 30, default 25
+    hasPreCoating?: boolean;
     hasPreCoatingWash: boolean;
     hasExtendedSoiling: boolean;
     extendedSoilingPrice: number;
     allowSoilingOverride: boolean;
     hasHandClean?: boolean;
     handCleanPrice?: number;
+    handCleanHeight?: number;
+    handCleanAppliesTo?: 'FULL' | 'PART';
+    handCleanWidth?: number;
+    hasRestorationClean?: boolean;
+    restorationSubcontractorName?: string;
+    restorationQuoteReference?: string;
+    restorationSubcontractorCost?: number;
+    restorationMarkupPercent?: number;
+    restorationPrice?: number;
+    restorationInsuranceConfirmed?: boolean;
     exclusions?: string;
 }
 
@@ -108,7 +119,14 @@ export interface SiteProvisionsState {
     customProvisions?: Record<number, number>;
 }
 
+export interface CustomQuoteItem {
+    id: string;
+    description: string;
+    amount: number;
+}
+
 export interface AeroWashQuoteBuilderProps {
+    isOwner?: boolean;
     siteName?: string;
     clientSelected?: boolean;
     currencySymbol?: string;
@@ -129,7 +147,21 @@ export interface AeroWashQuoteBuilderProps {
     }) => void;
 }
 
+
+function AdminHelp({ text }: { text?: string }) {
+    if (!text) return null;
+    return (
+        <span 
+            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/10 hover:bg-[#D05E00]/30 text-gray-300 hover:text-white text-[10px] font-bold cursor-help transition-colors border border-white/10 shrink-0"
+            title={text}
+        >
+            ?
+        </span>
+    );
+}
+
 export function AeroWashQuoteBuilder({
+    isOwner = true,
     siteName = "",
     clientSelected = false,
     currencySymbol = "R",
@@ -173,6 +205,39 @@ export function AeroWashQuoteBuilder({
     };
 
     // 1. Elevations State (Blank by default for new quotes)
+        // Custom non-catalogue items
+    const [customItems, setCustomItems] = useState<CustomQuoteItem[]>(() => {
+        if (initialData?.customItems && Array.isArray(initialData.customItems)) {
+            return initialData.customItems;
+        }
+        if (initialData?.items && Array.isArray(initialData.items)) {
+            const custom = initialData.items.filter((it: any) => it.isCustom || it.metadata?.isCustom || it.internalMetadata?.isCustom);
+            if (custom.length > 0) {
+                return custom.map((it: any, idx: number) => ({
+                    id: `custom-${idx}`,
+                    description: it.description?.replace(/^(Additional Work|Custom Item)\s*\n?/, '') || '',
+                    amount: it.rate || it.total || it.unitPrice || 0
+                }));
+            }
+        }
+        return [];
+    });
+
+    const addCustomItem = () => {
+        setCustomItems(prev => [
+            ...prev,
+            { id: `custom-${Date.now()}`, description: '', amount: 0 }
+        ]);
+    };
+
+    const updateCustomItem = (id: string, updates: Partial<CustomQuoteItem>) => {
+        setCustomItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    };
+
+    const removeCustomItem = (id: string) => {
+        setCustomItems(prev => prev.filter(item => item.id !== id));
+    };
+
     const [elevations, setElevations] = useState<ElevationState[]>(() => {
         if (initialData?.elevations && initialData.elevations.length > 0) {
             return initialData.elevations;
@@ -536,6 +601,10 @@ export function AeroWashQuoteBuilder({
                     const bandInfo = getBandFromHeight(next.height);
                     next.band = bandInfo.band;
                 }
+                if ('width' in updates && next.hasHandClean && next.handCleanAppliesTo !== 'PART') {
+                    const h = next.handCleanHeight !== undefined ? next.handCleanHeight : 3;
+                    next.handCleanPrice = roundToNearest50((next.width || 0) * h * 16);
+                }
                 return next;
             })
         );
@@ -569,6 +638,7 @@ export function AeroWashQuoteBuilder({
             internalMetadata: any;
             isProvisional?: boolean;
             isAlternative?: boolean;
+            isCustom?: boolean;
         }
 
         const clientItems: BuiltItem[] = [];
@@ -994,6 +1064,20 @@ export function AeroWashQuoteBuilder({
             }
         });
 
+        // Non-catalogue Custom Items
+        customItems.forEach((ci) => {
+            if (ci.description.trim() && ci.amount > 0) {
+                clientItems.push({
+                    name: ci.description.trim(),
+                    description: ci.description.trim(),
+                    area: 'Additional Work',
+                    amount: Number(ci.amount) || 0,
+                    isCustom: true,
+                    internalMetadata: { isCustom: true }
+                });
+            }
+        });
+
         // Subtotal before programme discounts
         let rawSubtotal = clientItems.reduce((sum, item) => sum + item.amount, 0);
 
@@ -1052,7 +1136,7 @@ export function AeroWashQuoteBuilder({
             errors,
             warnings
         };
-    }, [elevations, siteProvisions, programme, isLandmark, siteVisitDone, contractorSpecReceived, surveyCameraEnabled, thermalCameraEnabled, hasVatRegistration, vatRate]);
+    }, [elevations, siteProvisions, programme, isLandmark, siteVisitDone, contractorSpecReceived, customItems, surveyCameraEnabled, thermalCameraEnabled, hasVatRegistration, vatRate]);
 
     // Send payload up to parent
     useEffect(() => {
@@ -1074,6 +1158,7 @@ export function AeroWashQuoteBuilder({
                 rateCardRevision: 13,
                 scopeOfWorks: scopeOfWorks || autoGeneratedScope,
                 elevations,
+                customItems,
                 siteProvisions,
                 programme,
                 isLandmark,
@@ -1093,60 +1178,71 @@ export function AeroWashQuoteBuilder({
             taxAmount: calculation.taxAmount,
             validationErrors: calculation.errors
         });
-    }, [calculation, scopeOfWorks, autoGeneratedScope, siteVisitDone, siteVisitDate, siteVisitAttendedBy, siteVisitPhotos, conditionFlags]);
+    }, [calculation, scopeOfWorks, autoGeneratedScope, siteVisitDone, siteVisitDate, siteVisitAttendedBy, siteVisitPhotos, conditionFlags, customItems]);
 
     return (
         <div className="space-y-6">
             {/* Step Strip */}
             <div className="bg-[#0F172A]/90 border border-white/10 rounded-2xl p-3 shadow-lg">
                 <div className="flex items-center justify-between overflow-x-auto gap-2 py-1 scrollbar-none">
-                    {[
-                        { id: 'step-client', label: '1 Client', isComplete: Boolean(clientSelected || (siteName && siteName.trim())) },
-                        { id: 'step-elevations', label: '2 Elevations', isComplete: elevations.length > 0 && elevations.some(e => (e.width || 0) > 0 && (e.height || 0) > 0) },
-                        { id: 'step-site-visit', label: '3 Site visit', isComplete: siteVisitDone || conditionFlags.length > 0 || siteVisitPhotos.length > 0 || Boolean(siteVisitDate) },
-                        { id: 'step-extras', label: '4 Extras', isComplete: true },
-                        { id: 'step-contract', label: '5 Contract', isComplete: Boolean(programme) },
-                        { id: 'step-preview', label: '6 Check client view', isComplete: previewMode === 'CLIENT_VIEW' || checkedClientView },
-                        { id: 'step-save', label: '7 Save', isComplete: calculation.errors.length === 0 && elevations.length > 0 && (clientSelected || Boolean(siteName && siteName.trim())) }
-                    ].map((step, idx) => {
-                        const isDone = step.isComplete;
-                        return (
-                            <button
-                                key={step.id}
-                                type="button"
-                                onClick={() => {
-                                    if (step.id === 'step-preview') {
-                                        setPreviewMode('CLIENT_VIEW');
-                                        setCheckedClientView(true);
-                                        setTimeout(() => {
-                                            document.getElementById('step-preview')?.scrollIntoView({ behavior: 'smooth' });
-                                        }, 100);
-                                    } else if (step.id === 'step-client') {
-                                        document.getElementById('client-select')?.scrollIntoView({ behavior: 'smooth' });
-                                    } else if (step.id === 'step-save') {
-                                        document.getElementById('save-quote-submit-btn')?.scrollIntoView({ behavior: 'smooth' });
-                                    } else {
-                                        setPreviewMode('BUILDER');
-                                        setTimeout(() => {
-                                            document.getElementById(step.id)?.scrollIntoView({ behavior: 'smooth' });
-                                        }, 100);
-                                    }
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                                    isDone
-                                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25'
-                                        : 'bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10'
-                                }`}
-                            >
-                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                                    isDone ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white/10 text-gray-400'
-                                }`}>
-                                    {isDone ? <Check className="w-3 h-3 stroke-[3]" /> : idx + 1}
-                                </span>
-                                <span>{step.label}</span>
-                            </button>
+                    {(() => {
+                        const hasClient = Boolean(clientSelected);
+                        const hasElevations = elevations.length > 0 && elevations.some(e => (e.width || 0) > 0 && (e.height || 0) > 0);
+                        const hasExtrasConfigured = hasElevations && (
+                            Object.entries(siteProvisions).some(([k, v]) => (typeof v === 'boolean' && v === true && k !== 'hasSiteVisit') || (typeof v === 'number' && v > 0)) ||
+                            elevations.some(e => e.hasBalconies || e.hasPreTreatment || e.hasHandClean)
                         );
-                    })}
+
+                        const steps = [
+                            { id: 'step-client', label: 'Client', isComplete: hasClient },
+                            { id: 'step-elevations', label: 'Elevations', isComplete: hasElevations },
+                            { id: 'step-site-visit', label: 'Site visit', isComplete: hasElevations && siteVisitDone === true },
+                            { id: 'step-extras', label: 'Extras', isComplete: hasExtrasConfigured },
+                            { id: 'step-contract', label: 'Contract', isComplete: hasElevations && Boolean(programme) },
+                            { id: 'step-preview', label: 'Check client view', isComplete: hasElevations && (previewMode === 'CLIENT_VIEW' || checkedClientView) },
+                            { id: 'step-save', label: 'Save', isComplete: hasElevations && hasClient && calculation.errors.length === 0 }
+                        ];
+
+                        return steps.map((step, idx) => {
+                            const isDone = step.isComplete;
+                            return (
+                                <button
+                                    key={step.id}
+                                    type="button"
+                                    onClick={() => {
+                                        if (step.id === 'step-preview') {
+                                            setPreviewMode('CLIENT_VIEW');
+                                            setCheckedClientView(true);
+                                            setTimeout(() => {
+                                                document.getElementById('step-preview')?.scrollIntoView({ behavior: 'smooth' });
+                                            }, 100);
+                                        } else if (step.id === 'step-client') {
+                                            document.getElementById('client-select')?.scrollIntoView({ behavior: 'smooth' });
+                                        } else if (step.id === 'step-save') {
+                                            document.getElementById('save-quote-submit-btn')?.scrollIntoView({ behavior: 'smooth' });
+                                        } else {
+                                            setPreviewMode('BUILDER');
+                                            setTimeout(() => {
+                                                document.getElementById(step.id)?.scrollIntoView({ behavior: 'smooth' });
+                                            }, 100);
+                                        }
+                                    }}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                                        isDone
+                                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25'
+                                            : 'bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10'
+                                    }`}
+                                >
+                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                                        isDone ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white/10 text-gray-400'
+                                    }`}>
+                                        {isDone ? <Check className="w-3 h-3 stroke-[3]" /> : idx + 1}
+                                    </span>
+                                    <span>{step.label}</span>
+                                </button>
+                            );
+                        });
+                    })()}
                 </div>
             </div>
 
@@ -1418,11 +1514,108 @@ export function AeroWashQuoteBuilder({
                                                 ) : null}
                                             </div>
 
-                                            {/* Edge Warning or Condition Heavy Warning */}
+                                            {/* Edge Warning or Condition Heavy Option */}
                                             {isHeavy && (
-                                                <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-xs font-bold flex items-center gap-2">
-                                                    <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
-                                                    Decline: needs restoration first. Cannot quote maintenance cleaning on heavy condition.
+                                                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-3">
+                                                    <div className="flex items-center gap-2 text-amber-300 font-bold">
+                                                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                                                        Heavy Condition: Decline elevation, or quote Specialist Access Restoration Clean first.
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold">
+                                                            <input
+                                                                type="radio"
+                                                                name={`heavy_action_${elev.id}`}
+                                                                checked={!elev.hasRestorationClean}
+                                                                onChange={() => updateElevation(elev.id, { hasRestorationClean: false })}
+                                                                className="text-red-500"
+                                                            />
+                                                            <span className="text-red-300">Decline Elevation</span>
+                                                        </label>
+                                                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold">
+                                                            <input
+                                                                type="radio"
+                                                                name={`heavy_action_${elev.id}`}
+                                                                checked={Boolean(elev.hasRestorationClean)}
+                                                                onChange={() => updateElevation(elev.id, { hasRestorationClean: true, restorationMarkupPercent: elev.restorationMarkupPercent || 20 })}
+                                                                className="text-[#D05E00]"
+                                                            />
+                                                            <span className="text-orange-300 font-bold">Quote Specialist Access Restoration Clean (Item 24)</span>
+                                                        </label>
+                                                    </div>
+
+                                                    {elev.hasRestorationClean && (
+                                                        <div className="p-3 rounded-lg bg-black/40 border border-white/10 space-y-3 mt-2">
+                                                            <div className="text-[10px] font-black uppercase tracking-wider text-orange-400">
+                                                                Internal Subcontractor Details (Hidden from client)
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                <div>
+                                                                    <Label className="text-[10px] text-gray-400">Subcontractor Name *</Label>
+                                                                    <Input
+                                                                        placeholder="e.g. Apex Rope Access"
+                                                                        value={elev.restorationSubcontractorName || ''}
+                                                                        onChange={e => updateElevation(elev.id, { restorationSubcontractorName: e.target.value })}
+                                                                        className="h-7 text-xs bg-white/5 border-white/10"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <Label className="text-[10px] text-gray-400">Quote Reference *</Label>
+                                                                    <Input
+                                                                        placeholder="e.g. APX-9821"
+                                                                        value={elev.restorationQuoteReference || ''}
+                                                                        onChange={e => updateElevation(elev.id, { restorationQuoteReference: e.target.value })}
+                                                                        className="h-7 text-xs bg-white/5 border-white/10"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <Label className="text-[10px] text-gray-400">Quote Amount (R) *</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        placeholder="Cost"
+                                                                        value={elev.restorationSubcontractorCost || ''}
+                                                                        onChange={e => {
+                                                                            const cost = parseFloat(e.target.value) || 0;
+                                                                            const markup = elev.restorationMarkupPercent !== undefined ? elev.restorationMarkupPercent : 20;
+                                                                            const price = roundToNearest50(cost * (1 + markup / 100));
+                                                                            updateElevation(elev.id, { restorationSubcontractorCost: cost, restorationPrice: price });
+                                                                        }}
+                                                                        className="h-7 text-xs font-mono bg-white/5 border-white/10"
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-white/5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Label className="text-[10px] text-gray-400">Markup %:</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={elev.restorationMarkupPercent !== undefined ? elev.restorationMarkupPercent : 20}
+                                                                        onChange={e => {
+                                                                            const markup = parseFloat(e.target.value) || 0;
+                                                                            const cost = elev.restorationSubcontractorCost || 0;
+                                                                            const price = roundToNearest50(cost * (1 + markup / 100));
+                                                                            updateElevation(elev.id, { restorationMarkupPercent: markup, restorationPrice: price });
+                                                                        }}
+                                                                        className="h-7 w-16 text-xs font-mono bg-white/5 border-white/10"
+                                                                    />
+                                                                    <span className="text-xs text-emerald-400 font-bold">
+                                                                        Client Price: {formatCurrency(roundToNearest50((elev.restorationSubcontractorCost || 0) * (1 + (elev.restorationMarkupPercent !== undefined ? elev.restorationMarkupPercent : 20) / 100)), currencySymbol)}
+                                                                    </span>
+                                                                </div>
+
+                                                                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-amber-300">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={Boolean(elev.restorationInsuranceConfirmed)}
+                                                                        onChange={e => updateElevation(elev.id, { restorationInsuranceConfirmed: e.target.checked })}
+                                                                        className="rounded text-primary"
+                                                                    />
+                                                                    <span>Subcontractor insurance confirmed</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
 
@@ -1509,17 +1702,18 @@ export function AeroWashQuoteBuilder({
                                                                     onChange={e => updateElevation(elev.id, { hasBalconies: e.target.checked })}
                                                                     className="rounded text-primary"
                                                                 />
-                                                                <span>{cleanItemLabel(getItem(3)?.name) || 'Balconies & Detail Areas'}</span>
+                                                                <span>Balcony & Detail Areas</span>
+                                                                <AdminHelp text="Cleaning of balcony soffits, window reveals, returns and balustrade glass. Enter percentage (1–50%) based on balcony density across this elevation." />
                                                             </label>
                                                             {elev.hasBalconies && (
                                                                 <div className="flex items-center gap-2 pl-6">
-                                                                    <Label className="text-[10px] text-gray-400">Area % (10-15%):</Label>
+                                                                    <Label className="text-[10px] text-gray-400">Area % (1–50%):</Label>
                                                                     <Input
                                                                         type="number"
-                                                                        min="10"
-                                                                        max="15"
+                                                                        min="1"
+                                                                        max="50"
                                                                         value={elev.balconyPercent}
-                                                                        onChange={e => updateElevation(elev.id, { balconyPercent: parseFloat(e.target.value) || 12 })}
+                                                                        onChange={e => updateElevation(elev.id, { balconyPercent: Math.min(50, Math.max(1, parseFloat(e.target.value) || 12)) })}
                                                                         className="h-7 w-16 text-xs font-mono"
                                                                     />
                                                                     <span className="text-gray-400 text-[10px]">
@@ -1545,6 +1739,7 @@ export function AeroWashQuoteBuilder({
                                                                     <span className="text-[10px] text-gray-400 font-normal ml-1">
                                                                         (rate under review)
                                                                     </span>
+                                                                    <AdminHelp text="Treating green growth or dark stains before cleaning. Tick only when the building is dirtier than normal (green patches, black streaks, not cleaned in 1–2 years). Needs a site visit first. Not for normal dirt." />
                                                                 </span>
                                                             </label>
                                                             {elev.hasPreTreatment && (
@@ -1577,6 +1772,7 @@ export function AeroWashQuoteBuilder({
                                                                     className="rounded text-primary"
                                                                 />
                                                                 <span>{cleanItemLabel(getItem(9)?.name) || 'Pre-Coating Wash'}</span>
+                                                                <AdminHelp text="Washing a building before it gets painted. Tick only when a painting contractor/client asks for it. Needs their written specification." />
                                                             </label>
                                                             {elev.hasPreCoatingWash && (
                                                                 <p className="text-[10px] text-gray-400 pl-6">
@@ -1597,6 +1793,7 @@ export function AeroWashQuoteBuilder({
                                                                     className="rounded text-primary"
                                                                 />
                                                                 <span>{cleanItemLabel(getItem(16)?.name) || 'Extended Soiling Provision'}</span>
+                                                                <AdminHelp text="Extra time for very heavy dirt, confirmed at the site visit. Don't tick together with Pre-Treatment on the same side." />
                                                             </label>
                                                             {elev.hasExtendedSoiling && (
                                                                 <div className="space-y-1.5 pl-6">
@@ -1623,27 +1820,110 @@ export function AeroWashQuoteBuilder({
                                                         </div>
                                                     )}
 
-                                                    {/* Low-Level & Detail Hand Clean */}
+                                                    {/* Low-Level & Detail Hand Clean with Auto-Pricing */}
                                                     {isItemActive(23) && (
-                                                        <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 space-y-2">
-                                                            <label className="flex items-center gap-2 cursor-pointer font-bold">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={elev.hasHandClean || false}
-                                                                    onChange={e => updateElevation(elev.id, { hasHandClean: e.target.checked })}
-                                                                    className="rounded text-primary"
-                                                                />
-                                                                <span>{cleanItemLabel(getItem(23)?.name) || 'Low-Level & Detail Hand Clean'}</span>
-                                                            </label>
-                                                            {elev.hasHandClean && (
-                                                                <div className="pl-6">
-                                                                    <Input
-                                                                        type="number"
-                                                                        placeholder="Price on quote (R)"
-                                                                        value={elev.handCleanPrice || ''}
-                                                                        onChange={e => updateElevation(elev.id, { handCleanPrice: parseFloat(e.target.value) || 0 })}
-                                                                        className="h-7 text-xs font-mono"
+                                                        <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 space-y-2.5">
+                                                            <div className="flex items-center justify-between">
+                                                                <label className="flex items-center gap-2 cursor-pointer font-bold">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={elev.hasHandClean || false}
+                                                                        onChange={e => {
+                                                                            const checked = e.target.checked;
+                                                                            const h = elev.handCleanHeight !== undefined ? elev.handCleanHeight : 3;
+                                                                            const w = elev.handCleanAppliesTo === 'PART' ? (elev.handCleanWidth || 0) : elev.width;
+                                                                            const autoPrice = roundToNearest50((w || 0) * h * 16);
+                                                                            updateElevation(elev.id, {
+                                                                                hasHandClean: checked,
+                                                                                handCleanHeight: h,
+                                                                                handCleanAppliesTo: elev.handCleanAppliesTo || 'FULL',
+                                                                                handCleanPrice: checked ? (elev.handCleanPrice !== undefined && elev.handCleanPrice > 0 ? elev.handCleanPrice : autoPrice) : undefined
+                                                                            });
+                                                                        }}
+                                                                        className="rounded text-primary"
                                                                     />
+                                                                    <span>{cleanItemLabel(getItem(23)?.name) || 'Low-Level & Detail Hand Clean'}</span>
+                                                                    <AdminHelp text="Hand cleaning of ground-level glazing, doors and architectural detail below 3 m. Automatically priced at width × 3 m × R16/m²." />
+                                                                </label>
+                                                                <span className="text-[10px] text-gray-400 font-normal">
+                                                                    (rate under review)
+                                                                </span>
+                                                            </div>
+                                                            {elev.hasHandClean && (
+                                                                <div className="space-y-2 pl-6 pt-1 text-[11px]">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-gray-400">Height of hand-clean zone:</span>
+                                                                        <Input
+                                                                            type="number"
+                                                                            value={elev.handCleanHeight !== undefined ? elev.handCleanHeight : 3}
+                                                                            onChange={e => {
+                                                                                const h = parseFloat(e.target.value) || 3;
+                                                                                const w = elev.handCleanAppliesTo === 'PART' ? (elev.handCleanWidth || 0) : elev.width;
+                                                                                const autoPrice = roundToNearest50(w * h * 16);
+                                                                                updateElevation(elev.id, { handCleanHeight: h, handCleanPrice: autoPrice });
+                                                                            }}
+                                                                            className="h-6 w-14 text-xs font-mono"
+                                                                        />
+                                                                        <span className="text-gray-400">m</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <span className="text-gray-400">Applies to:</span>
+                                                                        <label className="flex items-center gap-1 cursor-pointer">
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`hand_clean_w_${elev.id}`}
+                                                                                checked={elev.handCleanAppliesTo !== 'PART'}
+                                                                                onChange={() => {
+                                                                                    const h = elev.handCleanHeight || 3;
+                                                                                    const autoPrice = roundToNearest50(elev.width * h * 16);
+                                                                                    updateElevation(elev.id, { handCleanAppliesTo: 'FULL', handCleanPrice: autoPrice });
+                                                                                }}
+                                                                                className="text-primary"
+                                                                            />
+                                                                            <span>Full width ({elev.width} m)</span>
+                                                                        </label>
+                                                                        <label className="flex items-center gap-1 cursor-pointer">
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`hand_clean_w_${elev.id}`}
+                                                                                checked={elev.handCleanAppliesTo === 'PART'}
+                                                                                onChange={() => {
+                                                                                    const partW = elev.handCleanWidth || Math.round(elev.width / 2);
+                                                                                    const h = elev.handCleanHeight || 3;
+                                                                                    const autoPrice = roundToNearest50(partW * h * 16);
+                                                                                    updateElevation(elev.id, { handCleanAppliesTo: 'PART', handCleanWidth: partW, handCleanPrice: autoPrice });
+                                                                                }}
+                                                                                className="text-primary"
+                                                                            />
+                                                                            <span>Part width:</span>
+                                                                        </label>
+                                                                        {elev.handCleanAppliesTo === 'PART' && (
+                                                                            <Input
+                                                                                type="number"
+                                                                                value={elev.handCleanWidth || ''}
+                                                                                onChange={e => {
+                                                                                    const partW = parseFloat(e.target.value) || 0;
+                                                                                    const h = elev.handCleanHeight || 3;
+                                                                                    const autoPrice = roundToNearest50(partW * h * 16);
+                                                                                    updateElevation(elev.id, { handCleanWidth: partW, handCleanPrice: autoPrice });
+                                                                                }}
+                                                                                placeholder="metres"
+                                                                                className="h-6 w-16 text-xs font-mono"
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                                                                        <span className="text-gray-400">Calculated amount (Band A R16/m²):</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <Input
+                                                                                type="number"
+                                                                                value={elev.handCleanPrice || ''}
+                                                                                onChange={e => updateElevation(elev.id, { handCleanPrice: parseFloat(e.target.value) || 0 })}
+                                                                                className="h-7 w-24 text-xs font-mono text-right"
+                                                                            />
+                                                                            <span className="text-[10px] text-gray-500 font-normal">override</span>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -2169,6 +2449,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(15)?.name) || 'Occupied Building Provision'}</span>
+                                            <AdminHelp text="Working around tenants or foot traffic. Adds 10% across cleaning lines for tenant notifications and interrupted access." />
                                         </label>
                                         <p className="text-[11px] text-gray-400">
                                             {getItem(15)?.clientDescription || 'Automatic 10% provision of all cleaning lines for tenant notifications and interrupted access.'}
@@ -2187,6 +2468,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(11)?.name) || 'Site Visit & Facade Assessment'}</span>
+                                            <AdminHelp text="On-site inspection to confirm scope, condition, water access and take pre-work photos. Free on client quote." />
                                         </label>
                                         <p className="text-[11px] text-emerald-400 font-bold">
                                             R0 – Shown as &quot;No charge&quot; on client quote
@@ -2205,6 +2487,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(14)?.name) || 'Service Photo Record'}</span>
+                                            <AdminHelp text="Before & after photos of all elevations and key architectural details. Free or custom price." />
                                         </label>
                                         <div className="flex items-center gap-2">
                                             <Input
@@ -2232,6 +2515,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(5)?.name) || 'Roof Maintenance Clean'}</span>
+                                            <AdminHelp text="Washing roof surfaces or parapets where safe access and drainage permit." />
                                         </label>
                                         {siteProvisions.hasRoofClean && (
                                             <Input
@@ -2256,6 +2540,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(6)?.name) || 'Solar Array Clean'}</span>
+                                            <AdminHelp text="Drone or pole washing of solar panels. R6/panel client water or R10/panel AeroWash demineralised water." />
                                         </label>
                                         {siteProvisions.hasSolarClean && (
                                             <div className="space-y-1.5 pl-6">
@@ -2304,6 +2589,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(7)?.name) || 'Signage & Entrance Features'}</span>
+                                            <AdminHelp text="Detailed cleaning of high-level building signage, branded logos, entrance canopies and glass awnings." />
                                         </label>
                                         {siteProvisions.hasSignage && (
                                             <Input
@@ -2328,6 +2614,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(8)?.name) || 'Bird Fouling Removal'}</span>
+                                            <AdminHelp text="Targeted pressure removal and sanitisation of heavy bird droppings on ledges and parapets." />
                                         </label>
                                         {siteProvisions.hasBirdFouling && (
                                             <Input
@@ -2352,6 +2639,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(10)?.name) || 'Post-Construction Exterior Clean'}</span>
+                                            <AdminHelp text="Washdown after building completion or exterior painting/render work to remove construction dust." />
                                         </label>
                                         {siteProvisions.hasPostConstruction && (
                                             <Input
@@ -2376,6 +2664,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(12)?.name) || 'Facade Condition Survey'}</span>
+                                            <AdminHelp text="High-resolution 4K photographic inspection of exterior cladding, joint seals, and window gaskets." />
                                         </label>
                                         {siteProvisions.hasFacadeSurvey && (
                                             <Input
@@ -2400,6 +2689,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(13)?.name) || 'Thermal Roof Survey'}</span>
+                                            <AdminHelp text="FLIR thermal camera aerial scan to identify roof water leaks, insulation voids, or heat loss." />
                                         </label>
                                         {siteProvisions.hasThermalSurvey && (
                                             <Input
@@ -2424,6 +2714,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(17)?.name) || 'Out-of-Hours Service'}</span>
+                                            <AdminHelp text="Weekend or early-morning cleaning windows to avoid business disruption. Daylight hours only." />
                                         </label>
                                         {siteProvisions.hasOutOfWeekHours && (
                                             <div>
@@ -2451,6 +2742,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(18)?.name) || 'Water Supply – Site Provision'}</span>
+                                            <AdminHelp text="When on-site water points or pressure are inadequate and booster pumps or bowsers are needed." />
                                         </label>
                                         {siteProvisions.hasWaterSupplySite && (
                                             <Input
@@ -2475,6 +2767,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(19)?.name) || 'Regional Water Provision'}</span>
+                                            <AdminHelp text="Haulage of bulk water to sites outside municipal supply zones (Atlantis, Simon's Town, etc.)." />
                                         </label>
                                         {siteProvisions.hasRegionalWater && (
                                             <div className="space-y-1.5 pl-6">
@@ -2509,6 +2802,7 @@ export function AeroWashQuoteBuilder({
                                                 className="rounded text-primary"
                                             />
                                             <span>{cleanItemLabel(getItem(20)?.name) || 'Extended Travel'}</span>
+                                            <AdminHelp text="Mobilisation surcharge for sites situated outside the Cape Town metropolitan area." />
                                         </label>
                                         {siteProvisions.hasExtendedTravel && (
                                             <Input
@@ -2549,6 +2843,7 @@ export function AeroWashQuoteBuilder({
                                                         className="rounded text-primary"
                                                     />
                                                     <span>{cItem.name}</span>
+                                                    <AdminHelp text={cItem.adminHelp || cItem.clientDescription || 'Custom provision'} />
                                                 </label>
                                                 {cItem.clientDescription && (
                                                     <p className="text-[11px] text-gray-400 pl-6">{cItem.clientDescription}</p>
@@ -2580,6 +2875,71 @@ export function AeroWashQuoteBuilder({
                         </CardContent>
                     </Card>
 
+
+                    {/* Custom Items (Non-catalogue) */}
+                    <Card className="border-white/10 bg-[#0F172A]/70">
+                        <CardHeader className="p-4 bg-white/[0.02] border-b border-white/5 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                                    <Plus className="w-4 h-4 text-primary" />
+                                    Custom Items (Non-catalogue)
+                                </CardTitle>
+                                <CardDescription className="text-xs text-gray-400">
+                                    For one-off work not in the AeroWash catalogue (e.g. pressure washing entrance pavers, gutter repairs).
+                                </CardDescription>
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={addCustomItem}
+                                className="bg-[#D05E00] hover:bg-[#B34E00] text-white text-xs font-bold"
+                            >
+                                <Plus className="w-3.5 h-3.5 mr-1" /> Add Custom Item
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-3">
+                            {customItems.length === 0 ? (
+                                <p className="text-xs text-gray-500 italic">No custom items added. Click &quot;Add Custom Item&quot; if this quote includes bespoke non-catalogue work.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {customItems.map((cItem, idx) => (
+                                        <div key={cItem.id || idx} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
+                                            <div className="flex-1 w-full">
+                                                <Input
+                                                    placeholder="Description of custom work (e.g. High-pressure wash ground entrance pavers)"
+                                                    value={cItem.description}
+                                                    onChange={e => updateCustomItem(cItem.id, { description: e.target.value })}
+                                                    className="h-8 text-xs bg-black/40 border-white/10 text-white"
+                                                />
+                                            </div>
+                                            <div className="w-full sm:w-36 flex items-center gap-2">
+                                                <div className="relative flex-1">
+                                                    <span className="absolute left-2.5 top-2 text-xs text-gray-400 font-mono">R</span>
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="Amount"
+                                                        value={cItem.amount || ''}
+                                                        onChange={e => updateCustomItem(cItem.id, { amount: parseFloat(e.target.value) || 0 })}
+                                                        className="h-8 pl-7 text-xs font-mono bg-black/40 border-white/10 text-white"
+                                                    />
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => removeCustomItem(cItem.id)}
+                                                    className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10 shrink-0"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
                     {/* SECTION 3: CONTRACT PROGRAMMES & PRE-SEND CHECKS */}
                     <div id="step-contract" className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Card className="border-white/10 bg-[#0F172A]/70">
@@ -2603,6 +2963,7 @@ export function AeroWashQuoteBuilder({
                                             onChange={() => setProgramme('ONCE_OFF')}
                                         />
                                         <span className="font-bold">Once-off Service (No contract discount)</span>
+                                        <AdminHelp text="For landmark or high-end buildings, always start with once-off Full Facade. Offer contract pricing only after they commit." />
                                     </label>
 
                                     <label className="flex items-center gap-2 cursor-pointer">
@@ -2611,10 +2972,11 @@ export function AeroWashQuoteBuilder({
                                             name="programme"
                                             value="BIANNUAL"
                                             checked={programme === 'BIANNUAL'}
-                                            disabled={isLandmark}
+                                            
                                             onChange={() => setProgramme('BIANNUAL')}
                                         />
                                         <span>Biannual Maintenance (2 visits/yr – 10% discount)</span>
+                                        <AdminHelp text="Scheduled cleaning twice per year (every 6 months) with a 10% contract discount applied to all cleaning lines." />
                                     </label>
 
                                     <label className="flex items-center gap-2 cursor-pointer">
@@ -2623,10 +2985,11 @@ export function AeroWashQuoteBuilder({
                                             name="programme"
                                             value="QUARTERLY"
                                             checked={programme === 'QUARTERLY'}
-                                            disabled={isLandmark}
+                                            
                                             onChange={() => setProgramme('QUARTERLY')}
                                         />
                                         <span>Quarterly Maintenance (4 visits/yr – 15% discount)</span>
+                                        <AdminHelp text="Scheduled cleaning 4 times per year (every quarter) with a 15% contract discount applied to all cleaning lines." />
                                     </label>
 
                                     <label className="flex items-center gap-2 cursor-pointer">
@@ -2635,10 +2998,11 @@ export function AeroWashQuoteBuilder({
                                             name="programme"
                                             value="MONTHLY"
                                             checked={programme === 'MONTHLY'}
-                                            disabled={isLandmark}
+                                            
                                             onChange={() => setProgramme('MONTHLY')}
                                         />
                                         <span>Monthly Maintenance (12 visits/yr – 20% discount)</span>
+                                        <AdminHelp text="Scheduled cleaning 12 times per year (monthly) with a 20% contract discount applied to all cleaning lines." />
                                     </label>
 
                                     <label className="flex items-center gap-2 cursor-pointer">
@@ -2647,24 +3011,15 @@ export function AeroWashQuoteBuilder({
                                             name="programme"
                                             value="MONTHLY_QUARTERLY_COMBINED"
                                             checked={programme === 'MONTHLY_QUARTERLY_COMBINED'}
-                                            disabled={isLandmark}
+                                            
                                             onChange={() => setProgramme('MONTHLY_QUARTERLY_COMBINED')}
                                         />
                                         <span>Monthly Glazing + Quarterly Full Facade (8 glazing + 4 full facade)</span>
+                                        <AdminHelp text="Combined package: 8 monthly glazing maintenance cleans + 4 quarterly full facade cleans per year." />
                                     </label>
                                 </div>
 
-                                <div className="pt-2 border-t border-white/5">
-                                    <label className="flex items-center gap-2 cursor-pointer text-amber-300 font-bold">
-                                        <input
-                                            type="checkbox"
-                                            checked={isLandmark}
-                                            onChange={e => setIsLandmark(e.target.checked)}
-                                            className="rounded text-primary"
-                                        />
-                                        <span>Prestige building: first quote once-off only, no contract discount</span>
-                                    </label>
-                                </div>
+                                
                             </CardContent>
                         </Card>
 
@@ -2680,31 +3035,64 @@ export function AeroWashQuoteBuilder({
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="p-4 space-y-3 text-xs">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={siteVisitDone}
-                                        onChange={e => setSiteVisitDone(e.target.checked)}
-                                        className="rounded text-primary"
-                                    />
-                                    <span>Site visit completed (Required if Pre-Treatment used or quote &gt; R50,000)</span>
-                                </label>
+                                {(() => {
+                                    const needsSiteVisit = elevations.some(e => e.hasPreTreatment) || (calculation?.subtotal || 0) > 50000;
+                                    const needsContractorSpec = elevations.some(e => e.hasPreCoating);
 
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={contractorSpecReceived}
-                                        onChange={e => setContractorSpecReceived(e.target.checked)}
-                                        className="rounded text-primary"
-                                    />
-                                    <span>Contractor specification received (Required if Pre-Coating Wash used)</span>
-                                </label>
+                                    if (!needsSiteVisit && !needsContractorSpec) {
+                                        return (
+                                            <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs py-1">
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                                <span>✓ Ready to send</span>
+                                            </div>
+                                        );
+                                    }
 
-                                <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 space-y-1 text-[11px] text-gray-400 font-mono">
-                                    <div>Floor Rule: R{MINIMUM_FLOOR_RATE_PER_M2.toFixed(2)}/m² minimum effective rate</div>
-                                    <div>Minimum Job: R{MINIMUM_JOB_AMOUNT.toLocaleString()} (Auto-raised if lower)</div>
-                                    <div>Rounding: All line totals rounded up to the next R50</div>
-                                </div>
+                                    return (
+                                        <div className="space-y-2">
+                                            {needsSiteVisit && (
+                                                siteVisitDone ? (
+                                                    <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                                        <span>Site visit completed</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2 text-amber-300 text-xs font-semibold">
+                                                        <AlertTriangle className="w-4 h-4 text-amber-400" />
+                                                        <span>Site visit required (Pre-treatment ticked or quote &gt; R50,000)</span>
+                                                    </div>
+                                                )
+                                            )}
+
+                                            {needsContractorSpec && (
+                                                contractorSpecReceived ? (
+                                                    <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                                        <span>Contractor specification received</span>
+                                                    </div>
+                                                ) : (
+                                                    <label className="flex items-center gap-2 cursor-pointer text-amber-300 text-xs font-semibold">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={contractorSpecReceived}
+                                                            onChange={e => setContractorSpecReceived(e.target.checked)}
+                                                            className="rounded text-primary"
+                                                        />
+                                                        <span>Contractor specification required (Pre-Coating Wash ticked)</span>
+                                                    </label>
+                                                )
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
+                                {isOwner && (
+                                    <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 space-y-1 text-[11px] text-gray-400 font-mono mt-2">
+                                        <div>Floor Rule: R{MINIMUM_FLOOR_RATE_PER_M2.toFixed(2)}/m² minimum effective rate</div>
+                                        <div>Minimum Job: R{MINIMUM_JOB_AMOUNT.toLocaleString()} (Auto-raised if lower)</div>
+                                        <div>Rounding: All line totals rounded up to the next R50</div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>

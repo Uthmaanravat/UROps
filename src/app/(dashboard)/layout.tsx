@@ -43,31 +43,63 @@ export default async function DashboardLayout({
         }
 
         const settings = dbUser.company?.settings || null;
+        const approvalThreshold = (settings as any)?.approvalThreshold;
 
         let pendingApprovals: any[] = [];
-        if ((dbUser as any).isOwner) {
+        let changesRequestedQuotes: any[] = [];
+
+        // Only process approval workflows if approvalThreshold is configured (AeroWash: 50000; LR Builders: off/null)
+        if (approvalThreshold && approvalThreshold > 0) {
             try {
-                const quotes = await prisma.invoice.findMany({
-                    where: {
-                        companyId: dbUser.companyId,
-                        type: 'QUOTE',
-                        total: { gt: 50000 }
-                    },
-                    select: {
-                        id: true,
-                        quoteNumber: true,
-                        total: true,
-                        metadata: true,
-                        client: { select: { name: true } }
-                    }
-                });
-                const pending = quotes.filter(q => (q.metadata as any)?.approvalStatus !== 'APPROVED');
-                pendingApprovals = pending.map(q => ({
-                    id: q.id,
-                    quoteNumber: q.quoteNumber,
-                    clientName: q.client?.name || 'Client',
-                    total: q.total
-                }));
+                if ((dbUser as any).isOwner) {
+                    const quotes = await prisma.invoice.findMany({
+                        where: {
+                            companyId: dbUser.companyId,
+                            type: 'QUOTE',
+                            total: { gt: approvalThreshold }
+                        },
+                        select: {
+                            id: true,
+                            quoteNumber: true,
+                            total: true,
+                            metadata: true,
+                            client: { select: { name: true } }
+                        }
+                    });
+                    const pending = quotes.filter(q => {
+                        const meta = (q.metadata as any) || {};
+                        return meta.approvalStatus !== 'APPROVED' && meta.approvalStatus !== 'CHANGES_REQUESTED';
+                    });
+                    pendingApprovals = pending.map(q => ({
+                        id: q.id,
+                        quoteNumber: q.quoteNumber,
+                        clientName: q.client?.name || 'Client',
+                        total: q.total
+                    }));
+                } else {
+                    const quotes = await prisma.invoice.findMany({
+                        where: {
+                            companyId: dbUser.companyId,
+                            type: 'QUOTE',
+                            total: { gt: approvalThreshold }
+                        },
+                        select: {
+                            id: true,
+                            quoteNumber: true,
+                            total: true,
+                            metadata: true,
+                            client: { select: { name: true } }
+                        }
+                    });
+                    const requested = quotes.filter(q => (q.metadata as any)?.approvalStatus === 'CHANGES_REQUESTED');
+                    changesRequestedQuotes = requested.map(q => ({
+                        id: q.id,
+                        quoteNumber: q.quoteNumber,
+                        clientName: q.client?.name || 'Client',
+                        total: q.total,
+                        note: (q.metadata as any)?.latestOwnerNote || 'Changes requested by owner'
+                    }));
+                }
             } catch (err) {
                 console.error('Error fetching pending approvals:', err);
             }
@@ -85,7 +117,8 @@ export default async function DashboardLayout({
             serializedUser = { ...dbUser, createdAt: String(dbUser.createdAt), updatedAt: String(dbUser.updatedAt) };
         }
 
-        return <DashboardLayoutClient user={serializedUser} settings={serializedSettings} pendingApprovals={pendingApprovals}>{children}</DashboardLayoutClient>
+        return <DashboardLayoutClient user={serializedUser} settings={serializedSettings} pendingApprovals={pendingApprovals}
+                changesRequestedQuotes={changesRequestedQuotes}>{children}</DashboardLayoutClient>
     } catch (criticalError) {
         console.error("Dashboard Layout Critical Error:", criticalError);
         // If it's a redirect error, rethrow it

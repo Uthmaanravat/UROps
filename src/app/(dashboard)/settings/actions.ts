@@ -39,6 +39,7 @@ export async function updateCompanySettings(data: {
     vatRegistrationDate?: Date | string | null
     vatRate?: number | string | null
     validityDays?: number | string | null
+    copyNotificationsTo?: string | null
 }) {
     try {
         const companyId = await ensureAuth()

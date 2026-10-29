@@ -39,6 +39,8 @@ export async function getTeamDataAction() {
                 name: true,
                 email: true,
                 role: true,
+                isOwner: true,
+                notificationEmail: true,
                 createdAt: true
             },
             orderBy: { createdAt: 'asc' }
@@ -303,4 +305,38 @@ export async function transferOwnershipAction(targetUserId: string) {
 
     revalidatePath('/settings/team')
     return { success: true }
+}
+
+export async function updateUserNotificationEmailAction(userId: string, notificationEmail: string | null) {
+    const companyId = await ensureAuth()
+    const caller = await getCallerAdmin(companyId)
+
+    const cleanEmail = notificationEmail?.trim() ? notificationEmail.trim() : null;
+    if (cleanEmail && !cleanEmail.includes('@')) {
+        throw new Error("Invalid email address format");
+    }
+
+    const updated = await prisma.user.update({
+        where: { id: userId, companyId },
+        data: { notificationEmail: cleanEmail }
+    });
+
+    try {
+        await prisma.companyAuditLog.create({
+            data: {
+                companyId,
+                actorUserId: caller.id,
+                actorName: caller.name || caller.email,
+                action: 'USER_UPDATED',
+                targetUserId: userId,
+                targetEmail: updated.email,
+                details: { notificationEmail: cleanEmail }
+            }
+        });
+    } catch (e) {
+        // non-blocking audit log
+    }
+
+    revalidatePath('/settings/team');
+    return { success: true, notificationEmail: cleanEmail };
 }

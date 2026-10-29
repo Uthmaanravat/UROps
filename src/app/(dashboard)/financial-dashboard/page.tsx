@@ -32,8 +32,7 @@ export default async function FinancialDashboardPage() {
 
     const projects = await prisma.project.findMany({
         where: {
-            companyId,
-            ...(isTendersEnabled ? {} : { workType: { not: 'TENDER' } })
+            companyId
         },
         include: { client: true }
     });
