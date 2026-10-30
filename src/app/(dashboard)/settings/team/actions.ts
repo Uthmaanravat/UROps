@@ -91,7 +91,7 @@ export async function createInviteAction(data: { email: string; role: Role }) {
         return { success: false, error: "A valid email address is required." }
     }
 
-    const role = data.role === Role.ADMIN ? Role.ADMIN : Role.MANAGER
+    const role = data.role === Role.ADMIN ? Role.ADMIN : data.role === Role.CREW ? Role.CREW : Role.MANAGER
 
     // Check if user already exists in this company (case-insensitive match)
     const existingMember = await prisma.user.findFirst({

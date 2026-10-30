@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { rescheduleProjectVisitAction } from "@/app/(dashboard)/projects/actions"
 import { generateMonthCalendarPdf } from "@/lib/project-print-utils"
+import { WeatherBadge } from "@/components/projects/WeatherBadge"
 import Link from "next/link"
 
 interface ProjectCalendarViewProps {
@@ -484,6 +485,11 @@ export function ProjectCalendarView({
                                                 <div className="text-[9px] opacity-80 truncate mt-0.5">
                                                     {p.site || p.name}
                                                 </div>
+                                                {isAeroWash && p.flightWeather && (
+                                                    <div className="mt-1">
+                                                        <WeatherBadge weather={p.flightWeather} compact className="text-[9px] px-1.5 py-0.5" />
+                                                    </div>
+                                                )}
                                                 {showPrices && totalWorth > 0 && (
                                                     <div className="text-[9px] font-mono text-emerald-400 mt-0.5">
                                                         R {Number(totalWorth).toLocaleString()}
@@ -580,6 +586,11 @@ export function ProjectCalendarView({
                                             <MapPin className="h-3 w-3 text-zinc-500 shrink-0" />
                                             <span className="truncate">{p.site || p.client?.address || "Site on file"}</span>
                                         </div>
+                                        {isAeroWash && p.flightWeather && (
+                                            <div className="pt-1">
+                                                <WeatherBadge weather={p.flightWeather} compact />
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-1 border-t border-white/5">
                                             {(() => {
                                                 const crewVal = isAeroWash

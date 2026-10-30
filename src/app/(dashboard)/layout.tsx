@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import DashboardLayoutClient from "./DashboardLayoutClient"
@@ -23,8 +24,13 @@ export default async function DashboardLayout({
             redirect("/login")
         }
 
-        const dbUser = await prisma.user.findUnique({
-            where: { id: user.id },
+        const dbUser = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { id: user.id },
+                    ...(user.email ? [{ email: { equals: user.email.trim().toLowerCase(), mode: 'insensitive' as const } }] : [])
+                ]
+            },
             include: {
                 company: {
                     include: {
@@ -38,92 +44,135 @@ export default async function DashboardLayout({
             redirect("/login")
         }
 
-        if (!dbUser.hasCompletedOnboarding) {
+        const pathname = headers().get('x-pathname') || ''
+
+        // Strict server-side CREW role isolation: CREW users can ONLY access /my-jobs and /my-jobs/[projectId]
+        if (dbUser.role === 'CREW') {
+            if (pathname && pathname !== '/my-jobs' && !pathname.startsWith('/my-jobs/')) {
+                redirect("/my-jobs")
+            }
+        } else if (!dbUser.hasCompletedOnboarding) {
             redirect("/onboarding")
         }
 
-        const settings = dbUser.company?.settings || null;
-        const approvalThreshold = (settings as any)?.approvalThreshold;
+        const settings = dbUser.company?.settings || null
+        const approvalThreshold = (settings as any)?.approvalThreshold
 
-        let pendingApprovals: any[] = [];
-        let changesRequestedQuotes: any[] = [];
+        let pendingApprovals: any[] = []
+        let changesRequestedQuotes: any[] = []
+        let standbyApprovals: any[] = []
 
-        // Only process approval workflows if approvalThreshold is configured (AeroWash: 50000; LR Builders: off/null)
-        if (approvalThreshold && approvalThreshold > 0) {
-            try {
-                if ((dbUser as any).isOwner) {
-                    const quotes = await prisma.invoice.findMany({
-                        where: {
-                            companyId: dbUser.companyId,
-                            type: 'QUOTE',
-                            total: { gt: approvalThreshold }
-                        },
-                        select: {
-                            id: true,
-                            quoteNumber: true,
-                            total: true,
-                            metadata: true,
-                            client: { select: { name: true } }
-                        }
-                    });
-                    const pending = quotes.filter(q => {
-                        const meta = (q.metadata as any) || {};
-                        return meta.approvalStatus !== 'APPROVED' && meta.approvalStatus !== 'CHANGES_REQUESTED';
-                    });
-                    pendingApprovals = pending.map(q => ({
-                        id: q.id,
-                        quoteNumber: q.quoteNumber,
-                        clientName: q.client?.name || 'Client',
-                        total: q.total
-                    }));
-                } else {
-                    const quotes = await prisma.invoice.findMany({
-                        where: {
-                            companyId: dbUser.companyId,
-                            type: 'QUOTE',
-                            total: { gt: approvalThreshold }
-                        },
-                        select: {
-                            id: true,
-                            quoteNumber: true,
-                            total: true,
-                            metadata: true,
-                            client: { select: { name: true } }
-                        }
-                    });
-                    const requested = quotes.filter(q => (q.metadata as any)?.approvalStatus === 'CHANGES_REQUESTED');
-                    changesRequestedQuotes = requested.map(q => ({
-                        id: q.id,
-                        quoteNumber: q.quoteNumber,
-                        clientName: q.client?.name || 'Client',
-                        total: q.total,
-                        note: (q.metadata as any)?.latestOwnerNote || 'Changes requested by owner'
-                    }));
+        // Never query or expose quotes/prices for CREW users
+        if (dbUser.role !== 'CREW') {
+            if (approvalThreshold && approvalThreshold > 0) {
+                try {
+                    if ((dbUser as any).isOwner) {
+                        const quotes = await prisma.invoice.findMany({
+                            where: {
+                                companyId: dbUser.companyId,
+                                type: 'QUOTE',
+                                total: { gt: approvalThreshold }
+                            },
+                            select: {
+                                id: true,
+                                quoteNumber: true,
+                                total: true,
+                                metadata: true,
+                                client: { select: { name: true } }
+                            }
+                        })
+                        const pending = quotes.filter(q => {
+                            const meta = (q.metadata as any) || {}
+                            return meta.approvalStatus !== 'APPROVED' && meta.approvalStatus !== 'CHANGES_REQUESTED'
+                        })
+                        pendingApprovals = pending.map(q => ({
+                            id: q.id,
+                            quoteNumber: q.quoteNumber,
+                            clientName: q.client?.name || 'Client',
+                            total: q.total
+                        }))
+                    } else {
+                        const quotes = await prisma.invoice.findMany({
+                            where: {
+                                companyId: dbUser.companyId,
+                                type: 'QUOTE',
+                                total: { gt: approvalThreshold }
+                            },
+                            select: {
+                                id: true,
+                                quoteNumber: true,
+                                total: true,
+                                metadata: true,
+                                client: { select: { name: true } }
+                            }
+                        })
+                        const requested = quotes.filter(q => (q.metadata as any)?.approvalStatus === 'CHANGES_REQUESTED')
+                        changesRequestedQuotes = requested.map(q => ({
+                            id: q.id,
+                            quoteNumber: q.quoteNumber,
+                            clientName: q.client?.name || 'Client',
+                            total: q.total,
+                            note: (q.metadata as any)?.latestOwnerNote || 'Changes requested by owner'
+                        }))
+                    }
+                } catch (err) {
+                    console.error('Error fetching pending approvals:', err)
                 }
-            } catch (err) {
-                console.error('Error fetching pending approvals:', err);
+            }
+
+            // Owner/Admin alert for flagged Standby / Return Attendance charges from site jobs
+            if ((dbUser as any).isOwner || dbUser.role === 'ADMIN') {
+                try {
+                    const flagged = await prisma.jobSheet.findMany({
+                        where: {
+                            companyId: dbUser.companyId,
+                            standbyFlagged: true,
+                            standbyStatus: 'PENDING_APPROVAL'
+                        },
+                        include: {
+                            project: {
+                                include: { client: { select: { name: true } } }
+                            }
+                        }
+                    })
+                    standbyApprovals = flagged.map(js => ({
+                        jobSheetId: js.id,
+                        projectId: js.projectId,
+                        projectName: js.project?.name || 'Job',
+                        clientName: js.project?.client?.name || 'Client',
+                        reason: js.standbyReason || 'ACCESS'
+                    }))
+                } catch {
+                    // Safe fallback if JobSheet awaits production migration
+                }
             }
         }
 
-        // CRITICAL: Must JSON-serialize to avoid Date object issues with Client Components
-        let serializedUser = null;
-        let serializedSettings = null;
+        let serializedUser = null
+        let serializedSettings = null
         try {
-            serializedUser = JSON.parse(JSON.stringify(dbUser));
-            serializedSettings = JSON.parse(JSON.stringify(settings));
+            serializedUser = JSON.parse(JSON.stringify(dbUser))
+            serializedSettings = JSON.parse(JSON.stringify(settings))
         } catch (serErr) {
-            console.error("Layout Serialization Error:", serErr);
-            // Fallback to basic object if stringify fails
-            serializedUser = { ...dbUser, createdAt: String(dbUser.createdAt), updatedAt: String(dbUser.updatedAt) };
+            console.error("Layout Serialization Error:", serErr)
+            serializedUser = { ...dbUser, createdAt: String(dbUser.createdAt), updatedAt: String(dbUser.updatedAt) }
         }
 
-        return <DashboardLayoutClient user={serializedUser} settings={serializedSettings} pendingApprovals={pendingApprovals}
-                changesRequestedQuotes={changesRequestedQuotes}>{children}</DashboardLayoutClient>
+        return (
+            <DashboardLayoutClient
+                user={serializedUser}
+                settings={serializedSettings}
+                pendingApprovals={pendingApprovals}
+                changesRequestedQuotes={changesRequestedQuotes}
+                standbyApprovals={standbyApprovals}
+            >
+                {children}
+            </DashboardLayoutClient>
+        )
     } catch (criticalError) {
-        console.error("Dashboard Layout Critical Error:", criticalError);
-        // If it's a redirect error, rethrow it
+        console.error("Dashboard Layout Critical Error:", criticalError)
         if (criticalError instanceof Error && (criticalError.message === 'NEXT_REDIRECT' || criticalError.message.includes('redirect'))) {
-            throw criticalError;
+            throw criticalError
         }
         return (
             <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -135,6 +184,6 @@ export default async function DashboardLayout({
                     </a>
                 </div>
             </div>
-        );
+        )
     }
 }

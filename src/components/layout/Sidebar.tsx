@@ -57,7 +57,7 @@ const navigation = [
     }
 ];
 
-export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANAGER', settings?: any, onItemClick?: () => void }) {
+export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANAGER' | 'CREW', settings?: any, onItemClick?: () => void }) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const type = searchParams ? searchParams.get("type") : null;
@@ -75,6 +75,35 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
     const isDroneEnabled = isAeroWash && settings?.layoutPreferences?.dashboardView === "drone";
     const isTendersEnabled = settings?.tendersEnabled === true;
 
+    // CREW sees ONLY "My Jobs Today" — zero prices, zero quotes, zero invoices, zero client list
+    if (role === "CREW") {
+        const isActive = pathname === "/my-jobs" || pathname.startsWith("/my-jobs/");
+        return (
+            <div className="px-3 py-4 space-y-4">
+                <div className="space-y-1">
+                    <div className="px-2 py-1 text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                        <ClipboardCheck className="h-3.5 w-3.5 text-primary" />
+                        Field Operations
+                    </div>
+                    <div className="mt-2 pl-2">
+                        <Link
+                            href="/my-jobs"
+                            onClick={onItemClick}
+                            className={cn(
+                                "group flex items-center justify-between rounded-xl px-3 py-3 text-sm font-black transition-all duration-300 relative overflow-hidden",
+                                isActive
+                                    ? "bg-primary/15 text-primary border border-primary/30"
+                                    : "text-white hover:bg-white/5"
+                            )}
+                        >
+                            <span>My Jobs Today</span>
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const dynamicNavigation = navigation.map(group => {
         if (group.title === "Dashboard" && isDroneEnabled) {
             const hasPipelineItem = group.items.some(item => item.title === "Sales Pipeline" || item.title === "Drone Operations");
@@ -91,6 +120,17 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
                 return {
                     ...group,
                     items: group.items.map(item => (item.title === "Drone Operations" || item.title === "Sales Pipeline") ? { ...item, title: "Sales Pipeline", href: "/prospects" } : (item.href === "/drone" ? { ...item, href: "/prospects" } : item))
+                };
+            }
+        }
+        if (group.title === "Operations" && isAeroWash) {
+            if (!group.items.some(item => item.href === "/my-jobs")) {
+                return {
+                    ...group,
+                    items: [
+                        { title: "My Jobs Today", href: "/my-jobs" },
+                        ...group.items
+                    ]
                 };
             }
         }

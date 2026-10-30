@@ -324,6 +324,7 @@ export function TeamManager({
                                         value={inviteRole}
                                         onChange={(e) => setInviteRole(e.target.value as Role)}
                                     >
+                                        <option value={Role.CREW}>Field Crew / Pilot (Assigned Jobs Only — No Prices)</option>
                                         <option value={Role.MANAGER}>Project Manager (Standard Member)</option>
                                         <option value={Role.ADMIN}>Administrator (Full Access &amp; Team Management)</option>
                                     </select>
@@ -441,29 +442,18 @@ export function TeamManager({
                                         {user.role}
                                     </Badge>
 
-                                    {/* Role toggle button */}
-                                    {user.role === Role.MANAGER ? (
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="text-xs h-8 text-primary hover:text-primary hover:bg-primary/10"
-                                            disabled={actionLoading === user.id}
-                                            onClick={() => handleRoleChange(user.id, Role.ADMIN)}
-                                        >
-                                            Promote to Admin
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="text-xs h-8 text-muted-foreground hover:text-white"
-                                            disabled={isOnlyAdmin || actionLoading === user.id}
-                                            title={isOnlyAdmin ? "Cannot demote the last admin" : "Demote to Manager"}
-                                            onClick={() => handleRoleChange(user.id, Role.MANAGER)}
-                                        >
-                                            Demote to Manager
-                                        </Button>
-                                    )}
+                                    {/* Role selector */}
+                                    <select
+                                        aria-label="Member role"
+                                        disabled={isOnlyAdmin || actionLoading === user.id}
+                                        value={user.role}
+                                        onChange={(e) => handleRoleChange(user.id, e.target.value as Role)}
+                                        className="h-8 rounded-md border border-white/15 bg-black/40 px-2.5 text-xs font-bold text-white disabled:opacity-50"
+                                    >
+                                        <option value={Role.ADMIN}>ADMIN</option>
+                                        <option value={Role.MANAGER}>MANAGER</option>
+                                        <option value={Role.CREW}>CREW</option>
+                                    </select>
 
                                     {/* Remove user button */}
                                     <Button

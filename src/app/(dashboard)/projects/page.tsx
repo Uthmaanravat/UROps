@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { ensureAuth } from "@/lib/auth-actions"
 import { ProjectDashboardClient } from "@/components/projects/ProjectDashboardClient"
+import { enrichAeroWashProjectsWithWeather, isAeroWashCompany } from "@/lib/weather-alerts"
 
 export const dynamic = 'force-dynamic'
 
@@ -189,7 +190,10 @@ export default async function ProjectsPage() {
         }
     }
 
-    // Flags ready for dashboard client
+    // Enrich AeroWash projects with Open-Meteo site forecasts
+    if (isAeroWashCompany(companyId, company?.settings)) {
+        projects = await enrichAeroWashProjectsWithWeather(projects, company?.settings as any, companyId)
+    }
 
     return (
         <ProjectDashboardClient

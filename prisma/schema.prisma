@@ -40,6 +40,8 @@ model Company {
   invitations    Invitation[]
   auditLogs      CompanyAuditLog[]
   catalogueItems CatalogueItem[]
+  drones         Drone[]
+  jobSheets      JobSheet[]
 }
 
 model Invitation {
@@ -88,8 +90,9 @@ model User {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
   companyId              String
-  hasCompletedOnboarding Boolean  @default(false)
-  company                Company  @relation(fields: [companyId], references: [id])
+  hasCompletedOnboarding Boolean    @default(false)
+  company                Company    @relation(fields: [companyId], references: [id])
+  pilotedJobSheets       JobSheet[]
 }
 
 model CompanySettings {
@@ -123,9 +126,16 @@ model CompanySettings {
   vatRegistrationDate  DateTime?
   vatRate              Float?   @default(15.0)
   justificationEnabled Boolean  @default(true)
-  validityDays         Int?     @default(30)
-  approvalThreshold    Float?
-  copyNotificationsTo  String?
+  validityDays            Int?      @default(30)
+  approvalThreshold       Float?
+  copyNotificationsTo     String?
+  weatherLimitsConfigured Boolean   @default(false)
+  sprayDriftWarnKmh       Float?
+  windWarnKmh             Float?
+  windLimitKmh            Float?
+  gustWarnKmh             Float?
+  gustLimitKmh            Float?
+  rainLimitMm             Float?
 }
 
 model Client {
@@ -196,6 +206,10 @@ model Project {
   isRecurring      Boolean                @default(false)
   recurrenceRule   Json?
   jobSpecs         Json?
+  assignedCrewIds  String[]               @default([])
+  pilotUserId      String?
+  droneId          String?
+  jobSheet         JobSheet?
 }
 
 model ScopeOfWork {
@@ -471,6 +485,7 @@ model ReportItem {
 enum Role {
   ADMIN
   MANAGER
+  CREW
 }
 
 enum InvoiceStatus {
@@ -833,4 +848,57 @@ model CatalogueItem {
   company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, category])
+}
+
+model Drone {
+  id           String     @id @default(uuid())
+  companyId    String
+  name         String
+  serialNumber String
+  model        String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobSheets    JobSheet[]
+
+  @@index([companyId, isActive])
+}
+
+model JobSheet {
+  id                      String    @id @default(uuid())
+  companyId               String
+  projectId               String    @unique
+  status                  String    @default("NOT_STARTED")
+  pilotUserId             String?
+  droneId                 String?
+  elevationFlights        Json?
+  totalFlightMinutes      Int?
+  checklist               Json?
+  startedAt               DateTime?
+  finishedAt              DateTime?
+  timeLogs                Json?
+  elevationPhotos         Json?
+  issuesNotes             String?   @db.Text
+  issuePhotos             Json?
+  signOffName             String?
+  signOffSignature        String?   @db.Text
+  signedOffAt             DateTime?
+  clientUnavailable       Boolean   @default(false)
+  clientUnavailableReason String?   @db.Text
+  standbyFlagged          Boolean   @default(false)
+  standbyReason           String?
+  standbyNotes            String?   @db.Text
+  standbyStatus           String?
+  weatherSnapshot         Json?
+  completionReportId      String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pilotUser User?   @relation(fields: [pilotUserId], references: [id], onDelete: SetNull)
+  drone     Drone?  @relation(fields: [droneId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
 }

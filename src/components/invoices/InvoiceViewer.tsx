@@ -3310,10 +3310,122 @@ export function InvoiceViewer({
                 {/* Items Section */}
                 {isAeroWashDocument ? (
                     <div className="mb-10 min-h-[400px]">
+                        {/* Internal-Only Balance Invoice Calculation & Deposit Warning (Never shown on Client Preview / PDF) */}
+                        {invoice.type === 'INVOICE' && (invoice.metadata as any)?.balanceCalculation && (() => {
+                            const calc = (invoice.metadata as any).balanceCalculation;
+                            const showUnpaidDepositWarning = Boolean(calc.depositNotReceived) && invoice.status !== 'PAID';
+                            return (
+                                <div className="mb-6 space-y-3 print:hidden" data-testid="internal-balance-calculation">
+                                    {showUnpaidDepositWarning && (
+                                        <div
+                                            className="rounded-2xl border-2 border-red-500/60 bg-red-500/15 px-5 py-4 flex items-start gap-3.5 shadow-lg shadow-red-950/30"
+                                            data-testid="deposit-not-received-warning"
+                                        >
+                                            <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                                            <div className="space-y-1">
+                                                <div className="text-sm font-black uppercase tracking-wider text-red-300">
+                                                    Deposit not received
+                                                </div>
+                                                <p className="text-xs text-red-100/90 leading-relaxed">
+                                                    No deposit or prior payment has been recorded against this job{calc.expectedDeposit > 0 ? ` (expected deposit: ${formatCurrency(calc.expectedDeposit, currencySymbol)})` : ''}. The full job amount due ({formatCurrency(calc.balanceDue, currencySymbol)}) has been included on this draft invoice.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="rounded-2xl border border-orange-500/30 bg-[#141722] p-5 space-y-4 shadow-xl">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <ShieldCheck className="h-4 w-4 text-[#FF6B00]" />
+                                                <span className="text-xs font-black uppercase tracking-[0.18em] text-white">
+                                                    Internal Balance Calculation
+                                                </span>
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-white/5 text-slate-300 border border-white/10">
+                                                Internal Only · Hidden from Client
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            <div className="rounded-xl bg-black/30 border border-white/10 p-3.5">
+                                                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                                    Quote Total
+                                                </div>
+                                                <div className="text-base font-black text-white mt-1">
+                                                    {formatCurrency(calc.quoteTotal || 0, currencySymbol)}
+                                                </div>
+                                                {calc.quoteNumber && (
+                                                    <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                                        {calc.quoteNumber}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="rounded-xl bg-black/30 border border-white/10 p-3.5">
+                                                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                                    Extras / Standby
+                                                </div>
+                                                <div className={cn("text-base font-black mt-1", (calc.extrasTotal || 0) > 0 ? "text-amber-400" : "text-slate-300")}>
+                                                    {(calc.extrasTotal || 0) > 0 ? `+ ${formatCurrency(calc.extrasTotal, currencySymbol)}` : formatCurrency(0, currencySymbol)}
+                                                </div>
+                                                <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                                    {Array.isArray(calc.extrasBreakdown) && calc.extrasBreakdown.length > 0
+                                                        ? `${calc.extrasBreakdown.length} approved line${calc.extrasBreakdown.length === 1 ? '' : 's'}`
+                                                        : 'None'}
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-xl bg-black/30 border border-white/10 p-3.5">
+                                                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                                    Deposit Paid
+                                                </div>
+                                                <div className={cn("text-base font-black mt-1", (calc.paymentsReceived || 0) > 0 ? "text-emerald-400" : "text-red-400")}>
+                                                    {(calc.paymentsReceived || 0) > 0 ? `− ${formatCurrency(calc.paymentsReceived, currencySymbol)}` : formatCurrency(0, currencySymbol)}
+                                                </div>
+                                                <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                                    {(calc.paymentsReceived || 0) > 0 ? 'Payments received' : 'Deposit not received'}
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-xl bg-[#FF6B00]/15 border border-[#FF6B00]/40 p-3.5">
+                                                <div className="text-[10px] font-black uppercase tracking-wider text-orange-300">
+                                                    Balance Due
+                                                </div>
+                                                <div className="text-base font-black text-white mt-1">
+                                                    {formatCurrency(calc.balanceDue ?? total, currencySymbol)}
+                                                </div>
+                                                <div className="text-[11px] text-orange-200/80 mt-0.5 truncate">
+                                                    Final job total {formatCurrency(calc.finalJobTotal || 0, currencySymbol)}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {Array.isArray(calc.extrasBreakdown) && calc.extrasBreakdown.length > 0 && (
+                                            <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 px-3.5 py-2.5 text-xs text-amber-100 space-y-1">
+                                                <div className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                                                    Approved Standby / Extra Lines Included
+                                                </div>
+                                                {calc.extrasBreakdown.map((ex: any, idx: number) => (
+                                                    <div key={ex.id || idx} className="flex justify-between gap-4">
+                                                        <span className="truncate">{ex.description}</span>
+                                                        <span className="font-bold shrink-0">{formatCurrency(ex.amount, currencySymbol)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         {/* AeroWash View Mode Switcher */}
                         <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10 print:hidden">
                             <div className="flex items-center gap-2">
-                                <span className="text-xs font-black uppercase tracking-widest text-[#D05E00]">AeroWash Quotation</span>
+                                <span className="text-xs font-black uppercase tracking-widest text-[#D05E00]">
+                                    {invoice.type === 'INVOICE'
+                                        ? ((invoice.metadata as any)?.isBalanceInvoice ? 'AeroWash Balance Invoice' : 'AeroWash Invoice')
+                                        : 'AeroWash Quotation'}
+                                </span>
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
                                     {aeroWashViewMode === "BUILDER" ? "Interactive Elevation Builder" : "Client Document View"}
                                 </span>

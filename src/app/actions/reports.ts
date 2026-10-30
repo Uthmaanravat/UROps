@@ -348,10 +348,20 @@ export async function updateReportDetails(data: {
 export async function createProjectCompletionReportAction(projectId: string) {
     try {
         const companyId = await ensureAuth()
-        const project = await prisma.project.findUnique({
+        const project = await prisma.project.findFirst({
             where: { id: projectId, companyId },
             include: {
                 client: true,
+                jobSheet: true,
+                parentProject: {
+                    include: {
+                        invoices: {
+                            where: { type: 'QUOTE' },
+                            orderBy: { createdAt: 'desc' },
+                            take: 1
+                        }
+                    }
+                },
                 invoices: {
                     where: { type: 'QUOTE' },
                     orderBy: { createdAt: 'desc' }
@@ -360,10 +370,29 @@ export async function createProjectCompletionReportAction(projectId: string) {
         })
         if (!project) throw new Error("Project not found")
 
-        const quote = project.invoices[0]
+        // If a completion report was already generated when finishing the job sheet, return it
+        if (project.jobSheet?.completionReportId) {
+            const existingReport = await prisma.report.findFirst({
+                where: { id: project.jobSheet.completionReportId, companyId }
+            })
+            if (existingReport) {
+                return { success: true, reportId: existingReport.id }
+            }
+        }
+
+        const quote = project.invoices[0] || project.parentProject?.invoices?.[0]
         const quoteMeta = (quote?.metadata as any) || {}
         const elevations = quoteMeta.elevations || []
         const photos = quoteMeta.siteVisitPhotos || []
+        const js = project.jobSheet
+        const [pilotUser, drone] = await Promise.all([
+            (js?.pilotUserId || project.pilotUserId)
+                ? prisma.user.findUnique({ where: { id: (js?.pilotUserId || project.pilotUserId)! }, select: { name: true, email: true } })
+                : Promise.resolve(null),
+            (js?.droneId || project.droneId)
+                ? prisma.drone.findUnique({ where: { id: (js?.droneId || project.droneId)! }, select: { name: true, serialNumber: true } })
+                : Promise.resolve(null)
+        ])
 
         const report = await prisma.report.create({
             data: {
@@ -372,16 +401,73 @@ export async function createProjectCompletionReportAction(projectId: string) {
                 clientId: project.clientId,
                 title: `Facade Maintenance Completion Report – ${project.name}`,
                 description: `Official completion inspection and handover report for facade maintenance work performed at ${quote?.site || project.name}.`,
+                conclusion: js
+                    ? (js.clientUnavailable
+                        ? `Work completed per scope. Client representative unavailable (${js.clientUnavailableReason || "Not on site"}).`
+                        : js.signOffName
+                            ? `Work completed and signed off on site by ${js.signOffName}.`
+                            : undefined)
+                    : undefined,
                 date: new Date(),
                 type: 'AEROWASH_COMPLETION',
                 metadata: {
                     elevations,
                     beforePhotos: photos,
+                    propertyAddress: quote?.site || project.client?.address || project.name,
+                    inspectionType: 'AeroWash Service Completion Report',
+                    pilotName: pilotUser?.name || pilotUser?.email || null,
+                    equipmentUsed: drone ? `${drone.name} (SN: ${drone.serialNumber})` : null,
+                    flightTime: js?.totalFlightMinutes ? `${js.totalFlightMinutes} mins` : null,
+                    totalFlightMinutes: js?.totalFlightMinutes ?? null,
                     quoteNumber: quote?.quoteNumber || quote?.number,
-                    site: quote?.site || project.name
+                    poNumber: quote?.clientPoNumber || null,
+                    site: quote?.site || project.name,
+                    signOff: js
+                        ? {
+                            clientUnavailable: js.clientUnavailable,
+                            name: js.signOffName,
+                            signatureDataUrl: js.signOffSignature,
+                            reason: js.clientUnavailableReason,
+                            signedAt: js.signedOffAt ? new Date(js.signedOffAt).toISOString() : null
+                        }
+                        : null
                 }
             }
         })
+
+        if (js) {
+            const elevationPhotosMap = (js.elevationPhotos as any) || {}
+            const elevFlights = (js.elevationFlights as any) || {}
+            let order = 0
+            for (const elev of elevations) {
+                const key = elev.id || elev.name
+                const slot = elevationPhotosMap[key] || elevationPhotosMap[elev.name] || { before: [], after: [] }
+                const allPaths = [
+                    ...(slot.before || []).map((p: any) => p.path).filter(Boolean),
+                    ...(slot.after || []).map((p: any) => p.path).filter(Boolean)
+                ]
+                const ef = elevFlights[key] || elevFlights[elev.name]
+                const flightInfo = ef?.flightStart || ef?.flightEnd
+                    ? ` Flight window: ${ef.flightStart || "—"} to ${ef.flightEnd || "—"}.`
+                    : ""
+                await prisma.reportItem.create({
+                    data: {
+                        reportId: report.id,
+                        title: `${elev.name || key} — Before (${(slot.before || []).length}) & After (${(slot.after || []).length})`,
+                        description: `Completed exterior maintenance clean on ${elev.name || key}.${flightInfo}`,
+                        location: elev.name || key,
+                        severity: "COMPLETED",
+                        imageUrl: allPaths[0] || null,
+                        imageUrls: allPaths,
+                        order: order++
+                    }
+                })
+            }
+            await prisma.jobSheet.update({
+                where: { id: js.id },
+                data: { completionReportId: report.id }
+            })
+        }
 
         revalidatePath(`/projects/${projectId}`)
         revalidatePath(`/reports`)

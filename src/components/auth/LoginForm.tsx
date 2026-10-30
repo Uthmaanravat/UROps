@@ -30,7 +30,7 @@ export function LoginForm() {
             const result = await signInAction(formData)
 
             if (result.success) {
-                router.push("/dashboard")
+                router.push((result as any).redirectTo || "/dashboard")
                 router.refresh()
             } else {
                 setError(result.error || "Invalid email or password")

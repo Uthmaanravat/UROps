@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { UserCircle, Menu, X, LogOut, Rocket, Loader2 } from "lucide-react";
@@ -19,17 +20,28 @@ export default function DashboardLayoutClient({
     settings,
     pendingApprovals = [],
     changesRequestedQuotes = [],
+    standbyApprovals = [],
 }: {
     children: React.ReactNode;
     user: User;
     settings: CompanySettings | null;
     pendingApprovals?: any[];
     changesRequestedQuotes?: any[];
+    standbyApprovals?: any[];
 }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUpdatingRole, setIsUpdatingRole] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const { setTheme } = useTheme();
+    const pathname = usePathname();
+    const router = useRouter();
+
+    // Client-side defense-in-depth for CREW role
+    useEffect(() => {
+        if ((user?.role as string) === 'CREW' && pathname && pathname !== '/my-jobs' && !pathname.startsWith('/my-jobs/')) {
+            router.replace('/my-jobs');
+        }
+    }, [user?.role, pathname, router]);
 
     // Ensure company theme is applied on load and workspace switch, isolated per business ID
     useEffect(() => {
@@ -97,6 +109,7 @@ export default function DashboardLayoutClient({
                             <span className="text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50">Active Session</span>
                         </div>
                     </div>
+                    {(user as any).isOwner && (
                     <div className="px-1">
                         <button
                             onClick={handleRoleSwitch}
@@ -116,6 +129,7 @@ export default function DashboardLayoutClient({
                             <Rocket className={cn("h-3.5 w-3.5", isUpdatingRole && "animate-spin")} />
                         </button>
                     </div>
+                    )}
                     <button
                         onClick={async () => {
                             setIsLoggingOut(true);
@@ -209,6 +223,7 @@ export default function DashboardLayoutClient({
                     <Sidebar role={user.role} settings={settings} onItemClick={() => setIsMobileMenuOpen(false)} />
                 </div>
                 <div className="p-4 border-t bg-white/[0.02] space-y-4">
+                    {(user as any).isOwner && (
                     <button
                         onClick={handleRoleSwitch}
                         disabled={isUpdatingRole}
@@ -226,6 +241,7 @@ export default function DashboardLayoutClient({
                         </div>
                         <Rocket className={cn("h-4 w-4", isUpdatingRole && "animate-spin")} />
                     </button>
+                    )}
                     <button
                         onClick={async () => {
                             setIsLoggingOut(true);
@@ -289,6 +305,25 @@ export default function DashboardLayoutClient({
                                 >
                                     <span>{q.quoteNumber || 'Quote'} ({q.clientName}): &ldquo;{q.note.slice(0, 35)}...&rdquo;</span>
                                     <span>→</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {standbyApprovals && standbyApprovals.length > 0 && (
+                    <div className="bg-gradient-to-r from-orange-500/20 via-amber-500/15 to-orange-500/10 border-b border-orange-500/40 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-orange-100 shadow-md">
+                        <div className="flex items-center gap-2 font-semibold">
+                            <span className="font-black text-orange-300 uppercase tracking-widest text-[11px]">Standby / Return Attendance Flagged:</span>
+                            <span>{standbyApprovals.length} site job(s) paused due to client stop or restricted site access — review charge</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {standbyApprovals.slice(0, 3).map((s: any) => (
+                                <Link
+                                    key={s.jobSheetId}
+                                    href={`/projects/${s.projectId}`}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-500/25 hover:bg-orange-500/35 text-orange-200 font-bold border border-orange-400/30 transition-all text-[11px]"
+                                >
+                                    <span>{s.projectName} ({s.reason.replace('_', ' ')}) →</span>
                                 </Link>
                             ))}
                         </div>
