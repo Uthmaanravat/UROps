@@ -39,11 +39,13 @@ export default async function InvoicesPage({
     let clients: { id: string; name: string }[] = [];
     let isTendersEnabled = false;
     let isReactiveEnabled = false;
+    let isDroneEnabled = false;
 
     try {
         const companySettings = await prisma.companySettings.findUnique({ where: { companyId } });
         isTendersEnabled = companySettings?.tendersEnabled === true;
         isReactiveEnabled = (companySettings as any)?.reactiveEnabled === true || companyId === '299c43ec-9578-4c45-91cb-a881a539e25d';
+        isDroneEnabled = Boolean((companySettings as any)?.droneOperationsEnabled || companySettings?.theme === 'dark-orange');
 
         // Fetch client list for filter options
         clients = await prisma.client.findMany({
@@ -395,7 +397,7 @@ export default async function InvoicesPage({
                         </div>
                     </div>
                 </div>
-                <Link href={typeFilter === 'INVOICE' ? '/payments' : '/drone'}>
+                <Link href={typeFilter === 'INVOICE' ? '/payments' : (isDroneEnabled ? '/drone' : '/prospects')}>
                     <Button size="sm" variant="outline" className="h-8 text-xs font-bold border-white/10 text-white hover:bg-white/5">
                         {typeFilter === 'INVOICE' ? 'Payments ↗' : 'Sales Pipeline ↗'}
                     </Button>

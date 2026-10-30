@@ -58,10 +58,10 @@ export const DEFAULT_LR_JOB_SPECS = {
     surfaces: "Building structure, masonry, interior/exterior finishes & site perimeter",
     method: "Standard construction & maintenance execution per approved scope and architectural specs",
     chemicals: "Approved industrial construction materials, sealants & non-hazardous cleaning agents",
-    waterPoint: "Site water connection / contractor bulk water supply on site",
-    powerSupply: "Single/three phase on-site power or portable generator staging",
-    parking: "Contractor vehicle & equipment staging area on designated site grounds",
-    groundZone: "Safe perimeter hoarding, safety cones & caution barricading per OHS guidelines",
+    waterPoint: "On-site water point or bulk supply",
+    powerSupply: "Single/three phase power or generator",
+    parking: "Designated site staging area",
+    groundZone: "Perimeter hoarding & caution tape",
     pilot: "Site Foreman / Project Lead",
     drone: "Construction Equipment & Tooling",
     rocOperator: "LR Builders Operations Team",
@@ -183,18 +183,15 @@ export async function generateSchedulePdf(
 
     const rows = (projects || []).map((p: any) => {
         let d = "Not scheduled"
-        if (p.startDate) {
-            d = new Date(p.startDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
-        } else if (p.endDate) {
-            d = new Date(p.endDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
-        } else if (p.invoices?.[0]?.date) {
-            d = new Date(p.invoices[0].date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+        // Target Week: show the date the work was done (completed or scheduled date), NOT the invoice date.
+        // If there's no work date, show "Not scheduled".
+        const workDate = p.endDate || p.startDate || p.scheduledDate || p.completedDate || p.jobSpecs?.completedDate || p.jobSpecs?.scheduledDate
+        if (workDate) {
+            d = new Date(workDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
         } else if (p.status === "IN_PROGRESS") {
             d = "In Progress"
-        } else if (p.status === "COMPLETED" || p.status === "INVOICED" || p.status === "PAID") {
-            d = p.updatedAt
-                ? new Date(p.updatedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
-                : (p.status === "PAID" ? "Paid" : p.status === "INVOICED" ? "Invoiced" : "Completed")
+        } else {
+            d = "Not scheduled"
         }
 
         const clientName = p.client?.name || "Client"
@@ -472,23 +469,23 @@ export async function generateJobSheetPdf(
     doc.setFontSize(7.5)
     doc.setTextColor(30, 41, 59)
     // Left: Access
-    doc.text(`• Water Point: ${specs.waterPoint}`, 18, y + 2)
-    doc.text(`• Power Supply: ${specs.powerSupply}`, 18, y + 6.5)
-    doc.text(`• Vehicle Staging: ${specs.parking}`, 18, y + 11)
-    doc.text(`• Ground Cordon: ${specs.groundZone}`, 18, y + 15.5)
+    doc.text(doc.splitTextToSize(`• Water Point: ${specs.waterPoint}`, 83), 18, y + 2)
+    doc.text(doc.splitTextToSize(`• Power Supply: ${specs.powerSupply}`, 83), 18, y + 6.5)
+    doc.text(doc.splitTextToSize(`• Vehicle Staging: ${specs.parking}`, 83), 18, y + 11)
+    doc.text(doc.splitTextToSize(`• Ground Cordon: ${specs.groundZone}`, 83), 18, y + 15.5)
 
     // Right: Crew / Operations
     if (isAeroWash) {
-        doc.text(`• Pilot in Command (PIC): ${specs.pilot}`, colMid + 6, y + 2)
-        doc.text(`• Aircraft: ${specs.drone}`, colMid + 6, y + 6.5)
-        doc.text(`• Commercial ROC Operator: ${specs.rocOperator}`, colMid + 6, y + 11)
-        doc.text(`• Airspace Compliance: ${specs.airspace}`, colMid + 6, y + 15.5)
+        doc.text(doc.splitTextToSize(`• Pilot in Command (PIC): ${specs.pilot}`, 83), colMid + 6, y + 2)
+        doc.text(doc.splitTextToSize(`• Aircraft: ${specs.drone}`, 83), colMid + 6, y + 6.5)
+        doc.text(doc.splitTextToSize(`• Commercial ROC Operator: ${specs.rocOperator}`, 83), colMid + 6, y + 11)
+        doc.text(doc.splitTextToSize(`• Airspace Compliance: ${specs.airspace}`, 83), colMid + 6, y + 15.5)
     } else {
         const assignedTeam = project.assignedTeam || project.team || project.crew || "Site Team"
-        doc.text(`• Assigned Team: ${assignedTeam}`, colMid + 6, y + 2)
-        doc.text(`• Work Classification: ${project.workClassification || (project.clientPoNumber ? "Contract Work Order" : "General Building Works")}`, colMid + 6, y + 6.5)
-        doc.text(`• Foreman / Site Lead: ${specs.pilot}`, colMid + 6, y + 11)
-        doc.text(`• Compliance Standard: SANS 10400 / OHS Act Compliance`, colMid + 6, y + 15.5)
+        doc.text(doc.splitTextToSize(`• Assigned Team: ${assignedTeam}`, 83), colMid + 6, y + 2)
+        doc.text(doc.splitTextToSize(`• Work Classification: ${project.workClassification || (project.clientPoNumber ? "Contract Work Order" : "General Building Works")}`, 83), colMid + 6, y + 6.5)
+        doc.text(doc.splitTextToSize(`• Foreman / Site Lead: ${specs.pilot}`, 83), colMid + 6, y + 11)
+        doc.text(doc.splitTextToSize(`• Compliance Standard: SANS 10400 / OHS Act Compliance`, 83), colMid + 6, y + 15.5)
     }
 
     y += 21

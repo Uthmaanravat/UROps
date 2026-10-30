@@ -57,6 +57,7 @@ import {
 
 interface DashboardClientProps {
     data: {
+        isAeroWash?: boolean
         clientCount: number
         invoiceCount: number
         unpaidCount: number
@@ -153,13 +154,15 @@ export function DashboardClient({ data }: DashboardClientProps) {
             {/* Unsaved Work Recovery Banner */}
             <DraftResumeBanner />
 
-            {/* Resend Domain Verification Alert */}
-            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-3 shadow-lg">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                    <span className="font-bold text-amber-300">Resend DNS Verification Notice:</span> Outgoing quotation and deposit emails to clients are currently routed via fallback sender with reply-to <code className="bg-black/30 px-1 py-0.5 rounded text-white font-mono text-[11px]">info@aerowash.co.za</code> until DNS verification for <code className="bg-black/30 px-1 py-0.5 rounded text-white font-mono text-[11px]">aerowash.co.za</code> is confirmed in Resend.
+            {/* Resend Domain Verification Alert (AeroWash only) */}
+            {data.isAeroWash && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-3 shadow-lg">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                        <span className="font-bold text-amber-300">Resend DNS Verification Notice:</span> Outgoing quotation and deposit emails to clients are currently routed via fallback sender with reply-to <code className="bg-black/30 px-1 py-0.5 rounded text-white font-mono text-[11px]">info@aerowash.co.za</code> until DNS verification for <code className="bg-black/30 px-1 py-0.5 rounded text-white font-mono text-[11px]">aerowash.co.za</code> is confirmed in Resend.
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Quick Stats Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

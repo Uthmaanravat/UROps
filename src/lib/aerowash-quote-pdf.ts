@@ -1,4 +1,4 @@
-import { isVatEffective, getVatRate } from "@/lib/vat-utils";
+import { isVatEffective, getVatRate, getVatNoticeText } from "@/lib/vat-utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatCurrency } from "@/lib/utils";
@@ -637,10 +637,16 @@ export async function generateAeroWashQuotePdf({
 
     // VAT line if registered
     const vatRate = (company as any).vatRate ?? 15;
-    const isVatRegistered = isVatActive && invoice.taxAmount > 0;
+    const isVatRegistered = isVatActive;
+    const effectiveTaxAmount = isVatRegistered 
+        ? (invoice.taxAmount > 0 ? invoice.taxAmount : (invoice.subtotal * (vatRate / 100))) 
+        : 0;
+    const effectiveTotal = isVatRegistered 
+        ? (invoice.subtotal + effectiveTaxAmount) 
+        : (invoice.total || invoice.subtotal);
 
     // Height calculation for keep-together logic
-    const totalsHeight = (allowanceAmount > 0 ? 9.5 : 5) + (isVatRegistered ? 5 : 0) + 14;
+    const totalsHeight = (allowanceAmount > 0 ? 9.5 : 5) + (isVatRegistered ? 5 : 0) + 18;
 
     // Notice box logic
     const siteVisitCompleted = Boolean(
@@ -699,7 +705,7 @@ export async function generateAeroWashQuotePdf({
         doc.setFont("helvetica", "normal");
         doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
         doc.text(`VAT (${vatRate}%)`, totalsLeftX, currentY);
-        doc.text(formatCurrency(invoice.taxAmount, currencySymbol), totalsRightX, currentY, { align: "right" });
+        doc.text(formatCurrency(effectiveTaxAmount, currencySymbol), totalsRightX, currentY, { align: "right" });
         currentY += 5;
     }
 
@@ -719,9 +725,16 @@ export async function generateAeroWashQuotePdf({
     doc.text("TOTAL DUE", totalsLeftX + 4, barY + 6.5);
 
     doc.setFontSize(11);
-    doc.text(formatCurrency(invoice.total, currencySymbol), totalsRightX - 4, barY + 6.5, { align: "right" });
+    doc.text(formatCurrency(effectiveTotal, currencySymbol), totalsRightX - 4, barY + 6.5, { align: "right" });
 
-    currentY = barY + 14;
+    // VAT Notice line
+    currentY = barY + 11;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
+    const vatNotice = getVatNoticeText(company.name, isVatRegistered, vatRate);
+    doc.text(vatNotice, totalsRightX, currentY + 3, { align: "right" });
+    currentY += 7;
 
     // ==========================================
     // 6. NOTICE BOX (Site visit completed vs required)
@@ -966,7 +979,7 @@ export async function generateAeroWashQuotePdf({
     ];
     const commercialRight = [
         { text: "Any variation or additional work is quoted separately before it is carried out.", isBold: false },
-        { text: "Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.", isBold: false },
+        { text: getVatNoticeText(company.name, isVatRegistered, vatRate), isBold: false },
         { text: "Where work cannot start, continue or be completed for reasons outside AeroWash's control, including site access not being available or work being stopped at the client's request, a standby or return attendance charge applies, agreed with you before it is invoiced.", isBold: false },
         { text: "Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.", isBold: false }
     ];

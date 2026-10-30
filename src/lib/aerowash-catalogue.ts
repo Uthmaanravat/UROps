@@ -372,7 +372,7 @@ COMMERCIAL TERMS
 • The balance is payable on completion.
 • This quotation is valid for 45 days from the date of issue.
 • Any variation or additional work is quoted separately before it is carried out.
-• Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.
+• AeroWash (Pty) Ltd is not VAT-registered. No VAT charged.
 • Where work cannot start, continue or be completed for reasons outside AeroWash's control, including site access not being available or work being stopped at the client's request, a standby or return attendance charge applies, agreed with you before it is invoiced.
 • Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.
 

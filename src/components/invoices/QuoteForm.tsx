@@ -1,6 +1,6 @@
 "use client"
 
-import { isVatEffective, getVatRate } from "@/lib/vat-utils"
+import { isVatEffective, getVatRate, getVatNoticeText } from "@/lib/vat-utils"
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -1133,6 +1133,7 @@ export function QuoteForm({
                                 thermalCameraEnabled={thermalCameraEnabled}
                                 hasVatRegistration={effectiveVatRegistration}
                                 vatRate={vatRate}
+                                companyName={companySettings?.name || (isAeroWashWorkspace ? "AeroWash (Pty) Ltd" : "LR Builders")}
                                 termsTemplates={termsTemplates}
                                 catalogueItems={catalogueItems}
                                 onChange={setAeroWashPayload}
@@ -1333,7 +1334,7 @@ export function QuoteForm({
                                                             </ul>
                                                             <ul className="space-y-1 list-disc list-inside">
                                                                 <li>Variations quoted separately before work carried out.</li>
-                                                                <li>Prices exclude VAT unless registered.</li>
+                                                                <li>{getVatNoticeText(companySettings?.name || (isAeroWashWorkspace ? "AeroWash (Pty) Ltd" : "LR Builders"), effectiveVatRegistration, vatRate)}</li>
                                                                 <li>Standby charge applies for access delays outside AeroWash control.</li>
                                                                 <li>Existing defects recorded before work; no liability for pre-existing issues.</li>
                                                             </ul>
@@ -1375,11 +1376,11 @@ export function QuoteForm({
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 p-6 rounded-2xl bg-[#14141E] border border-white/5">
                         <div className="space-y-2 text-xs text-muted-foreground">
                             <p>
-                                {effectiveVatRegistration
-                                    ? `All prices exclude ${vatRate}% VAT until total.`
-                                    : (isAeroWashWorkspace
-                                        ? "AeroWash is not VAT-registered. No VAT charged."
-                                        : "Not VAT-registered. No VAT charged.")}
+                                {getVatNoticeText(
+                                    companySettings?.name || (isAeroWashWorkspace ? "AeroWash (Pty) Ltd" : "LR Builders"),
+                                    effectiveVatRegistration,
+                                    vatRate
+                                )}
                             </p>
                             <div className="flex items-center gap-3">
                                 <AutoSaveIndicator isSavingDraft={isSavingDraft} lastSavedTimestamp={lastSavedTimestamp} />

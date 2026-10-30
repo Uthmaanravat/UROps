@@ -95,3 +95,22 @@ export function getDocumentHeading(
     }
     return isEffective ? 'TAX INVOICE' : 'INVOICE';
 }
+
+
+/**
+ * Returns standardized VAT notice text for footers, forms and documents:
+ * - VAT registered: "Line item prices exclude VAT. VAT ([rate]%) is added to the total below."
+ * - Not registered: "[Company name] is not VAT-registered. No VAT charged."
+ */
+export function getVatNoticeText(
+    companyName: string | null | undefined,
+    isEffective: boolean,
+    vatRatePercent: number | string = 15.0
+): string {
+    const cleanName = companyName?.trim() || "Company";
+    const numRate = Number(vatRatePercent) || 15;
+    if (isEffective) {
+        return `Line item prices exclude VAT. VAT (${numRate}%) is added to the total below.`;
+    }
+    return `${cleanName} is not VAT-registered. No VAT charged.`;
+}

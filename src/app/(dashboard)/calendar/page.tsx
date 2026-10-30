@@ -69,14 +69,22 @@ export default async function CalendarPage() {
         })
     ])
 
+    const isAeroWash = Boolean(
+        company?.name?.toLowerCase().includes('aerowash') ||
+        company?.settings?.theme === 'dark-orange' ||
+        (company?.settings as any)?.droneOperationsEnabled
+    )
+
     return (
         <div className="space-y-6 max-w-[1600px] mx-auto pb-20">
             <div>
                 <h1 className="text-3xl font-black text-white tracking-tighter uppercase">
-                    Flight Operations Calendar
+                    {isAeroWash ? "Flight Operations Calendar" : "Operations Calendar"}
                 </h1>
                 <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest opacity-60">
-                    Projected flight dates, recurring contract visits & sales follow-ups
+                    {isAeroWash
+                        ? "Projected flight dates, recurring contract visits & sales follow-ups"
+                        : "Projected site dates, recurring contract visits & sales follow-ups"}
                 </p>
             </div>
 

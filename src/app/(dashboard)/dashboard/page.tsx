@@ -202,8 +202,16 @@ export default async function DashboardPage() {
             trendData.push({ month: months[m], Income: mIncome, Expenses: mExpense, Profit: mIncome - mExpense });
         }
 
+        const company = await prisma.company.findUnique({ where: { id: companyId }, include: { settings: true } });
+        const isAeroWash = Boolean(
+            company?.name?.toLowerCase().includes('aerowash') ||
+            company?.settings?.theme === 'dark-orange' ||
+            (company?.settings as any)?.droneOperationsEnabled
+        );
+
         // Serialize data for client component
         const dashboardData = JSON.parse(JSON.stringify({
+            isAeroWash,
             clientCount,
             invoiceCount,
             unpaidCount: unpaidInvoices.length,

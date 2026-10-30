@@ -78,6 +78,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     }
 
     const isTendersEnabled = companySettings?.tendersEnabled === true;
+    const isDroneEnabled = Boolean((companySettings as any)?.droneOperationsEnabled || companySettings?.theme === 'dark-orange');
 
     const prospectId = ((invoice as any)?.client?.customFields as any)?.prospectId;
     const linkedProspect = prospectId
@@ -86,12 +87,16 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             where: { companyId, name: { equals: (invoice as any)?.client?.name || '', mode: 'insensitive' } }
         });
 
+    const prospectLink = isDroneEnabled 
+        ? `/drone?prospectId=${linkedProspect?.id}` 
+        : `/prospects?prospectId=${linkedProspect?.id}`;
+
     return (
         <div className="space-y-6">
             {linkedProspect && (
                 <div className="flex justify-end">
                     <Link
-                        href={`/drone?prospectId=${linkedProspect.id}`}
+                        href={prospectLink}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all"
                     >
                         <span>🎯 Origin: Core Target / Prospect &quot;{linkedProspect.name}&quot;</span>

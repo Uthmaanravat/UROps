@@ -1,6 +1,6 @@
 "use client"
 
-import { isVatEffective, getVatRate, getDocumentHeading } from "@/lib/vat-utils"
+import { isVatEffective, getVatRate, getDocumentHeading, getVatNoticeText } from "@/lib/vat-utils"
 import React from 'react'
 
 import { Button } from "@/components/ui/button"
@@ -955,6 +955,8 @@ export function InvoiceViewer({
         router.push(`/invoices/${newInvoiceId}`);
     }
 
+    const isAeroWashDocument = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash'));
+
     // Default company details if not set
     const company = {
         name: companySettings?.name || "",
@@ -968,12 +970,11 @@ export function InvoiceViewer({
         bankDetails: companySettings?.bankDetails || "",
         layoutPreferences: companySettings?.layoutPreferences,
         theme: companySettings?.theme,
-        website: (companySettings as any)?.website || "www.aerowash.co.za"
+        website: (companySettings as any)?.website || (isAeroWashDocument ? "www.aerowash.co.za" : "")
     };
 
     const [aeroWashViewMode, setAeroWashViewMode] = useState<"BUILDER" | "PREVIEW">("PREVIEW");
     const [aeroWashMetadata, setAeroWashMetadata] = useState<any>(invoice.metadata || null);
-    const isAeroWashDocument = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash'));
     const totalDue = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
     const threshold = (companySettings as any)?.approvalThreshold;
     const hasApprovalThreshold = typeof threshold === 'number' && threshold > 0;
@@ -1506,11 +1507,12 @@ export function InvoiceViewer({
         doc.text(formatCurrency(subtotal, currencySymbol), 196, currentY, { align: 'right' });
 
         const pdfVatRate = getVatRate(companySettings);
-        const isVatRegistered = isVatActive && taxAmount > 0;
+        const isVatRegistered = isVatActive;
         let totalDueY = currentY + 8;
         if (isVatRegistered) {
+            const effectiveTax = taxAmount > 0 ? taxAmount : (subtotal * (pdfVatRate / 100));
             doc.text(`VAT (${pdfVatRate}%):`, 140, currentY + 6);
-            doc.text(formatCurrency(taxAmount, currencySymbol), 196, currentY + 6, { align: 'right' });
+            doc.text(formatCurrency(effectiveTax, currencySymbol), 196, currentY + 6, { align: 'right' });
             totalDueY = currentY + 14;
         }
 
@@ -1519,6 +1521,14 @@ export function InvoiceViewer({
         doc.setFont("helvetica", "bold");
         doc.text(`TOTAL DUE:`, 140, totalDueY);
         doc.text(formatCurrency(total, currencySymbol), 196, totalDueY, { align: 'right' });
+
+        // Standardized VAT Notice text
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 116, 139);
+        const vatNotice = getVatNoticeText(company.name, isVatRegistered, pdfVatRate);
+        doc.text(vatNotice, 196, totalDueY + 4, { align: 'right' });
+
         currentY = totalDueY;
 
         // Contract programme display on PDF (visiting frequency & visits per year, NO percentages)
@@ -2481,7 +2491,7 @@ export function InvoiceViewer({
                                         </Label>
                                         <Textarea
                                             id="ownerSendBackNote"
-                                            placeholder="e.g. Please reduce the elevation rate for East Elevation or confirm access equipment before submitting..."
+                                            placeholder={isAeroWashDocument ? "e.g. Please reduce the elevation rate for East Elevation or confirm access equipment before submitting..." : "e.g. Please check line item rates or confirm site scope before submitting..."}
                                             value={sendBackNote}
                                             onChange={(e) => setSendBackNote(e.target.value)}
                                             rows={4}
@@ -3682,6 +3692,9 @@ export function InvoiceViewer({
                             <div className="flex justify-between items-center">
                                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Total Amount</span>
                                 <span className="text-3xl md:text-4xl font-black text-white tracking-tighter">{formatCurrency(total, currencySymbol)}</span>
+                            </div>
+                            <div className="text-[11px] text-gray-400 text-right pt-0.5">
+                                {getVatNoticeText(company.name, isVatRegistered, vatRate)}
                             </div>
                             {paidAmount > 0 && (
                                 <>

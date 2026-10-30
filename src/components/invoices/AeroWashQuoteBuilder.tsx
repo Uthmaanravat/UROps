@@ -44,6 +44,7 @@ import {
     formatPhotoRefs
 } from "@/lib/aerowash-catalogue"
 import { formatCurrency } from "@/lib/utils"
+import { getVatNoticeText } from "@/lib/vat-utils"
 
 function parseDecimalInput(val: string): number {
     if (!val) return 0;
@@ -134,6 +135,7 @@ export interface AeroWashQuoteBuilderProps {
     thermalCameraEnabled?: boolean;
     hasVatRegistration?: boolean;
     vatRate?: number;
+    companyName?: string;
     termsTemplates?: any[];
     catalogueItems?: any[];
     initialData?: any;
@@ -169,6 +171,7 @@ export function AeroWashQuoteBuilder({
     thermalCameraEnabled = false,
     hasVatRegistration = false,
     vatRate = 15,
+    companyName = "AeroWash (Pty) Ltd",
     termsTemplates = [],
     catalogueItems = [],
     initialData,
@@ -3197,6 +3200,9 @@ export function AeroWashQuoteBuilder({
                             <div className="border-t border-white/10 pt-2 flex justify-between text-lg font-black text-white">
                                 <span>TOTAL DUE</span>
                                 <span className="font-mono text-primary">{formatCurrency(calculation.total, currencySymbol)}</span>
+                            </div>
+                            <div className="text-[11px] text-gray-400 text-right pt-0.5">
+                                {getVatNoticeText(companyName, hasVatRegistration, vatRate)}
                             </div>
 
                             {calculation.programmeInfo.id !== 'ONCE_OFF' && (

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { formatCurrency, cn } from "@/lib/utils";
+import { getVatNoticeText } from "@/lib/vat-utils";
 import { Button } from "@/components/ui/button";
 import { Edit3, Check, FileText, CheckCircle2 } from "lucide-react";
 import { parseClauses } from "@/lib/terms-utils";
@@ -391,18 +392,29 @@ export function AeroWashDocumentPreview({
                                 </div>
                             )}
 
-                            {isVatRegistered && taxAmount > 0 && (
-                                <div className="flex justify-between items-center text-gray-600">
-                                    <span>VAT ({vatRate}%)</span>
-                                    <span className="font-bold text-zinc-900">{formatCurrency(taxAmount, currencySymbol)}</span>
-                                </div>
-                            )}
+                            {(() => {
+                                const effectiveTax = taxAmount > 0 ? taxAmount : (subtotal * (vatRate / 100));
+                                const effectiveTotal = isVatRegistered ? (subtotal + effectiveTax) : (total || subtotal);
+                                return (
+                                    <>
+                                        {isVatRegistered && (
+                                            <div className="flex justify-between items-center text-gray-600">
+                                                <span>VAT ({vatRate}%)</span>
+                                                <span className="font-bold text-zinc-900">{formatCurrency(effectiveTax, currencySymbol)}</span>
+                                            </div>
+                                        )}
 
-                            {/* Black TOTAL DUE Bar */}
-                            <div className="bg-[#0A0A0A] text-white p-3.5 rounded-lg border-t-[2px] border-[#D05E00] flex justify-between items-center shadow-lg">
-                                <span className="font-black text-xs tracking-[0.2em]">TOTAL DUE</span>
-                                <span className="font-black text-xl tracking-tight text-white">{formatCurrency(total, currencySymbol)}</span>
-                            </div>
+                                        {/* Black TOTAL DUE Bar */}
+                                        <div className="bg-[#0A0A0A] text-white p-3.5 rounded-lg border-t-[2px] border-[#D05E00] flex justify-between items-center shadow-lg">
+                                            <span className="font-black text-xs tracking-[0.2em]">TOTAL DUE</span>
+                                            <span className="font-black text-xl tracking-tight text-white">{formatCurrency(effectiveTotal, currencySymbol)}</span>
+                                        </div>
+                                        <div className="text-[11px] text-zinc-500 text-right pt-0.5">
+                                            {getVatNoticeText(company.name, isVatRegistered, vatRate)}
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
 
@@ -606,7 +618,7 @@ export function AeroWashDocumentPreview({
                                     </li>
                                     <li className="flex items-start gap-2">
                                         <span className="text-[#D05E00] font-bold">•</span>
-                                        <span>Prices exclude VAT. If AeroWash becomes VAT-registered, VAT will be added at the prevailing rate on invoices issued on or after the registration date.</span>
+                                        <span>{getVatNoticeText(company.name, isVatRegistered, vatRate)}</span>
                                     </li>
                                     <li className="flex items-start gap-2">
                                         <span className="text-[#D05E00] font-bold">•</span>
