@@ -18,6 +18,8 @@ export interface AeroWashQuotePdfOptions {
         subtotal: number;
         taxAmount: number;
         total: number;
+        firstPaymentPercentage?: number | null;
+        firstPaymentAmount?: number | null;
         clientPoNumber?: string | null;
         client: {
             name: string;
@@ -712,6 +714,26 @@ export async function generateAeroWashQuotePdf({
         currentY += 5;
     }
 
+    // Deposit / First Payment breakdown for invoices
+    const firstPaymentPct = invoice.firstPaymentPercentage ?? (invoice.metadata as any)?.firstPaymentPercentage;
+    const hasFirstPayment = Boolean(isInvoice && firstPaymentPct && firstPaymentPct > 0 && firstPaymentPct < 100);
+    const firstPaymentAmount = hasFirstPayment ? (effectiveTotal * (firstPaymentPct! / 100)) : 0;
+    const balanceRemaining = hasFirstPayment ? (effectiveTotal - firstPaymentAmount) : 0;
+
+    if (hasFirstPayment) {
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
+        const paymentLabel = firstPaymentPct === 60 ? "Deposit (60%)" : `First Payment (${firstPaymentPct}%)`;
+        const remainingLabel = firstPaymentPct === 60 ? "Balance on Completion (40%)" : `Remaining Balance (${(100 - firstPaymentPct!).toFixed(0)}%)`;
+        doc.text(paymentLabel, totalsLeftX, currentY);
+        doc.text(formatCurrency(firstPaymentAmount, currencySymbol), totalsRightX, currentY, { align: "right" });
+        currentY += 4.5;
+
+        doc.text(remainingLabel, totalsLeftX, currentY);
+        doc.text(formatCurrency(balanceRemaining, currencySymbol), totalsRightX, currentY, { align: "right" });
+        currentY += 5;
+    }
+
     // Black TOTAL DUE / BALANCE DUE Bar with orange top border
     const barY = currentY + 1;
     doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
@@ -725,10 +747,14 @@ export async function generateAeroWashQuotePdf({
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(255, 255, 255);
-    doc.text(isBalanceInvoice ? "BALANCE DUE" : "TOTAL DUE", totalsLeftX + 4, barY + 6.5);
+    const barLabel = hasFirstPayment
+        ? (firstPaymentPct === 60 ? "DEPOSIT DUE (60%)" : `AMOUNT DUE (${firstPaymentPct}%)`)
+        : (isBalanceInvoice ? "BALANCE DUE" : "TOTAL DUE");
+    const barAmount = hasFirstPayment ? firstPaymentAmount : effectiveTotal;
+    doc.text(barLabel, totalsLeftX + 4, barY + 6.5);
 
     doc.setFontSize(11);
-    doc.text(formatCurrency(effectiveTotal, currencySymbol), totalsRightX - 4, barY + 6.5, { align: "right" });
+    doc.text(formatCurrency(barAmount, currencySymbol), totalsRightX - 4, barY + 6.5, { align: "right" });
 
     currentY = barY + 14;
 
@@ -814,9 +840,10 @@ export async function generateAeroWashQuotePdf({
     }
 
     // ==========================================
-    // 9. PAGE 2: TERMS AND CONDITIONS & ACCEPTANCE
+    // 9. PAGE 2: TERMS AND CONDITIONS & ACCEPTANCE (Quotations only)
     // ==========================================
-    doc.addPage();
+    if (!isInvoice) {
+        doc.addPage();
 
     // Black header on Terms page (Matches reference media_1793210441931_b9902b4d.png)
     doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
@@ -1041,6 +1068,7 @@ export async function generateAeroWashQuotePdf({
 
     doc.setFontSize(7);
     doc.text("Purchase order no. (if applicable): ____________________________________", col1X, p2Y);
+    } // End if (!isInvoice) for Terms & Acceptance
 
     // ==========================================
     // 9b. APPENDIX: SITE INSPECTION PHOTOGRAPHS
@@ -1208,7 +1236,8 @@ export async function generateAeroWashQuotePdf({
         doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
 
         // Left footer
-        doc.text(`AeroWash (Pty) Ltd  ·  Quotation ${numberLabel}${clientRef ? '  ·  Client ref: ' + clientRef : ''}`, 14, pageHeight - 8);
+        const footerDocType = isInvoice ? (isVatActive ? 'Tax Invoice ' : 'Invoice ') : 'Quotation ';
+        doc.text(`AeroWash (Pty) Ltd  ·  ${footerDocType}${numberLabel}${clientRef ? '  ·  Client ref: ' + clientRef : ''}`, 14, pageHeight - 8);
 
         // Right footer
         doc.text(`Page ${p} of ${totalPages}`, 196, pageHeight - 8, { align: "right" });

@@ -395,6 +395,19 @@ export function AeroWashDocumentPreview({
                             {(() => {
                                 const effectiveTax = taxAmount > 0 ? taxAmount : (subtotal * (vatRate / 100));
                                 const effectiveTotal = isVatRegistered ? (subtotal + effectiveTax) : (total || subtotal);
+                                const firstPaymentPct = (invoice as any).firstPaymentPercentage ?? (invoice.metadata as any)?.firstPaymentPercentage;
+                                const hasFirstPayment = Boolean(isInvoice && firstPaymentPct && firstPaymentPct > 0 && firstPaymentPct < 100);
+                                const firstPaymentAmount = hasFirstPayment ? (effectiveTotal * (firstPaymentPct / 100)) : 0;
+                                const balanceRemaining = hasFirstPayment ? (effectiveTotal - firstPaymentAmount) : 0;
+                                const paymentLabel = firstPaymentPct === 60 ? "Deposit (60%)" : `First Payment (${firstPaymentPct}%)`;
+                                const remainingLabel = firstPaymentPct === 60 ? "Balance on Completion (40%)" : `Remaining Balance (${(100 - firstPaymentPct).toFixed(0)}%)`;
+                                const barLabel = isBalanceInvoice
+                                    ? "BALANCE DUE"
+                                    : hasFirstPayment
+                                        ? (firstPaymentPct === 60 ? "DEPOSIT DUE (60%)" : `FIRST PAYMENT DUE (${firstPaymentPct}%)`)
+                                        : "TOTAL DUE";
+                                const barAmount = hasFirstPayment ? firstPaymentAmount : effectiveTotal;
+
                                 return (
                                     <>
                                         {isVatRegistered && (
@@ -404,10 +417,23 @@ export function AeroWashDocumentPreview({
                                             </div>
                                         )}
 
+                                        {hasFirstPayment && (
+                                            <>
+                                                <div className="flex justify-between items-center text-gray-600">
+                                                    <span>{paymentLabel}</span>
+                                                    <span className="font-bold text-zinc-900">{formatCurrency(firstPaymentAmount, currencySymbol)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-gray-600">
+                                                    <span>{remainingLabel}</span>
+                                                    <span className="font-bold text-zinc-900">{formatCurrency(balanceRemaining, currencySymbol)}</span>
+                                                </div>
+                                            </>
+                                        )}
+
                                         {/* Black TOTAL DUE / BALANCE DUE Bar */}
                                         <div className="bg-[#0A0A0A] text-white p-3.5 rounded-lg border-t-[2px] border-[#D05E00] flex justify-between items-center shadow-lg">
-                                            <span className="font-black text-xs tracking-[0.2em]">{isBalanceInvoice ? "BALANCE DUE" : "TOTAL DUE"}</span>
-                                            <span className="font-black text-xl tracking-tight text-white">{formatCurrency(effectiveTotal, currencySymbol)}</span>
+                                            <span className="font-black text-xs tracking-[0.2em]">{barLabel}</span>
+                                            <span className="font-black text-xl tracking-tight text-white">{formatCurrency(barAmount, currencySymbol)}</span>
                                         </div>
                                     </>
                                 );
@@ -470,7 +496,8 @@ export function AeroWashDocumentPreview({
                         </div>
                     )}
 
-                    {/* TERMS AND CONDITIONS (Page 2 style matching reference) */}
+                    {/* TERMS AND CONDITIONS (Page 2 style matching reference) - Quotations Only */}
+                    {!isInvoice && (
                     <div className="rounded-2xl overflow-hidden border border-gray-200 mt-12 shadow-lg">
                         {/* Terms Header Band */}
                         <div className="bg-[#0A0A0A] text-white p-6 border-b-[2.5px] border-[#D05E00] flex justify-between items-center">
@@ -662,6 +689,7 @@ export function AeroWashDocumentPreview({
                         </div>
                         </div>
                     </div>
+                    )}
 
                     {/* APPENDIX: SITE INSPECTION PHOTOGRAPHS (Page 3 style) */}
                     {(() => {

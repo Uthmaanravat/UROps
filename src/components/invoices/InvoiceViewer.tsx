@@ -325,19 +325,33 @@ export function InvoiceViewer({
         invoice.firstPaymentPercentage ? invoice.firstPaymentPercentage.toString() : "none"
     );
     const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>(
-        invoice.firstPaymentPercentage && ![20, 50, 75].includes(invoice.firstPaymentPercentage)
+        invoice.firstPaymentPercentage && ![20, 50, 60, 75].includes(invoice.firstPaymentPercentage)
             ? invoice.firstPaymentPercentage.toString()
             : ""
     );
 
     const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+    const [convertError, setConvertError] = useState<string | null>(null);
     const [convertPoNumber, setConvertPoNumber] = useState("");
     const [convertPresentationStyle, setConvertPresentationStyle] = useState<'AS_PER_QUOTATION' | 'DETAILED'>('AS_PER_QUOTATION');
-    const [convertFirstPaymentOption, setConvertFirstPaymentOption] = useState<string>(
-        invoice.firstPaymentPercentage ? invoice.firstPaymentPercentage.toString() : "none"
-    );
+
+    // Determine contract and visit parameters for payment option defaults
+    const isAeroWashDoc = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash'));
+    const docProgInfo = (invoice as any)?.metadata?.programmeInfo;
+    const isDocContract = Boolean(docProgInfo && docProgInfo.id !== 'ONCE_OFF');
+    const docVisitsPerYear = Number(docProgInfo?.visitsPerYear) || 1;
+
+    const getInitialConvertPaymentOption = () => {
+        if (invoice.firstPaymentPercentage) return invoice.firstPaymentPercentage.toString();
+        if (isAeroWashDoc) {
+            return isDocContract ? "per_visit" : "60";
+        }
+        return "none";
+    };
+
+    const [convertFirstPaymentOption, setConvertFirstPaymentOption] = useState<string>(getInitialConvertPaymentOption);
     const [convertCustomPercentage, setConvertCustomPercentage] = useState<string>(
-        invoice.firstPaymentPercentage && ![20, 50, 75].includes(invoice.firstPaymentPercentage)
+        invoice.firstPaymentPercentage && ![20, 50, 60, 75].includes(invoice.firstPaymentPercentage)
             ? invoice.firstPaymentPercentage.toString()
             : ""
     );
@@ -486,11 +500,37 @@ export function InvoiceViewer({
         setItems(nextItems);
     };
 
+    const isNoChargeLine = (item: any): boolean => {
+        if (!item) return false;
+        const meta = (item.metadata || item.internalMetadata || {}) as any;
+        if (meta.isNoCharge || meta.isIncluded) return true;
+        const label = String(meta.label || '').trim().toLowerCase();
+        if (label === 'no charge' || label === 'included') return true;
+        if (meta.itemNumber === 11 || meta.itemNumber === 14) return true;
+
+        const desc = String(item.description || '').toLowerCase();
+        const name = String(item.name || '').toLowerCase();
+        const notes = String(item.notes || '').toLowerCase();
+        const combined = `${name} ${desc} ${notes}`;
+        if (combined.includes('site visit & facade assessment') || combined.includes('service photo record')) {
+            return true;
+        }
+        if (combined.includes('no charge') || combined.includes('included')) {
+            return true;
+        }
+        return false;
+    };
+
     const checkInvalidItems = (itemList: any[]) => {
         return (itemList || []).filter(item => {
             const qty = Number(item.quantity);
-            const price = Number(item.unitPrice);
-            return !qty || isNaN(qty) || qty <= 0 || !price || isNaN(price) || price <= 0;
+            if (!qty || isNaN(qty) || qty <= 0) return true;
+            const price = Number(item.unitPrice ?? item.amount ?? 0);
+            if (isNaN(price) || price < 0) return true;
+            if (price === 0) {
+                return !isNoChargeLine(item);
+            }
+            return false;
         });
     };
 
@@ -796,7 +836,11 @@ export function InvoiceViewer({
                 }
 
                 let finalPct: number | null = null;
-                if (firstPaymentOption === "20") finalPct = 20;
+                if (firstPaymentOption === "60") finalPct = 60;
+                else if (firstPaymentOption === "per_visit") {
+                    finalPct = docVisitsPerYear > 0 ? Number((100 / docVisitsPerYear).toFixed(2)) : 25;
+                }
+                else if (firstPaymentOption === "20") finalPct = 20;
                 else if (firstPaymentOption === "50") finalPct = 50;
                 else if (firstPaymentOption === "75") finalPct = 75;
                 else if (firstPaymentOption === "custom") {
@@ -1539,7 +1583,11 @@ export function InvoiceViewer({
         }
 
         let currentPct: number | undefined = undefined;
-        if (firstPaymentOption === "20") currentPct = 20;
+        if (firstPaymentOption === "60") currentPct = 60;
+        else if (firstPaymentOption === "per_visit") {
+            currentPct = docVisitsPerYear > 0 ? Number((100 / docVisitsPerYear).toFixed(2)) : 25;
+        }
+        else if (firstPaymentOption === "20") currentPct = 20;
         else if (firstPaymentOption === "50") currentPct = 50;
         else if (firstPaymentOption === "75") currentPct = 75;
         else if (firstPaymentOption === "custom") {
@@ -1547,6 +1595,8 @@ export function InvoiceViewer({
             if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
                 currentPct = parsed;
             }
+        } else if (invoice.firstPaymentPercentage && invoice.firstPaymentPercentage > 0 && invoice.firstPaymentPercentage < 100) {
+            currentPct = invoice.firstPaymentPercentage;
         }
 
         const paidAmount = invoice.payments ? invoice.payments.reduce((acc: number, p: any) => acc + p.amount, 0) : 0;
@@ -1965,7 +2015,11 @@ export function InvoiceViewer({
             totalRow.getCell(7).alignment = { horizontal: 'right' };
 
             let currentPct: number | undefined = undefined;
-            if (firstPaymentOption === "20") currentPct = 20;
+            if (firstPaymentOption === "60") currentPct = 60;
+            else if (firstPaymentOption === "per_visit") {
+                currentPct = docVisitsPerYear > 0 ? Number((100 / docVisitsPerYear).toFixed(2)) : 25;
+            }
+            else if (firstPaymentOption === "20") currentPct = 20;
             else if (firstPaymentOption === "50") currentPct = 50;
             else if (firstPaymentOption === "75") currentPct = 75;
             else if (firstPaymentOption === "custom") {
@@ -2064,18 +2118,22 @@ export function InvoiceViewer({
     };
 
     const executeConvert = async () => {
+        setConvertError(null);
         const currentList = itemsRef.current || items;
         const invalid = checkInvalidItems(currentList);
         if (invalid.length > 0) {
-            alert(`Cannot convert quotation to invoice:\n\n${invalid.length} line item(s) have zero or blank prices/quantities.\n\nPlease ensure all items have valid quantities (> 0) and prices (> 0) before converting.`);
+            setConvertError(`Cannot convert quotation to invoice: ${invalid.length} line item(s) have zero or blank prices/quantities. Please ensure all non-included items have valid quantities (> 0) and prices (> 0) before converting.`);
             return;
         }
 
-        setIsConvertDialogOpen(false);
         setLoading(true);
 
         let finalPct: number | undefined = undefined;
-        if (convertFirstPaymentOption === "20") finalPct = 20;
+        if (convertFirstPaymentOption === "60") finalPct = 60;
+        else if (convertFirstPaymentOption === "per_visit") {
+            finalPct = docVisitsPerYear > 0 ? Number((100 / docVisitsPerYear).toFixed(2)) : 25;
+        }
+        else if (convertFirstPaymentOption === "20") finalPct = 20;
         else if (convertFirstPaymentOption === "50") finalPct = 50;
         else if (convertFirstPaymentOption === "75") finalPct = 75;
         else if (convertFirstPaymentOption === "custom") {
@@ -2092,7 +2150,7 @@ export function InvoiceViewer({
             router.push(`/invoices/${newInvoiceId}`);
         } catch (error) {
             console.error(error);
-            alert("Failed to convert quotation: " + (error instanceof Error ? error.message : String(error)));
+            setConvertError("Failed to convert quotation: " + (error instanceof Error ? error.message : String(error)));
             setLoading(false);
         }
     }
@@ -2161,14 +2219,14 @@ export function InvoiceViewer({
                                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Official</span>
                             </div>
                             <p className="text-xs text-indigo-300/80">
-                                This quotation has been converted into an official Tax Invoice.
+                                This quotation has been converted into an official {isVatRegistered ? 'Tax Invoice' : 'Invoice'}.
                             </p>
                         </div>
                     </div>
                     {linkedInvoice && (
                         <Link href={`/invoices/${linkedInvoice.id}`} className="shrink-0 w-full sm:w-auto">
                             <Button size="sm" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5">
-                                View Tax Invoice ({linkedInvoice.quoteNumber || `INV-${String(linkedInvoice.number).padStart(3, '0')}`})
+                                View {isVatRegistered ? 'Tax Invoice' : 'Invoice'} ({linkedInvoice.quoteNumber || `INV-${String(linkedInvoice.number).padStart(3, '0')}`})
                                 <ArrowRight className="w-3.5 h-3.5" />
                             </Button>
                         </Link>
@@ -2685,7 +2743,13 @@ export function InvoiceViewer({
                                     )}
                                 </div>
                             ) : (
-                                <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
+                                <Dialog open={isConvertDialogOpen} onOpenChange={(open) => {
+                                    setIsConvertDialogOpen(open);
+                                    if (open) {
+                                        setConvertError(null);
+                                        setConvertFirstPaymentOption(getInitialConvertPaymentOption());
+                                    }
+                                }}>
                                     <DialogTrigger asChild>
                                         <Button disabled={loading} variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl">
                                             <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
@@ -2695,10 +2759,16 @@ export function InvoiceViewer({
                                     <DialogHeader>
                                         <DialogTitle className="text-xl font-black uppercase tracking-wider text-primary">Convert Quotation</DialogTitle>
                                         <DialogDescription className="text-gray-400">
-                                            Generate an official Tax Invoice from this quotation.
+                                            Generate an official {isVatRegistered ? 'Tax Invoice' : 'Invoice'} from this quotation.
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="grid gap-6 py-6">
+                                        {convertError && (
+                                            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-start gap-2.5">
+                                                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                                                <div className="leading-relaxed font-medium">{convertError}</div>
+                                            </div>
+                                        )}
                                         {isAeroWashDocument && (
                                             <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
                                                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -2725,11 +2795,32 @@ export function InvoiceViewer({
                                                 onChange={(e) => setConvertFirstPaymentOption(e.target.value)}
                                                 className="flex h-11 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-primary font-bold"
                                             >
-                                                <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
-                                                <option value="20" className="bg-[#1E293B]">20% Partial Payment</option>
-                                                <option value="50" className="bg-[#1E293B]">50% Partial Payment</option>
-                                                <option value="75" className="bg-[#1E293B]">75% Partial Payment</option>
-                                                <option value="custom" className="bg-[#1E293B]">Custom Percentage</option>
+                                                {isAeroWashDoc ? (
+                                                    isDocContract ? (
+                                                        <>
+                                                            <option value="per_visit" className="bg-[#1E293B]">Per visit ({docVisitsPerYear} visits/year – {(100 / docVisitsPerYear).toFixed(0)}%)</option>
+                                                            <option value="60" className="bg-[#1E293B]">60% Deposit</option>
+                                                            <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
+                                                            <option value="custom" className="bg-[#1E293B]">Custom Percentage</option>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <option value="60" className="bg-[#1E293B]">60% Deposit</option>
+                                                            <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
+                                                            <option value="50" className="bg-[#1E293B]">50% Partial Payment</option>
+                                                            <option value="custom" className="bg-[#1E293B]">Custom Percentage</option>
+                                                        </>
+                                                    )
+                                                ) : (
+                                                    <>
+                                                        <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
+                                                        <option value="20" className="bg-[#1E293B]">20% Partial Payment</option>
+                                                        <option value="50" className="bg-[#1E293B]">50% Partial Payment</option>
+                                                        <option value="60" className="bg-[#1E293B]">60% Deposit</option>
+                                                        <option value="75" className="bg-[#1E293B]">75% Partial Payment</option>
+                                                        <option value="custom" className="bg-[#1E293B]">Custom Percentage</option>
+                                                    </>
+                                                )}
                                             </select>
                                         </div>
                                         {convertFirstPaymentOption === "custom" && (
@@ -2763,7 +2854,7 @@ export function InvoiceViewer({
                                     <DialogFooter>
                                         <Button variant="ghost" onClick={() => setIsConvertDialogOpen(false)} className="text-gray-400">Cancel</Button>
                                         <Button onClick={executeConvert} disabled={loading} className="bg-primary text-primary-foreground font-black px-8">
-                                            Generate Tax Invoice
+                                            Generate {isVatRegistered ? 'Tax Invoice' : 'Invoice'}
                                         </Button>
                                     </DialogFooter>
                                 </DialogContent>
@@ -3217,6 +3308,10 @@ export function InvoiceViewer({
                                     disabled={isLocked}
                                 >
                                     <option value="none" className="bg-[#1E293B]">Full Payment (100%)</option>
+                                    <option value="60" className="bg-[#1E293B]">60% Deposit</option>
+                                    {isDocContract && (
+                                        <option value="per_visit" className="bg-[#1E293B]">Per visit ({docVisitsPerYear} visits/year – {(100 / docVisitsPerYear).toFixed(0)}%)</option>
+                                    )}
                                     <option value="20" className="bg-[#1E293B]">20% Partial Payment</option>
                                     <option value="50" className="bg-[#1E293B]">50% Partial Payment</option>
                                     <option value="75" className="bg-[#1E293B]">75% Partial Payment</option>
@@ -3813,7 +3908,11 @@ export function InvoiceViewer({
                             )}
                             {(() => {
                                 let pct: number | undefined = undefined;
-                                if (firstPaymentOption === "20") pct = 20;
+                                if (firstPaymentOption === "60") pct = 60;
+                                else if (firstPaymentOption === "per_visit") {
+                                    pct = docVisitsPerYear > 0 ? Number((100 / docVisitsPerYear).toFixed(2)) : 25;
+                                }
+                                else if (firstPaymentOption === "20") pct = 20;
                                 else if (firstPaymentOption === "50") pct = 50;
                                 else if (firstPaymentOption === "75") pct = 75;
                                 else if (firstPaymentOption === "custom") {
@@ -3821,18 +3920,22 @@ export function InvoiceViewer({
                                     if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
                                         pct = parsed;
                                     }
+                                } else if (invoice.firstPaymentPercentage && invoice.firstPaymentPercentage > 0 && invoice.firstPaymentPercentage < 100) {
+                                    pct = invoice.firstPaymentPercentage;
                                 }
 
                                 if (pct && pct > 0 && pct < 100) {
+                                    const paymentLabel = pct === 60 ? "Deposit (60%)" : (firstPaymentOption === "per_visit" ? `Per visit (${pct.toFixed(0)}%)` : `First Payment (${pct}%)`);
+                                    const remainingLabel = pct === 60 ? "Balance on Completion (40%)" : `Remaining Balance (${(100 - pct).toFixed(0)}%)`;
                                     return (
                                         <>
                                             <div className="h-px bg-white/10 my-3" />
                                             <div className="flex justify-between items-center text-sm md:text-base text-emerald-400 font-bold">
-                                                <span>First Payment ({pct}%)</span>
+                                                <span>{paymentLabel}</span>
                                                 <span>{formatCurrency(total * (pct / 100), currencySymbol)}</span>
                                             </div>
                                             <div className="flex justify-between items-center text-sm md:text-base text-gray-400 font-bold">
-                                                <span>Remaining Balance ({100 - pct}%)</span>
+                                                <span>{remainingLabel}</span>
                                                 <span>{formatCurrency(total * ((100 - pct) / 100), currencySymbol)}</span>
                                             </div>
                                         </>

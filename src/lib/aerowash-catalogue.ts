@@ -386,6 +386,35 @@ To proceed, sign below and return, or confirm by email to info@aerowash.co.za.`;
  * Auto-generates a client-facing Scope of Works description from selected items and site info.
  * Hard rule: Plain client language, NO passes, pressures, chemicals, water type/volumes.
  */
+/**
+ * Formats elevation names for client-facing Scope of Works descriptions:
+ * - ['North'] -> "the North elevation"
+ * - ['Front'] -> "the Front elevation"
+ * - ['North', 'East'] -> "the North and East elevations"
+ * - ['North', 'South', 'West'] -> "the North, South and West elevations"
+ */
+export function formatScopeElevations(names?: string[]): string {
+    if (!names || names.length === 0) return 'the exposed building elevations';
+
+    const cleaned = names.map(n => {
+        let s = (n || '').trim();
+        s = s.replace(/^the\s+/i, '');
+        s = s.replace(/\s+(elevation|elevations|facade|facades)$/i, '');
+        return s.trim();
+    }).filter(Boolean);
+
+    if (cleaned.length === 0) return 'the exposed building elevations';
+    if (cleaned.length === 1) {
+        return `the ${cleaned[0]} elevation`;
+    }
+    if (cleaned.length === 2) {
+        return `the ${cleaned[0]} and ${cleaned[1]} elevations`;
+    }
+    const allButLast = cleaned.slice(0, -1).join(', ');
+    const last = cleaned[cleaned.length - 1];
+    return `the ${allButLast} and ${last} elevations`;
+}
+
 export function generateAeroWashScopeOfWorks(params: {
     siteName?: string;
     elevationNames?: string[];
@@ -402,9 +431,7 @@ export function generateAeroWashScopeOfWorks(params: {
     hasHandClean?: boolean;
 }): string {
     const siteStr = params.siteName ? ` at ${params.siteName}` : '';
-    const elevStr = params.elevationNames && params.elevationNames.length > 0
-        ? params.elevationNames.join(', ')
-        : 'the exposed building elevations';
+    const elevStr = formatScopeElevations(params.elevationNames);
 
     const sentences: string[] = [];
 

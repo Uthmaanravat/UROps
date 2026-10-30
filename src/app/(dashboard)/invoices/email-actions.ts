@@ -3,6 +3,7 @@
 import { sendRealEmail } from "@/lib/email"
 import { prisma } from "@/lib/prisma"
 import { ensureAuth, getAuthUser } from "@/lib/auth-actions"
+import { isVatEffective, isInvalidLineItem } from "@/lib/vat-utils"
 
 /**
  * Server-side gatekeeper:
@@ -88,7 +89,7 @@ export async function sendInvoiceEmail(invoiceId: string, recipients?: string[],
             return { success: false, error: "Cannot send document: Document has no line items." }
         }
 
-        const invalidItems = invoice.items.filter(item => !item.quantity || Number(item.quantity) <= 0 || !item.unitPrice || Number(item.unitPrice) <= 0);
+        const invalidItems = invoice.items.filter(item => isInvalidLineItem(item));
         if (invalidItems.length > 0) {
             return {
                 success: false,
@@ -102,9 +103,11 @@ export async function sendInvoiceEmail(invoiceId: string, recipients?: string[],
             return { success: false, error: "No recipient emails provided" }
         }
 
+        const settings = await prisma.companySettings.findUnique({ where: { companyId: invoice.companyId } });
+        const isVatActive = isVatEffective(invoice.date, settings);
         const isAW = invoice.quoteNumber?.startsWith('AW-') || invoice.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9';
         const formattedNumber = invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
-        const docTypeLabel = invoice.type === 'QUOTE' ? (isAW ? 'Quotation' : 'Quote') : (isAW ? 'Tax Invoice' : 'Invoice');
+        const docTypeLabel = invoice.type === 'QUOTE' ? (isAW ? 'Quotation' : 'Quote') : (isVatActive ? 'Tax Invoice' : 'Invoice');
         const subject = `${docTypeLabel} ${formattedNumber} from UROps`
         const body = customBody || `Hi ${invoice.client.name},
 
@@ -114,7 +117,6 @@ Total Amount: R${invoice.total.toFixed(2)}
 Best regards,
 The UROps Team`
 
-        const settings = await prisma.companySettings.findUnique({ where: { companyId: invoice.companyId } });
         const fromEmail = settings?.email || 'info@aerowash.co.za';
         const fromName = settings?.name || 'AeroWash';
 

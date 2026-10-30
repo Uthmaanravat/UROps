@@ -835,7 +835,37 @@ export async function convertToInvoiceAction(id: string, clientPoNumber?: string
     if (!quote.items || quote.items.length === 0) {
         throw new Error("Cannot convert quotation: Quote has no line items.");
     }
-    const invalidItems = quote.items.filter(item => !item.quantity || Number(item.quantity) <= 0 || !item.unitPrice || Number(item.unitPrice) <= 0);
+    const isNoChargeLine = (item: any): boolean => {
+        if (!item) return false;
+        const meta = (item.metadata || item.internalMetadata || {}) as any;
+        if (meta.isNoCharge || meta.isIncluded) return true;
+        const label = String(meta.label || '').trim().toLowerCase();
+        if (label === 'no charge' || label === 'included') return true;
+        if (meta.itemNumber === 11 || meta.itemNumber === 14) return true;
+
+        const desc = String(item.description || '').toLowerCase();
+        const name = String(item.name || '').toLowerCase();
+        const notes = String(item.notes || '').toLowerCase();
+        const combined = `${name} ${desc} ${notes}`;
+        if (combined.includes('site visit & facade assessment') || combined.includes('service photo record')) {
+            return true;
+        }
+        if (combined.includes('no charge') || combined.includes('included')) {
+            return true;
+        }
+        return false;
+    };
+
+    const invalidItems = quote.items.filter(item => {
+        const qty = Number(item.quantity);
+        if (!qty || isNaN(qty) || qty <= 0) return true;
+        const price = Number(item.unitPrice ?? 0);
+        if (isNaN(price) || price < 0) return true;
+        if (price === 0) {
+            return !isNoChargeLine(item);
+        }
+        return false;
+    });
     if (invalidItems.length > 0) {
         throw new Error(`Cannot convert quotation to invoice: ${invalidItems.length} line item(s) have zero or blank prices/quantities. Please review and price all items first.`);
     }

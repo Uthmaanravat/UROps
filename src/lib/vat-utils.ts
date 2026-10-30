@@ -114,3 +114,41 @@ export function getVatNoticeText(
     }
     return `${cleanName} is not VAT-registered. No VAT charged.`;
 }
+
+
+/**
+ * Determines if a line item is an intentional zero-charge / included service
+ * (e.g., Site Visit & Facade Assessment, Service Photo Record).
+ */
+export function isNoChargeItem(item: any): boolean {
+    if (!item) return false;
+    const meta = (item.metadata || item.internalMetadata || {}) as any;
+    if (meta.isNoCharge || meta.isIncluded) return true;
+    const label = String(meta.label || '').trim().toLowerCase();
+    if (label === 'no charge' || label === 'included') return true;
+    if (meta.itemNumber === 11 || meta.itemNumber === 14) return true;
+
+    const desc = String(item.description || '').toLowerCase();
+    const name = String(item.name || '').toLowerCase();
+    const notes = String(item.notes || '').toLowerCase();
+    const combined = `${name} ${desc} ${notes}`;
+    if (combined.includes('site visit & facade assessment') || combined.includes('service photo record')) {
+        return true;
+    }
+    if (combined.includes('no charge') || combined.includes('included')) {
+        return true;
+    }
+    return false;
+}
+
+export function isInvalidLineItem(item: any): boolean {
+    if (!item) return true;
+    const qty = Number(item.quantity);
+    if (!qty || isNaN(qty) || qty <= 0) return true;
+    const price = Number(item.unitPrice ?? item.amount ?? 0);
+    if (isNaN(price) || price < 0) return true;
+    if (price === 0) {
+        return !isNoChargeItem(item);
+    }
+    return false;
+}

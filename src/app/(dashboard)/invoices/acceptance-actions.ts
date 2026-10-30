@@ -215,7 +215,7 @@ export async function acceptQuotePublicAction(data: {
             to: clientEmail,
             from: 'AeroWash Accounts <info@aerowash.co.za>',
             replyTo: 'info@aerowash.co.za',
-            subject: `Deposit Tax Invoice ${formattedInvoiceNumber} (60%) – AeroWash`,
+            subject: `Deposit ${vatEffective ? 'Tax Invoice' : 'Invoice'} ${formattedInvoiceNumber} (60%) – AeroWash`,
             body: `Dear ${clientName},\n\nThank you for accepting quotation ${quote.quoteNumber || quote.number} for ${quote.client.name}.\n\nPlease find your 60% deposit invoice details below:\nInvoice Number: ${formattedInvoiceNumber}\nAmount Due: R${depositTotal.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\nSite: ${quote.site || 'N/A'}\n\nYou can view and download your deposit invoice here:\n${depositViewUrl}\n\nBank Details:\n${settings?.bankDetails || 'Standard Bank - AeroWash (Pty) Ltd'}\n\nUpon payment receipt, our scheduling team will contact you to confirm the access schedule.\n\nWarm regards,\nAeroWash Operations Team`
         })
 

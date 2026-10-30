@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache"
 import { updateProjectStatus } from "../projects/actions"
 import { ensureAuth } from "@/lib/auth-actions"
 import { convertToInvoiceAction } from "./actions"
-import { isVatEffective, getVatRate, calculateVatAndTotal } from "@/lib/vat-utils"
+import { isVatEffective, getVatRate, calculateVatAndTotal, isInvalidLineItem } from "@/lib/vat-utils"
 
 import { randomUUID } from "crypto"
 
@@ -104,7 +104,7 @@ export async function finalizeQuoteAction(quoteId: string) {
         throw new Error("Cannot mark quote ready to send: Quote has no line items.")
     }
 
-    const invalidItems = quote.items.filter(item => !item.quantity || Number(item.quantity) <= 0 || !item.unitPrice || Number(item.unitPrice) <= 0);
+    const invalidItems = quote.items.filter(item => isInvalidLineItem(item));
     if (invalidItems.length > 0) {
         throw new Error(`Cannot mark quote ready to send: ${invalidItems.length} line item(s) have zero or blank prices/quantities. Please review and price all items first.`)
     }
