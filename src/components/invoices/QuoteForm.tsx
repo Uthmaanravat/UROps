@@ -1334,7 +1334,6 @@ export function QuoteForm({
                                                             </ul>
                                                             <ul className="space-y-1 list-disc list-inside">
                                                                 <li>Variations quoted separately before work carried out.</li>
-                                                                <li>{getVatNoticeText(companySettings?.name || (isAeroWashWorkspace ? "AeroWash (Pty) Ltd" : "LR Builders"), effectiveVatRegistration, vatRate)}</li>
                                                                 <li>Standby charge applies for access delays outside AeroWash control.</li>
                                                                 <li>Existing defects recorded before work; no liability for pre-existing issues.</li>
                                                             </ul>
@@ -1375,13 +1374,6 @@ export function QuoteForm({
                     {/* Totals & Submit */}
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 p-6 rounded-2xl bg-[#14141E] border border-white/5">
                         <div className="space-y-2 text-xs text-muted-foreground">
-                            <p>
-                                {getVatNoticeText(
-                                    companySettings?.name || (isAeroWashWorkspace ? "AeroWash (Pty) Ltd" : "LR Builders"),
-                                    effectiveVatRegistration,
-                                    vatRate
-                                )}
-                            </p>
                             <div className="flex items-center gap-3">
                                 <AutoSaveIndicator isSavingDraft={isSavingDraft} lastSavedTimestamp={lastSavedTimestamp} />
                                 {lastSavedTimestamp && (
@@ -1430,6 +1422,13 @@ export function QuoteForm({
                                 </div>
                             )}
 
+                            <div className="text-[11px] text-gray-400 font-medium text-right mb-1.5">
+                                {getVatNoticeText(
+                                    companySettings?.name || (isAeroWashWorkspace ? "AeroWash (Pty) Ltd" : "LR Builders"),
+                                    effectiveVatRegistration,
+                                    vatRate
+                                )}
+                            </div>
                             <div className="pt-4 flex justify-end gap-2">
                                 <Button
                                     type="button"

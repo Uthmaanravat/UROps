@@ -1522,13 +1522,6 @@ export function InvoiceViewer({
         doc.text(`TOTAL DUE:`, 140, totalDueY);
         doc.text(formatCurrency(total, currencySymbol), 196, totalDueY, { align: 'right' });
 
-        // Standardized VAT Notice text
-        doc.setFontSize(7.5);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(100, 116, 139);
-        const vatNotice = getVatNoticeText(company.name, isVatRegistered, pdfVatRate);
-        doc.text(vatNotice, 196, totalDueY + 4, { align: 'right' });
-
         currentY = totalDueY;
 
         // Contract programme display on PDF (visiting frequency & visits per year, NO percentages)
@@ -3693,9 +3686,6 @@ export function InvoiceViewer({
                                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Total Amount</span>
                                 <span className="text-3xl md:text-4xl font-black text-white tracking-tighter">{formatCurrency(total, currencySymbol)}</span>
                             </div>
-                            <div className="text-[11px] text-gray-400 text-right pt-0.5">
-                                {getVatNoticeText(company.name, isVatRegistered, vatRate)}
-                            </div>
                             {paidAmount > 0 && (
                                 <>
                                     <div className="h-px bg-white/10 my-3" />
@@ -3957,6 +3947,9 @@ export function InvoiceViewer({
                                     <span>{checkInvalidItems(items).length} {checkInvalidItems(items).length === 1 ? 'item requires' : 'items require'} price / qty</span>
                                 </div>
                             )}
+                            <div className="text-[11px] text-gray-400 font-medium text-right mb-1">
+                                {getVatNoticeText(company.name, isVatRegistered, vatRate)}
+                            </div>
                             <AutoSaveIndicator 
                                 dbSavedTimestamp={dbSavedAt} 
                                 localDraftTimestamp={lastSavedTimestamp} 

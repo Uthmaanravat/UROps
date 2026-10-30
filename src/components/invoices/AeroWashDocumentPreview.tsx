@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { formatCurrency, cn } from "@/lib/utils";
-import { getVatNoticeText } from "@/lib/vat-utils";
 import { Button } from "@/components/ui/button";
 import { Edit3, Check, FileText, CheckCircle2 } from "lucide-react";
 import { parseClauses } from "@/lib/terms-utils";
@@ -409,9 +408,6 @@ export function AeroWashDocumentPreview({
                                             <span className="font-black text-xs tracking-[0.2em]">TOTAL DUE</span>
                                             <span className="font-black text-xl tracking-tight text-white">{formatCurrency(effectiveTotal, currencySymbol)}</span>
                                         </div>
-                                        <div className="text-[11px] text-zinc-500 text-right pt-0.5">
-                                            {getVatNoticeText(company.name, isVatRegistered, vatRate)}
-                                        </div>
                                     </>
                                 );
                             })()}
@@ -615,10 +611,6 @@ export function AeroWashDocumentPreview({
                                     <li className="flex items-start gap-2">
                                         <span className="text-[#D05E00] font-bold">•</span>
                                         <span>Any variation or additional work is quoted separately before it is carried out.</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[#D05E00] font-bold">•</span>
-                                        <span>{getVatNoticeText(company.name, isVatRegistered, vatRate)}</span>
                                     </li>
                                     <li className="flex items-start gap-2">
                                         <span className="text-[#D05E00] font-bold">•</span>

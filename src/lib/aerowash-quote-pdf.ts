@@ -1,4 +1,4 @@
-import { isVatEffective, getVatRate, getVatNoticeText } from "@/lib/vat-utils";
+import { isVatEffective, getVatRate } from "@/lib/vat-utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatCurrency } from "@/lib/utils";
@@ -646,7 +646,7 @@ export async function generateAeroWashQuotePdf({
         : (invoice.total || invoice.subtotal);
 
     // Height calculation for keep-together logic
-    const totalsHeight = (allowanceAmount > 0 ? 9.5 : 5) + (isVatRegistered ? 5 : 0) + 18;
+    const totalsHeight = (allowanceAmount > 0 ? 9.5 : 5) + (isVatRegistered ? 5 : 0) + 14;
 
     // Notice box logic
     const siteVisitCompleted = Boolean(
@@ -727,14 +727,7 @@ export async function generateAeroWashQuotePdf({
     doc.setFontSize(11);
     doc.text(formatCurrency(effectiveTotal, currencySymbol), totalsRightX - 4, barY + 6.5, { align: "right" });
 
-    // VAT Notice line
-    currentY = barY + 11;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
-    const vatNotice = getVatNoticeText(company.name, isVatRegistered, vatRate);
-    doc.text(vatNotice, totalsRightX, currentY + 3, { align: "right" });
-    currentY += 7;
+    currentY = barY + 14;
 
     // ==========================================
     // 6. NOTICE BOX (Site visit completed vs required)
@@ -979,7 +972,6 @@ export async function generateAeroWashQuotePdf({
     ];
     const commercialRight = [
         { text: "Any variation or additional work is quoted separately before it is carried out.", isBold: false },
-        { text: getVatNoticeText(company.name, isVatRegistered, vatRate), isBold: false },
         { text: "Where work cannot start, continue or be completed for reasons outside AeroWash's control, including site access not being available or work being stopped at the client's request, a standby or return attendance charge applies, agreed with you before it is invoiced.", isBold: false },
         { text: "Existing damage, failed sealant, staining that has penetrated the substrate and other pre-existing defects are recorded before work starts and are not the responsibility of AeroWash.", isBold: false }
     ];
