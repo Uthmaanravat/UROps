@@ -2,9 +2,12 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-pathname', request.nextUrl.pathname)
+
     let response = NextResponse.next({
         request: {
-            headers: request.headers,
+            headers: requestHeaders,
         },
     })
 
@@ -33,7 +36,7 @@ export async function updateSession(request: NextRequest) {
                             })
                             response = NextResponse.next({
                                 request: {
-                                    headers: request.headers,
+                                    headers: requestHeaders,
                                 },
                             })
                             response.cookies.set({
@@ -41,7 +44,7 @@ export async function updateSession(request: NextRequest) {
                                 value,
                                 ...options,
                             })
-                        } catch (cookieErr) {
+                        } catch {
                             // Ignore cookie set errors in middleware
                         }
                     },
@@ -54,7 +57,7 @@ export async function updateSession(request: NextRequest) {
                             })
                             response = NextResponse.next({
                                 request: {
-                                    headers: request.headers,
+                                    headers: requestHeaders,
                                 },
                             })
                             response.cookies.set({
@@ -62,7 +65,7 @@ export async function updateSession(request: NextRequest) {
                                 value: '',
                                 ...options,
                             })
-                        } catch (cookieErr) {
+                        } catch {
                             // Ignore cookie remove errors in middleware
                         }
                     },

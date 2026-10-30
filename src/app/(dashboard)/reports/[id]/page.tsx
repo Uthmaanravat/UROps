@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { ensureAuth } from "@/lib/auth-actions"
 import { ReportEditor } from "./ReportEditor"
 import { redirect, notFound } from "next/navigation"
+import { getSignedPhotoUrl } from "@/lib/supabase-storage"
 
 export const dynamic = 'force-dynamic'
 
@@ -49,8 +50,20 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
         layoutPreferences: settings?.layoutPreferences
     }
 
-    const serializedReport = JSON.parse(JSON.stringify(report));
-    serializedReport.items = serializedReport.items || [];
+    const serializedReport = JSON.parse(JSON.stringify(report))
+    serializedReport.items = await Promise.all(
+        (serializedReport.items || []).map(async (item: any) => {
+            const resolvedUrls = await Promise.all(
+                (item.imageUrls || []).map((u: string) => getSignedPhotoUrl(u))
+            )
+            const resolvedPrimary = item.imageUrl ? await getSignedPhotoUrl(item.imageUrl) : (resolvedUrls[0] || null)
+            return {
+                ...item,
+                imageUrl: resolvedPrimary,
+                imageUrls: resolvedUrls
+            }
+        })
+    )
 
     return (
         <div className="space-y-6">

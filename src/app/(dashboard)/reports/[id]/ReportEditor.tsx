@@ -438,6 +438,68 @@ export function ReportEditor({ report, company, clients = [], projects = [] }: R
                 </div>
             )}
 
+            {/* AeroWash Completion Flight & Sign-Off Summary */}
+            {(reportType === "AEROWASH_COMPLETION" || metadata?.signOff) && (
+                <Card className="bg-[#141722] border-orange-500/30 shadow-xl p-5 rounded-2xl space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+                        <div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">AeroWash Flight Operations & Handover</span>
+                            <h3 className="text-base font-black text-white mt-0.5">{metadata?.propertyAddress || report.project?.name || "Site Completion Record"}</h3>
+                        </div>
+                        {metadata?.poNumber && (
+                            <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-slate-200">
+                                PO: {metadata.poNumber}
+                            </span>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                            <div className="text-[10px] uppercase font-bold text-slate-400">Pilot (RPAS PIC)</div>
+                            <div className="font-bold text-white mt-0.5">{metadata?.pilotName || "On file"}</div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                            <div className="text-[10px] uppercase font-bold text-slate-400">Aircraft</div>
+                            <div className="font-bold text-white mt-0.5">{metadata?.equipmentUsed || "AeroWash JTC10"}</div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                            <div className="text-[10px] uppercase font-bold text-slate-400">Total Flight Time</div>
+                            <div className="font-bold text-white mt-0.5">{metadata?.flightTime || (metadata?.totalFlightMinutes ? `${metadata.totalFlightMinutes} mins` : "Recorded")}</div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                            <div className="text-[10px] uppercase font-bold text-slate-400">Site Weather</div>
+                            <div className="font-bold text-white mt-0.5">{metadata?.weather || "Within limits"}</div>
+                        </div>
+                    </div>
+                    {metadata?.signOff && (
+                        <div className="p-4 rounded-xl bg-black/30 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <div className="text-[10px] uppercase font-black tracking-wider text-emerald-400">Client On-Site Sign-Off</div>
+                                {metadata.signOff.clientUnavailable ? (
+                                    <div className="text-xs text-amber-300 font-semibold mt-1">
+                                        Client representative unavailable on site — Reason: {metadata.signOff.reason || "Not available"}
+                                    </div>
+                                ) : (
+                                    <div className="text-sm font-bold text-white mt-1">
+                                        Signed by {metadata.signOff.name || "Client Representative"}
+                                        {metadata.signOff.signedAt && (
+                                            <span className="text-xs text-slate-400 font-normal ml-2">
+                                                ({new Date(metadata.signOff.signedAt).toLocaleString()})
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            {metadata.signOff.signatureDataUrl && !metadata.signOff.clientUnavailable && (
+                                <div className="bg-[#0B0F1A] rounded-lg p-2.5 border border-emerald-500/30 shrink-0">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={metadata.signOff.signatureDataUrl} alt="Client signature" className="h-14 w-auto object-contain" />
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </Card>
+            )}
+
             {/* Advanced Settings */}
             {(reportType === "ADVANCED" || reportType === "CONSTRUCTION") && (
                 <Card className="bg-card border-white/5 shadow-inner p-4 rounded-2xl grid md:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-300">

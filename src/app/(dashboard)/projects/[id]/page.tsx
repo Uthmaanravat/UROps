@@ -2,24 +2,39 @@ import { prisma } from "@/lib/prisma"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Pencil, FileText, Calendar, DollarSign, CheckCircle, Sparkles, Trophy, ArrowUpRight } from "lucide-react"
+import { Pencil, FileText, Calendar, DollarSign, CheckCircle, Sparkles, Trophy } from "lucide-react"
 import { formatCurrency, cn } from "@/lib/utils"
 import { WorkflowTracker } from "@/components/workflow/WorkflowTracker"
 import { updateProjectStatus, deleteProject } from "@/app/(dashboard)/projects/actions"
 import { deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { DeleteButton } from "@/components/ui/DeleteButton"
 import { deleteSOWAction } from "./sow/actions"
-import { ensureAuth } from "@/lib/auth-actions"
+import { ensureAuth, getAuthUser } from "@/lib/auth-actions"
 import { SOWChecklistButton } from "./sow/SOWChecklistButton"
+import { AeroWashJobDispatchCard } from "@/components/projects/AeroWashJobDispatchCard"
+import { getOpenMeteoSiteForecastForDate, evaluateFlightWeatherStatus, type EvaluatedFlightWeather } from "@/lib/weather"
 
 export const dynamic = 'force-dynamic'
 
+const AEROWASH_COMPANY_ID = '70af7281-072d-4ed5-9f2e-af4d93e99ea9'
+
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
     const companyId = await ensureAuth()
+    const authUser = await getAuthUser()
     const project = await (prisma as any).project.findFirst({
         where: { id: params.id, companyId },
         include: {
             client: true,
+            jobSheet: true,
+            parentProject: {
+                include: {
+                    invoices: {
+                        where: { type: 'QUOTE' },
+                        orderBy: { createdAt: 'desc' },
+                        take: 1
+                    }
+                }
+            },
             invoices: {
                 orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
                 include: { payments: true }
@@ -50,12 +65,48 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         where: { companyId: project.companyId }
     })
 
+    const isAeroWash =
+        project.companyId === AEROWASH_COMPANY_ID ||
+        settings?.theme === 'dark-orange'
+
+    let teamUsers: Array<{ id: string; name: string | null; email: string; role: string }> = []
+    let drones: Array<{ id: string; name: string; serialNumber: string; isActive: boolean }> = []
+    let flightWeather: EvaluatedFlightWeather | null = null
+
+    if (isAeroWash) {
+        const [usersRes, dronesRes] = await Promise.all([
+            prisma.user.findMany({
+                where: { companyId },
+                select: { id: true, name: true, email: true, role: true },
+                orderBy: { createdAt: 'asc' }
+            }),
+            prisma.drone.findMany({
+                where: { companyId, isActive: true },
+                select: { id: true, name: true, serialNumber: true, isActive: true },
+                orderBy: { name: 'asc' }
+            })
+        ])
+        teamUsers = usersRes
+        drones = dronesRes
+
+        const quoteDoc =
+            project.invoices.find((i: any) => i.type === 'QUOTE') ||
+            project.parentProject?.invoices?.[0]
+        const siteAddress = quoteDoc?.site || project.client?.address || project.name
+        if (project.startDate) {
+            const forecast = await getOpenMeteoSiteForecastForDate(
+                siteAddress,
+                project.startDate,
+                project.jobSheet?.siteCoordinates as any
+            )
+            flightWeather = evaluateFlightWeatherStatus(forecast, settings)
+        }
+    }
+
     const latestScope = project.scopes[0]
     const latestWbp = project.workBreakdowns[0]
     // Find the latest document for the project (regardless of type) to ensure navigation works
     const latestDoc = project.invoices[0]
-    const invoice = project.invoices.find((i: any) => i.type === 'INVOICE')
-    const paidAmount = invoice?.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0
 
     const hasInvoice = project.invoices.some((i: any) => i.type === 'INVOICE');
     const hasQuote = project.invoices.some((i: any) => i.type === 'QUOTE');
@@ -67,8 +118,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         effectiveStage = 'QUOTATION';
     }
 
-    // Role Simulation (demo purposes)
-    const isAdmin = true;
+    const isAdmin = !authUser || authUser.role === 'ADMIN' || Boolean(authUser.isOwner);
 
     return (
         <div className="space-y-8 pb-20">
@@ -79,9 +129,9 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                     <span className="opacity-30">/</span>
                     <span className="text-muted-foreground">{project.client.name}</span>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <h1 className="text-4xl font-black tracking-tight text-white">{project.name}</h1>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         {project.status === 'COMPLETED' && (
                             <form action={async () => {
                                 'use server'
@@ -93,7 +143,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                 }
                             }}>
                                 <Button className="bg-[#D05E00] hover:bg-[#B34E00] text-white font-bold shadow-lg shadow-orange-500/20">
-                                    <FileText className="mr-2 h-4 w-4" /> Create Completion Report
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    {project.jobSheet?.completionReportId ? "View Completion Report" : "Create Completion Report"}
                                 </Button>
                             </form>
                         )}
@@ -222,6 +273,46 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                         </div>
                     </div>
                 </div>
+
+                {/* AeroWash Only: Crew, Pilot, Aircraft Dispatch & Standby Charge Approval */}
+                {isAeroWash && (
+                    <AeroWashJobDispatchCard
+                        project={{
+                            id: project.id,
+                            name: project.name,
+                            status: project.status,
+                            isRecurring: project.isRecurring,
+                            parentProjectId: project.parentProjectId,
+                            assignedCrewIds: project.assignedCrewIds || [],
+                            pilotUserId: project.pilotUserId || null,
+                            droneId: project.droneId || null
+                        }}
+                        jobSheet={
+                            project.jobSheet
+                                ? {
+                                      id: project.jobSheet.id,
+                                      status: project.jobSheet.status,
+                                      startedAt: project.jobSheet.startedAt
+                                          ? new Date(project.jobSheet.startedAt).toISOString()
+                                          : null,
+                                      finishedAt: project.jobSheet.finishedAt
+                                          ? new Date(project.jobSheet.finishedAt).toISOString()
+                                          : null,
+                                      totalFlightMinutes: project.jobSheet.totalFlightMinutes ?? null,
+                                      standbyFlagged: project.jobSheet.standbyFlagged,
+                                      standbyReason: project.jobSheet.standbyReason,
+                                      standbyNotes: project.jobSheet.standbyNotes,
+                                      standbyStatus: project.jobSheet.standbyStatus,
+                                      completionReportId: project.jobSheet.completionReportId
+                                  }
+                                : null
+                        }
+                        teamUsers={teamUsers}
+                        drones={drones}
+                        flightWeather={flightWeather}
+                        isOwnerOrAdmin={isAdmin}
+                    />
+                )}
             </div>
 
             {/* Content Grid */}
@@ -274,9 +365,9 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                             <td className="p-3 text-right text-muted-foreground">-</td>
                                             <td className="p-3 text-right">
                                                 <div className="flex justify-end gap-2 items-center">
-                                                    <SOWChecklistButton 
-                                                        project={project as any} 
-                                                        latestScope={latestScope as any} 
+                                                    <SOWChecklistButton
+                                                        project={project as any}
+                                                        latestScope={latestScope as any}
                                                         settings={settings}
                                                         compact={true}
                                                         className="h-8 w-8 p-0 border-white/10 hover:bg-primary/10 text-primary transition-all rounded-md"

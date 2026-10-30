@@ -1,5 +1,7 @@
 import { getCompanySettings } from "./actions"
+import { getCompanyDronesAction } from "./flight-ops-actions"
 import { SettingsForm } from "@/components/settings/SettingsForm"
+import { AeroWashFlightOpsSettings } from "@/components/settings/AeroWashFlightOpsSettings"
 import Link from "next/link"
 import { Building2, ShieldCheck, Users, Layers } from "lucide-react"
 
@@ -8,6 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function SettingsPage() {
     const settings = await getCompanySettings()
     const isAeroWash = settings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || settings?.theme === 'dark-orange'
+    const drones = isAeroWash ? await getCompanyDronesAction() : []
 
     return (
         <div className="space-y-6">
@@ -52,6 +55,13 @@ export default async function SettingsPage() {
                     </Link>
                 </div>
             </div>
+
+            {isAeroWash && (
+                <AeroWashFlightOpsSettings
+                    initialSettings={settings}
+                    initialDrones={drones}
+                />
+            )}
 
             <SettingsForm initialSettings={settings} />
         </div>

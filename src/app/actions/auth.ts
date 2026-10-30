@@ -155,7 +155,7 @@ export async function signInAction(formData: FormData) {
                         { email: { equals: targetEmail, mode: 'insensitive' } }
                     ]
                 },
-                select: { id: true, companyId: true }
+                select: { id: true, companyId: true, role: true }
             })
 
             if (!dbUser || !dbUser.companyId) {
@@ -165,9 +165,14 @@ export async function signInAction(formData: FormData) {
                     error: "Access denied. Your account is not associated with an active company or has been removed."
                 }
             }
+
+            return {
+                success: true,
+                redirectTo: dbUser.role === 'CREW' ? '/my-jobs' : '/dashboard'
+            }
         }
 
-        return { success: true }
+        return { success: true, redirectTo: '/dashboard' }
     } catch (error: any) {
         console.error("SignIn Error:", error.message)
         return { success: false, error: error.message }

@@ -37,6 +37,7 @@ import { generateSchedulePdf, generateJobSheetPdf } from "@/lib/project-print-ut
 import { ProjectScheduleView } from "@/components/projects/ProjectScheduleView"
 import { ProjectCalendarView } from "@/components/projects/ProjectCalendarView"
 import { ProjectRecurrenceModal } from "@/components/projects/ProjectRecurrenceModal"
+import { WeatherBadge } from "@/components/projects/WeatherBadge"
 import { ProjectSchedulePrintModal } from "@/components/projects/ProjectSchedulePrintModal"
 
 // PART 5 REQUIREMENT: Scheduled -> In Progress -> Completed -> Invoiced -> Paid
@@ -542,6 +543,12 @@ export function ProjectDashboardClient({
                                                         <span className="truncate">{site}</span>
                                                     </div>
 
+                                                    {isAeroWash && project.flightWeather && (
+                                                        <div>
+                                                            <WeatherBadge weather={project.flightWeather} compact className="text-[10px]" />
+                                                        </div>
+                                                    )}
+
                                                     {/* Date & Crew */}
                                                     <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-1 border-t border-white/5">
                                                         <div className="flex items-center gap-1 text-zinc-300 font-medium">
@@ -580,20 +587,44 @@ export function ProjectDashboardClient({
                                                         </span>
                                                     </div>
 
-                                                    {/* Action Button: Print Job Sheet */}
-                                                    <Button
-                                                        type="button"
-                                                        onClick={() => handlePrintJobSheet(project)}
-                                                        disabled={isPrinting}
-                                                        className="w-full h-7 rounded-lg text-[10px] font-bold bg-[#14141E] border border-white/10 text-white hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                                                    >
-                                                        {isPrinting ? (
-                                                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                                                        ) : (
-                                                            <Printer className="h-3 w-3 text-primary" />
-                                                        )}
-                                                        <span>Print Job Sheet</span>
-                                                    </Button>
+                                                    {/* Action Buttons: Mobile Job Sheet (AeroWash only) + Print Job Sheet */}
+                                                    {isAeroWash ? (
+                                                        <div className="flex gap-1.5">
+                                                            <Link
+                                                                href={`/my-jobs/${project.id}`}
+                                                                className="flex-1 h-7 rounded-lg text-[10px] font-bold bg-primary/15 border border-primary/40 text-primary hover:bg-primary hover:text-black transition-all flex items-center justify-center gap-1 shadow-sm"
+                                                            >
+                                                                <span>Run Job</span>
+                                                            </Link>
+                                                            <Button
+                                                                type="button"
+                                                                onClick={() => handlePrintJobSheet(project)}
+                                                                disabled={isPrinting}
+                                                                className="flex-1 h-7 rounded-lg text-[10px] font-bold bg-[#14141E] border border-white/10 text-white hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                                                            >
+                                                                {isPrinting ? (
+                                                                    <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                                ) : (
+                                                                    <Printer className="h-3 w-3 text-primary" />
+                                                                )}
+                                                                <span>PDF</span>
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <Button
+                                                            type="button"
+                                                            onClick={() => handlePrintJobSheet(project)}
+                                                            disabled={isPrinting}
+                                                            className="w-full h-7 rounded-lg text-[10px] font-bold bg-[#14141E] border border-white/10 text-white hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                                                        >
+                                                            {isPrinting ? (
+                                                                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                            ) : (
+                                                                <Printer className="h-3 w-3 text-primary" />
+                                                            )}
+                                                            <span>Print Job Sheet</span>
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             )
                                         })}
@@ -660,7 +691,14 @@ export function ProjectDashboardClient({
                                                 </td>
                                                 <td className="p-3.5 text-zinc-300">{p.client?.name || "Client"}</td>
                                                 <td className="p-3.5 text-zinc-400 max-w-[200px] truncate">{site}</td>
-                                                <td className="p-3.5 text-zinc-300">{dateStr}</td>
+                                                <td className="p-3.5 text-zinc-300">
+                                                    <div>{dateStr}</div>
+                                                    {isAeroWash && p.flightWeather && (
+                                                        <div className="mt-1">
+                                                            <WeatherBadge weather={p.flightWeather} compact className="text-[9px] px-1.5 py-0.5" />
+                                                        </div>
+                                                    )}
+                                                </td>
                                                 <td className="p-3.5 text-zinc-300">{crew}</td>
                                                 <td className="p-3.5">
                                                     <Badge className="bg-zinc-800 text-zinc-300 text-[10px] font-bold">
