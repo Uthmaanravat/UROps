@@ -645,11 +645,14 @@ export async function generateAeroWashQuotePdf({
         ? (invoice.subtotal + effectiveTaxAmount) 
         : (invoice.total || invoice.subtotal);
 
+    const isBalanceInvoice = Boolean(invoice.metadata?.isBalanceInvoice);
+    const showPdfSubtotalRow = allowanceAmount > 0 || !isBalanceInvoice || isVatRegistered;
+
     // Height calculation for keep-together logic
-    const totalsHeight = (allowanceAmount > 0 ? 9.5 : 5) + (isVatRegistered ? 5 : 0) + 14;
+    const totalsHeight = (allowanceAmount > 0 ? 9.5 : (showPdfSubtotalRow ? 5 : 0)) + (isVatRegistered ? 5 : 0) + 14;
 
     // Notice box logic
-    const siteVisitCompleted = Boolean(
+    const siteVisitCompleted = !isBalanceInvoice && Boolean(
         invoice.metadata?.siteVisitDone || 
         invoice.metadata?.siteVisitCompleted ||
         (invoice.metadata?.siteVisitPhotos && invoice.metadata.siteVisitPhotos.length > 0) ||
@@ -660,7 +663,7 @@ export async function generateAeroWashQuotePdf({
         ? new Date(siteVisitDateRaw).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
         : new Date(invoice.date || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    const siteVisitRequired = !siteVisitCompleted && (
+    const siteVisitRequired = !isInvoice && !siteVisitCompleted && (
         invoice.metadata?.siteVisitRequired ?? (
             invoice.total >= 50000 || 
             invoice.items.some(i => i.description.toLowerCase().includes('site visit') || i.description.toLowerCase().includes('pre-treatment'))
@@ -695,7 +698,7 @@ export async function generateAeroWashQuotePdf({
         doc.text(allowanceName, totalsLeftX, currentY);
         doc.text(`− ${formatCurrency(allowanceAmount, currencySymbol)}`, totalsRightX, currentY, { align: "right" });
         currentY += 5;
-    } else {
+    } else if (showPdfSubtotalRow) {
         doc.text("Subtotal", totalsLeftX, currentY);
         doc.text(formatCurrency(invoice.subtotal, currencySymbol), totalsRightX, currentY, { align: "right" });
         currentY += 5;
@@ -709,7 +712,7 @@ export async function generateAeroWashQuotePdf({
         currentY += 5;
     }
 
-    // Black TOTAL DUE Bar with orange top border
+    // Black TOTAL DUE / BALANCE DUE Bar with orange top border
     const barY = currentY + 1;
     doc.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
     doc.rect(totalsLeftX, barY, totalsWidth, 10, 'F');
@@ -718,11 +721,11 @@ export async function generateAeroWashQuotePdf({
     doc.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
     doc.rect(totalsLeftX, barY, totalsWidth, 1.2, 'F');
 
-    // Total Due Text
+    // Total Due / Balance Due Text
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(255, 255, 255);
-    doc.text("TOTAL DUE", totalsLeftX + 4, barY + 6.5);
+    doc.text(isBalanceInvoice ? "BALANCE DUE" : "TOTAL DUE", totalsLeftX + 4, barY + 6.5);
 
     doc.setFontSize(11);
     doc.text(formatCurrency(effectiveTotal, currencySymbol), totalsRightX - 4, barY + 6.5, { align: "right" });

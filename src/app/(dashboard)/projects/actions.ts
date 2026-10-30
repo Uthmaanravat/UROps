@@ -84,88 +84,36 @@ export async function updateProjectStatus(id: string, status: string) {
             }
         })
 
-        // On project COMPLETED: draft the BALANCE invoice (remaining 40%) using existing Convert to Invoice flow
+        // On project COMPLETED: draft the dynamic Balance Invoice (Quote + Approved Extras - Payments Received)
         if (finalStatus === 'COMPLETED') {
             try {
-                // Find accepted quote with deposit invoice
-                const acceptedQuote = project.invoices.find(inv => inv.type === 'QUOTE' && inv.status === 'ACCEPTED');
-                const hasExistingBalanceInvoice = project.invoices.some(inv => inv.type === 'INVOICE' && (inv.metadata as any)?.isBalanceInvoice);
-
-                if (acceptedQuote && !hasExistingBalanceInvoice) {
-                    const settings = await prisma.companySettings.findUnique({ where: { companyId } });
-                    const isAeroWash = companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || settings?.theme === 'dark-orange';
-                    const balancePct = 40;
-                    const balanceSubtotal = Math.round((acceptedQuote.subtotal * (balancePct / 100)) * 100) / 100;
-                    const { isVatEffective, getVatRate, calculateVatAndTotal } = await import("@/lib/vat-utils");
-                    const now = new Date();
-                    const vatEffective = isVatEffective(now, settings);
-                    const vatRate = getVatRate(settings);
-                    const { taxRate, taxAmount, total: balanceTotal } = calculateVatAndTotal(balanceSubtotal, vatEffective, vatRate);
-
-                    const year = now.getFullYear();
-                    const lastInv = await prisma.invoice.findFirst({
-                        where: { companyId, type: 'INVOICE' },
-                        orderBy: { number: 'desc' }
+                const settings = await prisma.companySettings.findUnique({ where: { companyId } });
+                const isAeroWash = companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || settings?.theme === 'dark-orange';
+                if (isAeroWash) {
+                    const { upsertProjectBalanceInvoiceDraft } = await import("@/lib/balance-invoice");
+                    const res = await upsertProjectBalanceInvoiceDraft({
+                        projectId: project.id,
+                        companyId
                     });
-                    const nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInv?.number || 0) + 1;
-                    await prisma.companySettings.update({
-                        where: { companyId },
-                        data: { lastInvoiceNumber: nextInvoiceNumber }
-                    });
-                    const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`;
-
-                    const balanceInvoice = await prisma.invoice.create({
-                        data: {
-                            companyId,
-                            clientId: project.clientId,
-                            projectId: project.id,
-                            type: 'INVOICE',
-                            status: 'DRAFT', // Draft for owner review and send
-                            number: nextInvoiceNumber,
-                            quoteNumber: formattedInvoiceNumber,
-                            reference: acceptedQuote.quoteNumber || `Quote #${acceptedQuote.number}`,
-                            clientPoNumber: acceptedQuote.clientPoNumber,
-                            subtotal: balanceSubtotal,
-                            taxRate,
-                            taxAmount,
-                            total: balanceTotal,
-                            site: acceptedQuote.site || project.name,
-                            paymentNotes: `Final balance invoice (40%) on project completion as per accepted quotation ${acceptedQuote.quoteNumber || acceptedQuote.number}.`,
-                            date: now,
-                            metadata: {
-                                isBalanceInvoice: true,
-                                originalQuoteId: acceptedQuote.id,
-                                balancePercentage: 40
-                            },
-                            items: {
-                                create: [
-                                    {
-                                        description: `40% Balance Due on Project Completion – ${acceptedQuote.quoteNumber || 'Quotation'} (${acceptedQuote.site || project.name})`,
-                                        quantity: 1,
-                                        unit: 'sum',
-                                        unitPrice: balanceSubtotal,
-                                        total: balanceSubtotal,
-                                        position: 0
-                                    }
-                                ]
-                            }
+                    if (res.invoiceId && res.calculation) {
+                        const { sendRealEmail } = await import("@/lib/email");
+                        const ownerEmails = ['uthmaan@aerowash.co.za'];
+                        if (settings?.copyNotificationsTo && !ownerEmails.includes(settings.copyNotificationsTo)) {
+                            ownerEmails.push(settings.copyNotificationsTo);
                         }
-                    });
-
-                    // Notify owner that balance invoice is drafted
-                    const { sendRealEmail } = await import("@/lib/email");
-                    const ownerEmails = ['uthmaan@aerowash.co.za'];
-                    if (settings?.copyNotificationsTo && !ownerEmails.includes(settings.copyNotificationsTo)) {
-                        ownerEmails.push(settings.copyNotificationsTo);
+                        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
+                        await sendRealEmail({
+                            to: ownerEmails,
+                            from: 'AeroWash Review <info@aerowash.co.za>',
+                            replyTo: 'info@aerowash.co.za',
+                            subject: `Project Completed: Balance Invoice Drafted (${res.invoiceNumber} — R${res.calculation.balanceDue.toFixed(2)})`,
+                            body:
+                                `Hello Uthmaan,\n\nProject "${project.name}" has been marked as COMPLETED.\n\n` +
+                                `Balance Invoice ${res.invoiceNumber} (R${res.calculation.balanceDue.toFixed(2)}) is ready for your review:\n` +
+                                (res.calculation.depositNotReceived ? `⚠️ Warning: Deposit not received — full amount due included on draft.\n` : '') +
+                                `${appUrl}/invoices/${res.invoiceId}\n\nUROps Project Workflow`
+                        }).catch(() => {});
                     }
-                    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
-                    await sendRealEmail({
-                        to: ownerEmails,
-                        from: 'AeroWash Review <info@aerowash.co.za>',
-                        replyTo: 'info@aerowash.co.za',
-                        subject: `Project Completed: Balance Invoice Drafted (${formattedInvoiceNumber} — R${balanceTotal.toFixed(2)})`,
-                        body: `Hello Uthmaan,\n\nProject "${project.name}" has been marked as COMPLETED.\n\nThe 40% balance invoice (${formattedInvoiceNumber} for R${balanceTotal.toFixed(2)}) has been drafted automatically and is ready for your review and send:\n${appUrl}/invoices/${balanceInvoice.id}\n\nUROps Project Workflow`
-                    });
                 }
             } catch (autoDraftErr) {
                 console.error("Error auto-drafting balance invoice on project completion:", autoDraftErr);

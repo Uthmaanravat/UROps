@@ -1121,6 +1121,24 @@ export async function recordPaymentAction(data: {
     if (invoice) {
         revalidatePath(`/clients/${invoice.clientId}`)
         if (invoice.projectId) {
+            // If an unsent DRAFT balance invoice exists on this project and payment was recorded against another invoice (e.g. late deposit), recalculate the draft balance invoice automatically
+            const otherDraftBal = await prisma.invoice.findFirst({
+                where: {
+                    projectId: invoice.projectId,
+                    companyId,
+                    type: "INVOICE",
+                    status: "DRAFT",
+                    id: { not: invoice.id }
+                }
+            })
+            if (otherDraftBal && ((otherDraftBal.metadata as any)?.isBalanceInvoice || (otherDraftBal.metadata as any)?.isVisitInvoice)) {
+                const { upsertProjectBalanceInvoiceDraft } = await import("@/lib/balance-invoice")
+                await upsertProjectBalanceInvoiceDraft({
+                    projectId: invoice.projectId,
+                    companyId
+                })
+                revalidatePath(`/invoices/${otherDraftBal.id}`)
+            }
             revalidatePath(`/projects/${invoice.projectId}`)
         }
     }

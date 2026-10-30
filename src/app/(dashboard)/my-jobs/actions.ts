@@ -7,6 +7,7 @@ import { uploadQuotePhoto, getSignedPhotoUrl } from "@/lib/supabase-storage"
 import { suggestNextAvailableJobDate, getOpenMeteoSiteForecastForDate, evaluateFlightWeatherStatus } from "@/lib/weather"
 import { isVatEffective, getVatRate, calculateVatAndTotal } from "@/lib/vat-utils"
 import { sendRealEmail } from "@/lib/email"
+import { recordApprovedProjectExtra, upsertProjectBalanceInvoiceDraft } from "@/lib/balance-invoice"
 
 export interface PreFlightChecklistState {
     weatherChecked: boolean
@@ -848,98 +849,15 @@ export async function finishJobAction(input: {
             })
         ])
 
-        // 5. Draft Balance Invoice (Phase 1 40% flow for once-off jobs, or visit invoice draft for recurring visits)
-        let draftedInvoiceId: string | null = null
-        let draftedInvoiceNumber: string | null = null
-
-        const settings = settingsData.settings
-        const existingBalanceInv = project.invoices.find(
-            inv => inv.type === "INVOICE" && ((inv.metadata as any)?.isBalanceInvoice || (inv.metadata as any)?.isVisitInvoice)
-        )
-
-        if (existingBalanceInv) {
-            draftedInvoiceId = existingBalanceInv.id
-            draftedInvoiceNumber = existingBalanceInv.quoteNumber || `INV-${existingBalanceInv.number}`
-            // Attach completionReportId onto existing draft invoice metadata
-            await prisma.invoice.update({
-                where: { id: existingBalanceInv.id },
-                data: {
-                    metadata: {
-                        ...((existingBalanceInv.metadata as any) || {}),
-                        completionReportId: report.id
-                    }
-                }
-            })
-        } else if (acceptedQuote) {
-            const isRecurringVisit = Boolean(project.parentProjectId)
-            const pct = isRecurringVisit ? 100 : 40
-            const baseSubtotal = Math.round((acceptedQuote.subtotal * (pct / 100)) * 100) / 100
-
-            const vatEffective = isVatEffective(now, settings)
-            const vatRate = getVatRate(settings)
-            const { taxRate, taxAmount, total: invTotal } = calculateVatAndTotal(baseSubtotal, vatEffective, vatRate)
-
-            const year = now.getFullYear()
-            const lastInv = await prisma.invoice.findFirst({
-                where: { companyId, type: "INVOICE" },
-                orderBy: { number: "desc" }
-            })
-            const nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInv?.number || 0) + 1
-            if (settings) {
-                await prisma.companySettings.update({
-                    where: { companyId },
-                    data: { lastInvoiceNumber: nextInvoiceNumber }
-                })
-            }
-            const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, "0")}`
-
-            const createdInv = await prisma.invoice.create({
-                data: {
-                    companyId,
-                    clientId: project.clientId,
-                    projectId: project.id,
-                    type: "INVOICE",
-                    status: "DRAFT",
-                    number: nextInvoiceNumber,
-                    quoteNumber: formattedInvoiceNumber,
-                    reference: acceptedQuote.quoteNumber || `Quote #${acceptedQuote.number}`,
-                    clientPoNumber: acceptedQuote.clientPoNumber,
-                    subtotal: baseSubtotal,
-                    taxRate,
-                    taxAmount,
-                    total: invTotal,
-                    site: siteAddress,
-                    paymentNotes: isRecurringVisit
-                        ? `Scheduled maintenance visit invoice for ${project.name}. Completion report attached.`
-                        : `Final balance invoice (40%) on project completion as per accepted quotation ${acceptedQuote.quoteNumber || acceptedQuote.number}.`,
-                    date: now,
-                    metadata: {
-                        isBalanceInvoice: !isRecurringVisit,
-                        isVisitInvoice: isRecurringVisit,
-                        originalQuoteId: acceptedQuote.id,
-                        balancePercentage: pct,
-                        completionReportId: report.id
-                    },
-                    items: {
-                        create: [
-                            {
-                                description: isRecurringVisit
-                                    ? `Completed Scheduled Facade Maintenance Visit – ${project.name}`
-                                    : `40% Balance Due on Project Completion – ${acceptedQuote.quoteNumber || "Quotation"} (${siteAddress})`,
-                                quantity: 1,
-                                unit: "sum",
-                                unitPrice: baseSubtotal,
-                                total: baseSubtotal,
-                                position: 0
-                            }
-                        ]
-                    }
-                }
-            })
-
-            draftedInvoiceId = createdInv.id
-            draftedInvoiceNumber = formattedInvoiceNumber
-        }
+        // 5. Draft Balance Invoice: Final Job Total (Quote + Approved Extras) minus Payments Received
+        const balanceDraft = await upsertProjectBalanceInvoiceDraft({
+            projectId: project.id,
+            companyId,
+            completionReportId: report.id
+        })
+        const draftedInvoiceId = balanceDraft.invoiceId
+        const draftedInvoiceNumber = balanceDraft.invoiceNumber
+        const balanceCalc = balanceDraft.calculation
 
         // 6. Notify Owner
         if (settingsData.emails.length > 0) {
@@ -954,8 +872,9 @@ export async function finishJobAction(input: {
                     `• Pilot: ${pilotUser?.name || pilotUser?.email || authUser.name || authUser.email}\n` +
                     `• Aircraft: ${drone ? `${drone.name} (${drone.serialNumber})` : "On file"}\n` +
                     `• Total Flight Time: ${computedFlightMins ?? "—"} mins\n` +
-                    `• Client Sign-Off: ${unavailable ? `Unavailable (${input.clientUnavailableReason?.trim()})` : `Signed by ${input.signOffName?.trim()}`}\n\n` +
-                    `Completion Report: ${appUrl}/reports/${report.id}\n` +
+                    `• Client Sign-Off: ${unavailable ? `Unavailable (${input.clientUnavailableReason?.trim()})` : `Signed by ${input.signOffName?.trim()}`}\n` +
+                    (balanceCalc?.depositNotReceived ? `• ⚠️ Deposit not received — full amount due (R${balanceCalc.balanceDue.toFixed(2)}) included on draft.\n` : "") +
+                    `\nCompletion Report: ${appUrl}/reports/${report.id}\n` +
                     (draftedInvoiceId ? `Draft Balance Invoice: ${appUrl}/invoices/${draftedInvoiceId}\n` : "")
             }).catch(err => console.warn("Completion email warning:", err))
         }
@@ -1017,99 +936,47 @@ export async function resolveStandbyChargeAction(input: {
             return { success: false, error: "Enter a valid Standby / Return Attendance amount (R)." }
         }
 
-        const settings = await prisma.companySettings.findUnique({ where: { companyId } })
-        const now = new Date()
-        const vatEffective = isVatEffective(now, settings)
-        const vatRate = getVatRate(settings)
-
         const lineDesc =
             input.description?.trim() ||
             `Standby / Return Attendance Charge (${project.jobSheet.standbyReason === "ACCESS" ? "Site access unavailable" : "Work stopped at client request"})`
 
-        // Append to existing DRAFT invoice on project if present, otherwise create a new DRAFT invoice
-        const draftInvoice = project.invoices.find(i => i.type === "INVOICE" && i.status === "DRAFT")
-        let targetInvoiceId: string
-
-        if (draftInvoice) {
-            const newSubtotal = Math.round((draftInvoice.subtotal + amount) * 100) / 100
-            const { taxRate, taxAmount, total } = calculateVatAndTotal(newSubtotal, vatEffective, vatRate)
-            const count = await prisma.invoiceItem.count({ where: { invoiceId: draftInvoice.id } })
-
-            await prisma.$transaction([
-                prisma.invoiceItem.create({
-                    data: {
-                        invoiceId: draftInvoice.id,
-                        description: lineDesc,
-                        quantity: 1,
-                        unit: "visit",
-                        unitPrice: amount,
-                        total: amount,
-                        position: count
-                    }
-                }),
-                prisma.invoice.update({
-                    where: { id: draftInvoice.id },
-                    data: { subtotal: newSubtotal, taxRate, taxAmount, total }
-                })
-            ])
-            targetInvoiceId = draftInvoice.id
-        } else {
-            const { taxRate, taxAmount, total } = calculateVatAndTotal(amount, vatEffective, vatRate)
-            const year = now.getFullYear()
-            const lastInv = await prisma.invoice.findFirst({
-                where: { companyId, type: "INVOICE" },
-                orderBy: { number: "desc" }
-            })
-            const nextInvoiceNumber = Math.max(settings?.lastInvoiceNumber || 0, lastInv?.number || 0) + 1
-            if (settings) {
-                await prisma.companySettings.update({
-                    where: { companyId },
-                    data: { lastInvoiceNumber: nextInvoiceNumber }
-                })
-            }
-            const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, "0")}`
-            const created = await prisma.invoice.create({
-                data: {
-                    companyId,
-                    clientId: project.clientId,
-                    projectId: project.id,
-                    type: "INVOICE",
-                    status: "DRAFT",
-                    number: nextInvoiceNumber,
-                    quoteNumber: formattedInvoiceNumber,
-                    site: project.name,
-                    subtotal: amount,
-                    taxRate,
-                    taxAmount,
-                    total,
-                    paymentNotes: "Standby / Return Attendance variation invoice (drafted for review).",
-                    metadata: { isStandbyInvoice: true },
-                    items: {
-                        create: [
-                            {
-                                description: lineDesc,
-                                quantity: 1,
-                                unit: "visit",
-                                unitPrice: amount,
-                                total: amount,
-                                position: 0
-                            }
-                        ]
-                    }
-                }
-            })
-            targetInvoiceId = created.id
-        }
+        await recordApprovedProjectExtra({
+            projectId: project.id,
+            companyId,
+            description: lineDesc,
+            amount,
+            reason: project.jobSheet.standbyReason || undefined
+        })
 
         await prisma.jobSheet.update({
             where: { id: project.jobSheet.id },
             data: { standbyStatus: "APPROVED" }
         })
 
+        // If project is already COMPLETED or already has a DRAFT balance invoice, update the Balance Invoice immediately
+        const hasDraftBalanceInv = project.invoices.some(
+            i =>
+                i.type === "INVOICE" &&
+                i.status === "DRAFT" &&
+                Boolean((i.metadata as any)?.isBalanceInvoice || (i.metadata as any)?.isVisitInvoice)
+        )
+
+        let targetInvoiceId: string | null = null
+        if (project.status === "COMPLETED" || hasDraftBalanceInv) {
+            const upserted = await upsertProjectBalanceInvoiceDraft({
+                projectId: project.id,
+                companyId
+            })
+            targetInvoiceId = upserted.invoiceId
+        }
+
         revalidatePath(`/projects/${project.id}`)
-        revalidatePath(`/invoices/${targetInvoiceId}`)
+        if (targetInvoiceId) {
+            revalidatePath(`/invoices/${targetInvoiceId}`)
+        }
+        revalidatePath("/invoices")
         revalidatePath("/", "layout")
-        return { success: true, invoiceId: targetInvoiceId }
+        return { success: true, invoiceId: targetInvoiceId, queuedForCompletion: !targetInvoiceId }
     } catch (e: any) {
         console.error("resolveStandbyChargeAction error:", e)
         return { success: false, error: e.message || "Failed to approve standby charge" }

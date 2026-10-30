@@ -49,6 +49,7 @@ export function AeroWashDocumentPreview({
     onEditItems
 }: AeroWashDocumentPreviewProps) {
     const isInvoice = invoice.type === 'INVOICE';
+    const isBalanceInvoice = Boolean(invoice.metadata?.isBalanceInvoice);
     const dateObj = new Date(date);
     const year = dateObj.getFullYear();
 
@@ -82,7 +83,7 @@ export function AeroWashDocumentPreview({
     const allowanceName = invoice.metadata?.allowanceName || "Introductory allowance";
     const subtotalStandardRates = subtotal + allowanceAmount;
 
-    const siteVisitCompleted = Boolean(
+    const siteVisitCompleted = !isBalanceInvoice && Boolean(
         invoice.metadata?.siteVisitDone || 
         invoice.metadata?.siteVisitCompleted ||
         (invoice.metadata?.siteVisitPhotos && invoice.metadata.siteVisitPhotos.length > 0) ||
@@ -93,7 +94,7 @@ export function AeroWashDocumentPreview({
         ? new Date(siteVisitDateRaw).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
         : new Date(invoice.date || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    const siteVisitRequired = !siteVisitCompleted && (
+    const siteVisitRequired = !isInvoice && !siteVisitCompleted && (
         invoice.metadata?.siteVisitRequired ?? (
             total >= 50000 || items.some(i => i.description?.toLowerCase().includes('site visit') || i.description?.toLowerCase().includes('pre-treatment'))
         )
@@ -384,12 +385,12 @@ export function AeroWashDocumentPreview({
                                         <span>− {formatCurrency(allowanceAmount, currencySymbol)}</span>
                                     </div>
                                 </>
-                            ) : (
+                            ) : (!isBalanceInvoice || isVatRegistered) ? (
                                 <div className="flex justify-between items-center text-gray-600">
                                     <span>Subtotal</span>
                                     <span className="font-bold text-zinc-900">{formatCurrency(subtotal, currencySymbol)}</span>
                                 </div>
-                            )}
+                            ) : null}
 
                             {(() => {
                                 const effectiveTax = taxAmount > 0 ? taxAmount : (subtotal * (vatRate / 100));
@@ -403,9 +404,9 @@ export function AeroWashDocumentPreview({
                                             </div>
                                         )}
 
-                                        {/* Black TOTAL DUE Bar */}
+                                        {/* Black TOTAL DUE / BALANCE DUE Bar */}
                                         <div className="bg-[#0A0A0A] text-white p-3.5 rounded-lg border-t-[2px] border-[#D05E00] flex justify-between items-center shadow-lg">
-                                            <span className="font-black text-xs tracking-[0.2em]">TOTAL DUE</span>
+                                            <span className="font-black text-xs tracking-[0.2em]">{isBalanceInvoice ? "BALANCE DUE" : "TOTAL DUE"}</span>
                                             <span className="font-black text-xl tracking-tight text-white">{formatCurrency(effectiveTotal, currencySymbol)}</span>
                                         </div>
                                     </>

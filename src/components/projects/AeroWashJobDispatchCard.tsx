@@ -129,7 +129,9 @@ export function AeroWashJobDispatchCard({
                     type: "ok",
                     msg:
                         decision === "APPROVE"
-                            ? "Standby / Return Attendance charge added to draft invoice."
+                            ? (res as any).invoiceId
+                                ? "Standby / Return Attendance charge added to the draft Balance Invoice."
+                                : "Standby / Return Attendance charge approved — will be included automatically on the Balance Invoice upon job completion."
                             : "Standby flag dismissed."
                 })
                 router.refresh()
