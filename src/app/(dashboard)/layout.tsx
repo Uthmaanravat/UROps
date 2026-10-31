@@ -3,6 +3,7 @@ import { headers } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import DashboardLayoutClient from "./DashboardLayoutClient"
+import { getLayoutComplianceBannerItems } from "@/lib/compliance-alerts"
 
 export const dynamic = 'force-dynamic'
 
@@ -61,6 +62,7 @@ export default async function DashboardLayout({
         let pendingApprovals: any[] = []
         let changesRequestedQuotes: any[] = []
         let standbyApprovals: any[] = []
+        let complianceAlerts: any[] = []
 
         // Never query or expose quotes/prices for CREW users
         if (dbUser.role !== 'CREW') {
@@ -146,6 +148,8 @@ export default async function DashboardLayout({
                     // Safe fallback if JobSheet awaits production migration
                 }
             }
+
+            complianceAlerts = await getLayoutComplianceBannerItems(dbUser.companyId, settings)
         }
 
         let serializedUser = null
@@ -165,6 +169,7 @@ export default async function DashboardLayout({
                 pendingApprovals={pendingApprovals}
                 changesRequestedQuotes={changesRequestedQuotes}
                 standbyApprovals={standbyApprovals}
+                complianceAlerts={complianceAlerts}
             >
                 {children}
             </DashboardLayoutClient>

@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { ensureAuth } from "@/lib/auth-actions"
+import { getLayoutComplianceBannerItems } from "@/lib/compliance-alerts"
 
 export async function getSidebarNotifications() {
     try {
@@ -52,11 +53,21 @@ export async function getSidebarNotifications() {
             console.error("Sidebar count error (Projects):", e);
         }
 
+        let complianceCount = 0;
+        try {
+            const settings = await prisma.companySettings.findUnique({ where: { companyId } })
+            const alerts = await getLayoutComplianceBannerItems(companyId, settings)
+            complianceCount = alerts.length
+        } catch {
+            // Safe fallback
+        }
+
         return {
             wbp: wbpCount,
             quotations: quoteCount,
             invoices: invoiceCount,
-            projects: projectCount
+            projects: projectCount,
+            compliance: complianceCount
         }
     } catch (error) {
         console.error("Error fetching sidebar notifications:", error)

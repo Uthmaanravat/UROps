@@ -21,6 +21,7 @@ export default function DashboardLayoutClient({
     pendingApprovals = [],
     changesRequestedQuotes = [],
     standbyApprovals = [],
+    complianceAlerts = [],
 }: {
     children: React.ReactNode;
     user: User;
@@ -28,6 +29,7 @@ export default function DashboardLayoutClient({
     pendingApprovals?: any[];
     changesRequestedQuotes?: any[];
     standbyApprovals?: any[];
+    complianceAlerts?: Array<{ id: string; label: string; severity: "CRITICAL" | "EXPIRED" }>;
 }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUpdatingRole, setIsUpdatingRole] = useState(false);
@@ -97,7 +99,7 @@ export default function DashboardLayoutClient({
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
-                    <Sidebar role={user.role} settings={settings} />
+                    <Sidebar role={user.role} settings={settings} complianceAlertCount={complianceAlerts.length} />
                 </div>
                 <div className="border-t border-white/5 pt-6 space-y-4">
                     <div className="flex items-center gap-3 px-2">
@@ -220,7 +222,7 @@ export default function DashboardLayoutClient({
                     </Button>
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
-                    <Sidebar role={user.role} settings={settings} onItemClick={() => setIsMobileMenuOpen(false)} />
+                    <Sidebar role={user.role} settings={settings} onItemClick={() => setIsMobileMenuOpen(false)} complianceAlertCount={complianceAlerts.length} />
                 </div>
                 <div className="p-4 border-t bg-white/[0.02] space-y-4">
                     {(user as any).isOwner && (
@@ -327,6 +329,24 @@ export default function DashboardLayoutClient({
                                 </Link>
                             ))}
                         </div>
+                    </div>
+                )}
+                {complianceAlerts && complianceAlerts.length > 0 && pathname !== "/compliance" && (
+                    <div className="bg-gradient-to-r from-rose-500/20 via-orange-500/15 to-rose-500/10 border-b border-rose-500/35 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-100 shadow-md">
+                        <div className="flex items-center gap-2.5 font-semibold">
+                            <span className="flex h-2.5 w-2.5 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                            </span>
+                            <span className="font-black text-rose-300 uppercase tracking-widest text-[11px]">Compliance / Airworthiness Alert:</span>
+                            <span>{complianceAlerts.slice(0, 3).map(a => a.label).join(" · ")}</span>
+                        </div>
+                        <Link
+                            href="/compliance"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/25 hover:bg-rose-500/35 text-rose-200 font-bold border border-rose-400/30 transition-all text-[11px]"
+                        >
+                            <span>Open Compliance Hub →</span>
+                        </Link>
                     </div>
                 )}
                 <main className="flex-1 p-3 md:p-4 overflow-auto">

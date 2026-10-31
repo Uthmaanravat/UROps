@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { WeatherBadge } from "@/components/projects/WeatherBadge"
 import { assignCrewAndAircraftAction, resolveStandbyChargeAction } from "@/app/(dashboard)/my-jobs/actions"
+import { getDispatchComplianceWarningsAction } from "@/app/(dashboard)/compliance/actions"
 import type { EvaluatedFlightWeather } from "@/lib/weather"
 
 interface TeamMemberOption {
@@ -79,6 +80,26 @@ export function AeroWashJobDispatchCard({
     const [droneId, setDroneId] = useState<string>(project.droneId || "")
     const [applyToFutureVisits, setApplyToFutureVisits] = useState<boolean>(false)
     const [feedback, setFeedback] = useState<{ type: "ok" | "err"; msg: string } | null>(null)
+    const [complianceWarnings, setComplianceWarnings] = useState<string[]>([])
+
+    useEffect(() => {
+        let cancelled = false
+        if (!pilotUserId && !droneId) {
+            setComplianceWarnings([])
+            return
+        }
+        getDispatchComplianceWarningsAction({
+            pilotUserId: pilotUserId || null,
+            droneId: droneId || null,
+        }).then(res => {
+            if (!cancelled && res?.warnings) {
+                setComplianceWarnings(res.warnings)
+            }
+        }).catch(() => null)
+        return () => {
+            cancelled = true
+        }
+    }, [pilotUserId, droneId])
 
     // Standby charge approval state
     const [standbyAmount, setStandbyAmount] = useState<string>("2500")
@@ -279,8 +300,8 @@ export function AeroWashJobDispatchCard({
                         <Label className="text-xs font-bold uppercase tracking-wider text-slate-300">
                             Assigned Aircraft (Drone)
                         </Label>
-                        <Link href="/settings" className="text-[11px] text-orange-400 hover:underline">
-                            Manage Drones in Settings
+                        <Link href="/compliance" className="text-[11px] text-orange-400 hover:underline">
+                            Compliance &amp; Fleet →
                         </Link>
                     </div>
                     <select
@@ -297,6 +318,28 @@ export function AeroWashJobDispatchCard({
                     </select>
                 </div>
             </div>
+
+            {complianceWarnings.length > 0 && (
+                <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 flex items-start justify-between gap-3 text-xs text-amber-200">
+                    <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                            <div className="font-bold text-amber-300 uppercase tracking-wider text-[10px]">
+                                Compliance Advisory (Non-Blocking)
+                            </div>
+                            {complianceWarnings.map((w, idx) => (
+                                <div key={idx}>{w}</div>
+                            ))}
+                        </div>
+                    </div>
+                    <Link
+                        href="/compliance"
+                        className="shrink-0 font-bold text-amber-300 hover:underline whitespace-nowrap"
+                    >
+                        Review →
+                    </Link>
+                </div>
+            )}
 
             {/* Assigned Crew Checkboxes */}
             <div className="space-y-2">

@@ -42,6 +42,11 @@ model Company {
   catalogueItems CatalogueItem[]
   drones         Drone[]
   jobSheets      JobSheet[]
+  flightLogs           FlightLogEntry[]
+  droneMaintenanceLogs DroneMaintenanceLog[]
+  droneBatteries       DroneBattery[]
+  batteryChargeLogs    BatteryChargeLog[]
+  complianceDocuments  ComplianceDocument[]
 }
 
 model Invitation {
@@ -91,8 +96,10 @@ model User {
   updatedAt              DateTime @updatedAt
   companyId              String
   hasCompletedOnboarding Boolean    @default(false)
-  company                Company    @relation(fields: [companyId], references: [id])
+  company                Company              @relation(fields: [companyId], references: [id])
   pilotedJobSheets       JobSheet[]
+  flightLogs             FlightLogEntry[]     @relation("PilotFlightLogs")
+  pilotComplianceDocs    ComplianceDocument[] @relation("PilotComplianceDocs")
 }
 
 model CompanySettings {
@@ -136,6 +143,8 @@ model CompanySettings {
   gustWarnKmh             Float?
   gustLimitKmh            Float?
   rainLimitMm             Float?
+  complianceEnabled       Boolean   @default(false)
+  complianceAlertEmails   String?
 }
 
 model Client {
@@ -210,6 +219,7 @@ model Project {
   pilotUserId      String?
   droneId          String?
   jobSheet         JobSheet?
+  flightLogs       FlightLogEntry[]
 }
 
 model ScopeOfWork {
@@ -851,16 +861,29 @@ model CatalogueItem {
 }
 
 model Drone {
-  id           String     @id @default(uuid())
-  companyId    String
-  name         String
-  serialNumber String
-  model        String?
-  isActive     Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  jobSheets    JobSheet[]
+  id                         String                @id @default(uuid())
+  companyId                  String
+  name                       String
+  serialNumber               String
+  model                      String?
+  sacaaRegNumber             String?
+  commissionDate             DateTime?
+  airworthinessStatus        String                @default("SERVICEABLE")
+  lastMaintenanceDate        DateTime?
+  nextMaintenanceDueDate     DateTime?
+  maintenanceIntervalDays    Int                   @default(90)
+  maintenanceIntervalMinutes Int                   @default(3000)
+  flightMinutesAtLastService Int                   @default(0)
+  manualBaseFlightMinutes    Int                   @default(0)
+  isActive                   Boolean               @default(true)
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  company                    Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobSheets                  JobSheet[]
+  flightLogs                 FlightLogEntry[]
+  maintenanceLogs            DroneMaintenanceLog[]
+  batteries                  DroneBattery[]
+  complianceDocuments        ComplianceDocument[]
 
   @@index([companyId, isActive])
 }
@@ -895,10 +918,190 @@ model JobSheet {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  pilotUser User?   @relation(fields: [pilotUserId], references: [id], onDelete: SetNull)
-  drone     Drone?  @relation(fields: [droneId], references: [id], onDelete: SetNull)
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pilotUser User?           @relation(fields: [pilotUserId], references: [id], onDelete: SetNull)
+  drone     Drone?          @relation(fields: [droneId], references: [id], onDelete: SetNull)
+  flightLog FlightLogEntry?
 
   @@index([companyId, status])
+}
+
+enum FlightPurpose {
+  COMMERCIAL_OPS
+  SITE_RECON
+  TRAINING
+  MAINTENANCE_TEST
+  OTHER
+}
+
+enum MaintenanceType {
+  SCHEDULED_SERVICE
+  UNSCHEDULED_REPAIR
+  WASH_RIG_INSPECTION
+  FIRMWARE_CALIBRATION
+}
+
+enum BatteryStatus {
+  ACTIVE
+  MAINTENANCE_DUE
+  SWOLLEN_QUARANTINE
+  RETIRED
+}
+
+enum ComplianceDocCategory {
+  RPL
+  INSURANCE
+  COIDA
+  TAX_CLEARANCE
+  ABEOD_AGREEMENT
+  COMPANY_REG
+  BBBEE
+  BANK_CONFIRMATION
+  SAFETY_HSE_PLAN
+  OTHER
+}
+
+model FlightLogEntry {
+  id                String        @id @default(uuid())
+  companyId         String
+  jobSheetId        String?       @unique
+  projectId         String?
+  pilotUserId       String?
+  pilotNameSnapshot String?
+  droneId           String?
+  droneNameSnapshot String?
+  flightDate        DateTime
+  durationMinutes   Int
+  sorties           Int           @default(1)
+  purpose           FlightPurpose @default(COMMERCIAL_OPS)
+  siteLocation      String?
+  weatherSummary    String?
+  batteryIdsUsed    String[]      @default([])
+  incidentOccurred  Boolean       @default(false)
+  notes             String?       @db.Text
+  source            String        @default("JOB_SHEET")
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  company    Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobSheet   JobSheet?          @relation(fields: [jobSheetId], references: [id], onDelete: SetNull)
+  project    Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  pilotUser  User?              @relation("PilotFlightLogs", fields: [pilotUserId], references: [id], onDelete: SetNull)
+  drone      Drone?             @relation(fields: [droneId], references: [id], onDelete: SetNull)
+  chargeLogs BatteryChargeLog[]
+
+  @@index([companyId, flightDate(sort: Desc)])
+  @@index([companyId, pilotUserId])
+  @@index([companyId, droneId])
+}
+
+model DroneMaintenanceLog {
+  id                       String          @id @default(uuid())
+  companyId                String
+  droneId                  String
+  performedAt              DateTime        @default(now())
+  performedBy              String
+  type                     MaintenanceType @default(SCHEDULED_SERVICE)
+  airframeMinutesAtService Int             @default(0)
+  workSummary              String          @db.Text
+  partsReplaced            String?
+  cost                     Float?
+  nextDueDate              DateTime?
+  nextDueAirframeMinutes   Int?
+  attachmentStoragePath    String?
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  drone   Drone   @relation(fields: [droneId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, droneId, performedAt(sort: Desc)])
+}
+
+model DroneBattery {
+  id                    String        @id @default(uuid())
+  companyId             String
+  assignedDroneId       String?
+  pairGroup             String?
+  label                 String
+  model                 String?
+  serialNumber          String?
+  purchaseDate          DateTime?
+  initialCycles         Int           @default(0)
+  currentCycles         Int           @default(0)
+  maxRecommendedCycles  Int           @default(200)
+  healthPercent         Int?
+  lastChargedAt         DateTime?
+  lastInspectionDate    DateTime?
+  nextInspectionDueDate DateTime?
+  status                BatteryStatus @default(ACTIVE)
+  notes                 String?       @db.Text
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedDrone Drone?             @relation(fields: [assignedDroneId], references: [id], onDelete: SetNull)
+  chargeLogs    BatteryChargeLog[]
+
+  @@unique([companyId, label])
+  @@index([companyId, status])
+}
+
+model BatteryChargeLog {
+  id                 String   @id @default(uuid())
+  companyId          String
+  batteryId          String
+  flightLogId        String?
+  loggedAt           DateTime @default(now())
+  loggedByUserId     String?
+  loggedByName       String?
+  cyclesAdded        Int      @default(1)
+  cycleCountAfter    Int
+  healthPercent      Int?
+  voltageDeviationMv Int?
+  swellingObserved   Boolean  @default(false)
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  battery   DroneBattery    @relation(fields: [batteryId], references: [id], onDelete: Cascade)
+  flightLog FlightLogEntry? @relation(fields: [flightLogId], references: [id], onDelete: SetNull)
+
+  @@index([batteryId, loggedAt(sort: Desc)])
+  @@index([companyId, loggedAt(sort: Desc)])
+}
+
+model ComplianceDocument {
+  id                  String                @id @default(uuid())
+  companyId           String
+  category            ComplianceDocCategory
+  pilotUserId         String?
+  droneId             String?
+  title               String
+  referenceNumber     String?
+  issuingAuthority    String?
+  issuedDate          DateTime?
+  expiryDate          DateTime?
+  alertDaysBefore     Int                   @default(30)
+  storagePath         String
+  fileName            String
+  mimeType            String
+  fileSizeBytes       Int
+  includeInVendorPack Boolean               @default(true)
+  vendorPackOrder     Int                   @default(0)
+  isArchived          Boolean               @default(false)
+  uploadedByUserId    String?
+  lastAlertStage      String?
+  lastAlertSentAt     DateTime?
+  notes               String?               @db.Text
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  pilotUser User?   @relation("PilotComplianceDocs", fields: [pilotUserId], references: [id], onDelete: SetNull)
+  drone     Drone?  @relation(fields: [droneId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, category, isArchived])
+  @@index([companyId, expiryDate])
 }

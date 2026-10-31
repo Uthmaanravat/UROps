@@ -8,6 +8,7 @@ import { suggestNextAvailableJobDate, getOpenMeteoSiteForecastForDate, evaluateF
 import { isVatEffective, getVatRate, calculateVatAndTotal } from "@/lib/vat-utils"
 import { sendRealEmail } from "@/lib/email"
 import { recordApprovedProjectExtra, upsertProjectBalanceInvoiceDraft } from "@/lib/balance-invoice"
+import { syncJobSheetFlightLog } from "@/lib/flight-log-sync"
 
 export interface PreFlightChecklistState {
     weatherChecked: boolean
@@ -128,7 +129,7 @@ export async function assignCrewAndAircraftAction(input: {
             }
         })
 
-        await prisma.jobSheet.upsert({
+        const upsertedSheet = await prisma.jobSheet.upsert({
             where: { projectId: project.id },
             update: {
                 pilotUserId: input.pilotUserId || null,
@@ -141,6 +142,7 @@ export async function assignCrewAndAircraftAction(input: {
                 droneId: input.droneId || null
             }
         })
+        await syncJobSheetFlightLog(upsertedSheet.id)
 
         // Optionally apply crew/pilot/drone to future recurring visits
         if (input.applyToFutureVisits) {
@@ -207,6 +209,7 @@ export async function saveJobPreFlightAndMetaAction(input: {
                 ...updatePayload
             }
         })
+        await syncJobSheetFlightLog(sheet.id)
 
         return { success: true, jobSheetId: sheet.id }
     } catch (e: any) {
@@ -823,7 +826,7 @@ export async function finishJobAction(input: {
         }
 
         // 4. Update JobSheet & Project to COMPLETED
-        await prisma.$transaction([
+        const [completedSheet] = await prisma.$transaction([
             prisma.jobSheet.update({
                 where: { projectId: project.id },
                 data: {
@@ -848,6 +851,8 @@ export async function finishJobAction(input: {
                 data: { status: "COMPLETED" }
             })
         ])
+        await syncJobSheetFlightLog(completedSheet.id)
+        revalidatePath("/compliance")
 
         // 5. Draft Balance Invoice: Final Job Total (Quote + Approved Extras) minus Payments Received
         const balanceDraft = await upsertProjectBalanceInvoiceDraft({

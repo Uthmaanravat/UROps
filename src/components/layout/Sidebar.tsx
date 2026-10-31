@@ -57,7 +57,17 @@ const navigation = [
     }
 ];
 
-export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANAGER' | 'CREW', settings?: any, onItemClick?: () => void }) {
+export function Sidebar({
+    role,
+    settings,
+    onItemClick,
+    complianceAlertCount = 0,
+}: {
+    role: 'ADMIN' | 'MANAGER' | 'CREW'
+    settings?: any
+    onItemClick?: () => void
+    complianceAlertCount?: number
+}) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const type = searchParams ? searchParams.get("type") : null;
@@ -123,14 +133,18 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
                 };
             }
         }
-        if (group.title === "Operations" && isAeroWash) {
-            if (!group.items.some(item => item.href === "/my-jobs")) {
+        if (group.title === "Operations" && (isAeroWash || settings?.complianceEnabled)) {
+            const extraOpsItems: Array<{ title: string; href: string }> = [];
+            if (isAeroWash && !group.items.some(item => item.href === "/my-jobs")) {
+                extraOpsItems.push({ title: "My Jobs Today", href: "/my-jobs" });
+            }
+            if (!group.items.some(item => item.href === "/compliance")) {
+                extraOpsItems.push({ title: "Compliance & Fleet", href: "/compliance" });
+            }
+            if (extraOpsItems.length > 0) {
                 return {
                     ...group,
-                    items: [
-                        { title: "My Jobs Today", href: "/my-jobs" },
-                        ...group.items
-                    ]
+                    items: [...extraOpsItems, ...group.items]
                 };
             }
         }
@@ -212,6 +226,11 @@ export function Sidebar({ role, settings, onItemClick }: { role: 'ADMIN' | 'MANA
                                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full shadow-[0_0_10px_#8cff3380]" />
                                             )}
                                             <span className="truncate">{item.title}</span>
+                                            {item.href === "/compliance" && complianceAlertCount > 0 && (
+                                                <span className="ml-2 shrink-0 px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-black leading-none">
+                                                    {complianceAlertCount}
+                                                </span>
+                                            )}
                                         </Link>
                                     );
                                 })}
