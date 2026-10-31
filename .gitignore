@@ -27,3 +27,10 @@ venv/
 *.tsbuildinfo
 
 scratch/
+
+# backups & database dumps
+backups/
+*.backup
+*.backup*
+*backup*.json
+*backup*.sql
