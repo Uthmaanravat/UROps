@@ -274,7 +274,7 @@ BEGIN
     END IF;
 END $$;
 
--- 10. Private Supabase Storage bucket & authenticated-only RLS policy for compliance documents
+-- 10. Private Supabase Storage buckets: server-only (service_role) access, no broad anon/authenticated policies
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
     'compliance-documents',
@@ -288,21 +288,12 @@ ON CONFLICT (id) DO UPDATE SET
     file_size_limit = 26214400,
     allowed_mime_types = ARRAY['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE schemaname = 'storage'
-          AND tablename = 'objects'
-          AND policyname = 'Allow authenticated ops on compliance-documents'
-    ) THEN
-        CREATE POLICY "Allow authenticated ops on compliance-documents"
-        ON storage.objects
-        FOR ALL
-        TO authenticated
-        USING (bucket_id = 'compliance-documents')
-        WITH CHECK (bucket_id = 'compliance-documents');
-    END IF;
-END $$;
+UPDATE storage.buckets
+SET public = false
+WHERE id = 'quotation-photos';
+
+-- Drop overly permissive bucket-only policies on both compliance-documents and quotation-photos
+DROP POLICY IF EXISTS "Allow authenticated ops on compliance-documents" ON storage.objects;
+DROP POLICY IF EXISTS "Allow all ops on quotation-photos" ON storage.objects;
 
 COMMIT;

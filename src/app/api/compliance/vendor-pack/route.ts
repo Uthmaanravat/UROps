@@ -29,8 +29,15 @@ export async function GET(request: NextRequest) {
         if (!authUser || !authUser.companyId) {
             return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
         }
-        if (authUser.role === "CREW") {
-            return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 })
+        // Strictly block CREW and any non-Admin/Manager user from downloading the Vendor Pack
+        const canDownloadPack =
+            authUser.role !== "CREW" &&
+            (authUser.role === "ADMIN" || authUser.role === "MANAGER" || Boolean(authUser.isOwner))
+        if (!canDownloadPack) {
+            return NextResponse.json(
+                { ok: false, error: "Forbidden: Crew cannot access the Vendor Pack." },
+                { status: 403 }
+            )
         }
 
         const companyId = authUser.companyId

@@ -55,6 +55,7 @@ type TabId = "FLIGHT_LOG" | "DRONES" | "BATTERIES" | "DOCUMENTS"
 interface ComplianceHubClientProps {
     companyName: string
     isAdmin: boolean
+    userRole?: string
     flightLogs: any[]
     drones: any[]
     batteries: any[]
@@ -109,6 +110,7 @@ const DEFAULT_TITLES: Record<AllComplianceCategory, { title: string; authority: 
 export function ComplianceHubClient({
     companyName,
     isAdmin,
+    userRole,
     flightLogs,
     drones,
     batteries,
@@ -117,6 +119,7 @@ export function ComplianceHubClient({
     projects,
 }: ComplianceHubClientProps) {
     const router = useRouter()
+    const isCrew = userRole === "CREW"
     const [activeTab, setActiveTab] = useState<TabId>("FLIGHT_LOG")
     const [isPending, startTransition] = useTransition()
 
@@ -564,6 +567,7 @@ export function ComplianceHubClient({
                         </span>
                     )}
                 </button>
+                {!isCrew && (
                 <button
                     type="button"
                     onClick={() => setActiveTab("DOCUMENTS")}
@@ -581,6 +585,7 @@ export function ComplianceHubClient({
                         </span>
                     )}
                 </button>
+                )}
             </div>
 
             {/* Active Tab Body */}
@@ -609,7 +614,7 @@ export function ComplianceHubClient({
                     drones={drones}
                 />
             )}
-            {activeTab === "DOCUMENTS" && (
+            {activeTab === "DOCUMENTS" && !isCrew && (
                 <DocumentVaultTab
                     isAdmin={isAdmin}
                     documents={documents}

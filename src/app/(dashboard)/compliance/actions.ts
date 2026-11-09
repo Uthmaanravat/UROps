@@ -670,11 +670,25 @@ export async function deleteComplianceDocumentAction(docId: string) {
 
 export async function getComplianceDocumentSignedUrlAction(docId: string, download = false) {
     try {
-        const { companyId } = await requireNonCrewCaller()
+        const companyId = await ensureAuth()
+        const authUser = await getAuthUser()
+        if (!authUser || authUser.companyId !== companyId) {
+            return { success: false, error: "Unauthorized" }
+        }
         const doc = await prisma.complianceDocument.findFirst({
             where: { id: docId, companyId },
         })
         if (!doc) return { success: false, error: "Document not found." }
+
+        // CREW role may ONLY access their own RPL record; blocked from all other Vault documents
+        if (authUser.role === "CREW") {
+            if (doc.category !== "RPL" || doc.pilotUserId !== authUser.id) {
+                return {
+                    success: false,
+                    error: "Forbidden: Crew members may only view their own RPL record.",
+                }
+            }
+        }
 
         const url = await getComplianceSignedUrl(
             companyId,

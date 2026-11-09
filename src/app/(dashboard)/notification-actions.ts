@@ -1,13 +1,16 @@
 'use server'
 
 import { prisma } from "@/lib/prisma"
-import { ensureAuth } from "@/lib/auth-actions"
+import { ensureAuth, getAuthUser } from "@/lib/auth-actions"
 import { getLayoutComplianceBannerItems } from "@/lib/compliance-alerts"
 
 export async function getSidebarNotifications() {
     try {
         const companyId = await ensureAuth()
-        if (!companyId) return { wbp: 0, quotations: 0, invoices: 0, projects: 0 }
+        const authUser = await getAuthUser()
+        if (!companyId || !authUser || authUser.role === 'CREW') {
+            return { wbp: 0, quotations: 0, invoices: 0, projects: 0, compliance: 0 }
+        }
 
         // 1. WB&P: Count items in DRAFT status
         let wbpCount = 0;
@@ -71,6 +74,6 @@ export async function getSidebarNotifications() {
         }
     } catch (error) {
         console.error("Error fetching sidebar notifications:", error)
-        return { wbp: 0, quotations: 0, invoices: 0, projects: 0 }
+        return { wbp: 0, quotations: 0, invoices: 0, projects: 0, compliance: 0 }
     }
 }

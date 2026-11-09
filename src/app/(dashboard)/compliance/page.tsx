@@ -13,6 +13,7 @@ export default async function CompliancePage() {
     if (!authUser || authUser.companyId !== companyId) {
         redirect("/login")
     }
+    // Block CREW from Compliance Hub / Document Vault / Vendor Pack
     if (authUser.role === "CREW") {
         redirect("/my-jobs")
     }
@@ -82,7 +83,10 @@ export default async function CompliancePage() {
                 orderBy: [{ pairGroup: "asc" }, { label: "asc" }],
             }),
             prisma.complianceDocument.findMany({
-                where: { companyId },
+                where:
+                    authUser.role === "CREW"
+                        ? { companyId, category: "RPL", pilotUserId: authUser.id }
+                        : { companyId },
                 include: {
                     pilotUser: { select: { id: true, name: true, email: true } },
                     drone: { select: { id: true, name: true } },
@@ -124,6 +128,7 @@ export default async function CompliancePage() {
         <ComplianceHubClient
             companyName={companyName}
             isAdmin={isAdmin}
+            userRole={authUser.role}
             flightLogs={serialized.flightLogs}
             drones={serialized.drones}
             batteries={serialized.batteries}

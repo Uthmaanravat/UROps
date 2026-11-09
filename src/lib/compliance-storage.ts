@@ -8,7 +8,9 @@ function getComplianceStorageClient() {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 
     if (supabaseUrl && serviceRoleKey) {
-        return createServiceClient(supabaseUrl, serviceRoleKey)
+        return createServiceClient(supabaseUrl, serviceRoleKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+        })
     }
 
     const ssrClient = createServerSupabaseClient()
@@ -16,11 +18,7 @@ function getComplianceStorageClient() {
         return ssrClient
     }
 
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-    if (!supabaseUrl || !anonKey) {
-        throw new Error("Supabase credentials missing for compliance storage.")
-    }
-    return createServiceClient(supabaseUrl, anonKey)
+    throw new Error("Server-side Supabase credentials required for compliance storage.")
 }
 
 export function sanitizeComplianceFileName(name: string): string {
