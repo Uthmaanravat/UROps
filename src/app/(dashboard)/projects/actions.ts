@@ -106,12 +106,15 @@ export async function updateProjectStatus(id: string, status: string) {
                             to: ownerEmails,
                             from: 'AeroWash Review <info@aerowash.co.za>',
                             replyTo: 'info@aerowash.co.za',
+                            companyId,
+                            companyName: settings?.name || 'AeroWash (Pty) Ltd',
+                            triggeredByUserAction: true,
                             subject: `Project Completed: Balance Invoice Drafted (${res.invoiceNumber} — R${res.calculation.balanceDue.toFixed(2)})`,
                             body:
                                 `Hello Uthmaan,\n\nProject "${project.name}" has been marked as COMPLETED.\n\n` +
                                 `Balance Invoice ${res.invoiceNumber} (R${res.calculation.balanceDue.toFixed(2)}) is ready for your review:\n` +
                                 (res.calculation.depositNotReceived ? `⚠️ Warning: Deposit not received — full amount due included on draft.\n` : '') +
-                                `${appUrl}/invoices/${res.invoiceId}\n\nUROps Project Workflow`
+                                `${appUrl}/invoices/${res.invoiceId}\n\n${settings?.name || 'AeroWash (Pty) Ltd'}`
                         }).catch(() => {});
                     }
                 }

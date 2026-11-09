@@ -716,7 +716,7 @@ export async function generateAeroWashQuotePdf({
 
     // Deposit / First Payment breakdown for invoices
     const firstPaymentPct = invoice.firstPaymentPercentage ?? (invoice.metadata as any)?.firstPaymentPercentage;
-    const hasFirstPayment = Boolean(isInvoice && firstPaymentPct && firstPaymentPct > 0 && firstPaymentPct < 100);
+    const hasFirstPayment = Boolean(isInvoice && firstPaymentPct && firstPaymentPct > 0 && firstPaymentPct < 100 && !(invoice.metadata as any)?.isDepositInvoice);
     const firstPaymentAmount = hasFirstPayment ? (effectiveTotal * (firstPaymentPct! / 100)) : 0;
     const balanceRemaining = hasFirstPayment ? (effectiveTotal - firstPaymentAmount) : 0;
 

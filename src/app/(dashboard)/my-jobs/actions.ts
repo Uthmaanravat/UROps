@@ -34,7 +34,7 @@ function isChecklistComplete(c?: Partial<PreFlightChecklistState> | null): boole
 }
 
 async function authorizeProjectForCaller(projectId: string) {
-    const companyId = await ensureAuth()
+    const companyId = await ensureAuth({ allowCrew: true })
     const authUser = await getAuthUser()
     if (!authUser || authUser.companyId !== companyId) {
         throw new Error("Unauthorized")
@@ -391,6 +391,11 @@ export async function pauseJobAction(input: {
                     to: emails,
                     from: "AeroWash Flight Ops <info@aerowash.co.za>",
                     replyTo: "info@aerowash.co.za",
+                    companyId,
+                    companyName: "AeroWash (Pty) Ltd",
+                    actorUserId: authUser.id,
+                    actorName: authUser.name || authUser.email,
+                    triggeredByUserAction: true,
                     subject: `Standby / Return Attendance Flagged: ${project.name}`,
                     body:
                         `A site job was paused due to ${input.reason === "ACCESS" ? "Site Access Unavailable" : "Client Stop Request"}.\n\n` +
@@ -523,6 +528,11 @@ export async function rescheduleWeatherPausedJobAction(input: {
                 to: emails,
                 from: "AeroWash Flight Ops <info@aerowash.co.za>",
                 replyTo: "info@aerowash.co.za",
+                companyId,
+                companyName: "AeroWash (Pty) Ltd",
+                actorUserId: authUser.id,
+                actorName: authUser.name || authUser.email,
+                triggeredByUserAction: true,
                 subject: `Weather Reschedule (No Charge): ${project.name} -> ${input.newDateStr}`,
                 body:
                     `Job "${project.name}" (${project.client?.name || "Client"}) was paused on site for weather and rescheduled to ${input.newDateStr} at no charge per the AeroWash weather term.\n\n` +
@@ -871,6 +881,11 @@ export async function finishJobAction(input: {
                 to: settingsData.emails,
                 from: "AeroWash Flight Ops <info@aerowash.co.za>",
                 replyTo: "info@aerowash.co.za",
+                companyId,
+                companyName: "AeroWash (Pty) Ltd",
+                actorUserId: authUser.id,
+                actorName: authUser.name || authUser.email,
+                triggeredByUserAction: true,
                 subject: `Job Completed on Site: ${project.name}${draftedInvoiceNumber ? ` (${draftedInvoiceNumber} Drafted)` : ""}`,
                 body:
                     `Job "${project.name}" (${project.client?.name || "Client"}) has been finished on site.\n\n` +

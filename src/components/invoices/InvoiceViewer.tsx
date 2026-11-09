@@ -1057,10 +1057,18 @@ export function InvoiceViewer({
 
         setLoading(true);
         await saveChanges();
-        const res = await sendInvoiceEmail(invoice.id, emails);
+        // Attach the exact same PDF that "Download PDF" produces (skipped silently if it cannot be built or is too large)
+        let pdfPayload: { filename: string; base64: string } | undefined;
+        try {
+            const generated = await generatePDF('base64');
+            if (generated?.base64 && generated.base64.length < 4_000_000) pdfPayload = generated;
+        } catch (err) {
+            console.warn('Could not build PDF attachment for email:', err);
+        }
+        const res = await sendInvoiceEmail(invoice.id, emails, undefined, pdfPayload);
         setLoading(false);
         if (res.success) {
-            alert("Email sent successfully!");
+            alert((res as any).attachmentIncluded === false ? "Email sent, but the PDF could not be attached. Please send the PDF separately." : "Email sent successfully!");
             setIsEmailDialogOpen(false);
             router.refresh();
         } else {
@@ -1070,7 +1078,7 @@ export function InvoiceViewer({
 
     const currencySymbol = companySettings?.currency || "R";
 
-    const generatePDF = async () => {
+    const generatePDF = async (mode: 'download' | 'base64' = 'download'): Promise<{ filename: string; base64: string } | undefined> => {
         // Server-side permission verification for over-R50k quotes
         if (isQuoteOverLimit && !isApproved && !isOwner) {
             alert(`This quotation exceeds ${thresholdFormatted} and requires owner approval before downloading.`);
@@ -1140,6 +1148,7 @@ export function InvoiceViewer({
                 }
             });
             const filename = `${numberLabel}.pdf`;
+            if (mode === 'base64') return { filename, base64: aeroDoc.output('datauristring') };
             aeroDoc.save(filename);
             return;
         }
@@ -1740,6 +1749,7 @@ export function InvoiceViewer({
             const friendlyStatus = statusMap[commercialStatus] || commercialStatus.replace('_', ' ');
             pdfName = `${numberLabel}_${friendlyStatus}`;
         }
+        if (mode === 'base64') return { filename: `${pdfName}.pdf`, base64: doc.output('datauristring') };
         doc.save(`${pdfName}.pdf`);
     }
 

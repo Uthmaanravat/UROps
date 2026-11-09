@@ -7,7 +7,7 @@ import { MyJobsTodayClient } from "@/components/jobs/MyJobsTodayClient"
 export const dynamic = "force-dynamic"
 
 export default async function MyJobsTodayPage() {
-    const companyId = await ensureAuth()
+    const companyId = await ensureAuth({ allowCrew: true })
     const authUser = await getAuthUser()
     if (!authUser) redirect("/login")
 

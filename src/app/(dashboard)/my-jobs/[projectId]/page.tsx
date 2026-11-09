@@ -22,7 +22,7 @@ export default async function MobileJobSheetPage({
 }: {
     params: { projectId: string }
 }) {
-    const companyId = await ensureAuth()
+    const companyId = await ensureAuth({ allowCrew: true })
     const authUser = await getAuthUser()
     if (!authUser) redirect("/login")
 
@@ -176,7 +176,7 @@ export default async function MobileJobSheetPage({
             refNumber: idx + 1,
             caption: p.caption || p.label || `Photo ${idx + 1}`,
             elevationName: p.elevationName || null,
-            url: p.url ? await getSignedPhotoUrl(p.url) : ""
+            url: p.url ? await getSignedPhotoUrl(p.url, 900, companyId) : ""
         }))
     )
     const photoById = new Map(resolvedSitePhotos.map(p => [p.id, p]))

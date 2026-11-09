@@ -153,6 +153,8 @@ export async function checkAndNotifyTomorrowRedWeatherAlerts(companyId: string) 
                     to: recipients,
                     from: 'AeroWash Flight Ops <info@aerowash.co.za>',
                     replyTo: 'info@aerowash.co.za',
+                    companyId,
+                    companyName: settings.name || 'AeroWash (Pty) Ltd',
                     subject: `NO-FLY Weather Alert for Tomorrow (${tomorrowStr}): ${job.name}`,
                     body:
                         `AeroWash Day-Before Weather Alert\n\n` +

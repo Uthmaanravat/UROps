@@ -1131,8 +1131,11 @@ export async function recordPaymentAction(data: {
                         to: ownerEmails,
                         from: 'AeroWash Payments <info@aerowash.co.za>',
                         replyTo: 'info@aerowash.co.za',
+                        companyId,
+                        companyName: settings?.name || 'AeroWash (Pty) Ltd',
+                        triggeredByUserAction: true,
                         subject: `Deposit Paid: Project Ready to Schedule (${invoice.quoteNumber || invoice.number} — R${data.amount})`,
-                        body: `Hello Uthmaan,\n\nA deposit payment of R${data.amount.toFixed(2)} has been recorded against invoice ${invoice.quoteNumber || invoice.number}.\n\nThe linked project is now marked "Ready to schedule" in your operations queue.\n\nView Project:\n${process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'}/projects/${invoice.projectId}\n\nUROps Automated Workflow`
+                        body: `Hello Uthmaan,\n\nA deposit payment of R${data.amount.toFixed(2)} has been recorded against invoice ${invoice.quoteNumber || invoice.number}.\n\nThe linked project is now marked "Ready to schedule" in your operations queue.\n\nView Project:\n${process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'}/projects/${invoice.projectId}\n\n${settings?.name || 'AeroWash (Pty) Ltd'}`
                     });
                 } catch (notifErr) {
                     console.error("Deposit payment notification error:", notifErr);

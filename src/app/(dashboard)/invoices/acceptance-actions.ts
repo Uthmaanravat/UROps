@@ -6,6 +6,9 @@ import { headers } from "next/headers"
 import { sendRealEmail } from "@/lib/email"
 import { calculateVatAndTotal, isVatEffective, getVatRate } from "@/lib/vat-utils"
 import { generateAeroWashQuotePdf } from "@/lib/aerowash-quote-pdf"
+import { composeBrandedEmail } from "@/lib/email-compose"
+import { formatMoneyZA } from "@/lib/email-templates"
+import { buildAeroWashDocumentPdf } from "@/lib/server-document-pdf"
 
 export async function acceptQuotePublicAction(data: {
     quoteId: string
@@ -205,18 +208,56 @@ export async function acceptQuotePublicAction(data: {
             }
         })
 
-        // 7. Email Deposit Invoice to Client
+        // 7. Email Deposit Invoice to Client (branded, PDF attached; no login-only links)
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'
-        const depositViewUrl = `${appUrl}/invoices/${depositInvoice.id}`
         const clientEmail = data.acceptedByEmail.trim()
         const clientName = data.acceptedByName.trim()
+        const currency = settings?.currency || 'R'
+        const quoteLabel = quote.quoteNumber || String(quote.number)
+
+        const depositPdf = await buildAeroWashDocumentPdf(depositInvoice.id)
+        const depositEmail = await composeBrandedEmail({
+            companyId,
+            settings,
+            extraAttachments: depositPdf
+                ? [{ filename: depositPdf.filename, content: depositPdf.buffer, contentType: 'application/pdf' }]
+                : [],
+            email: {
+                subject: (b) => `Deposit ${vatEffective ? 'Tax Invoice' : 'Invoice'} ${formattedInvoiceNumber} (60%) from ${b.shortName}`,
+                greeting: `Hi ${clientName},`,
+                paragraphs: [
+                    `Thank you for accepting quotation ${quoteLabel}.`,
+                    depositPdf
+                        ? `Please find attached your 60% deposit ${vatEffective ? 'tax invoice' : 'invoice'} ${formattedInvoiceNumber}.`
+                        : `Your 60% deposit ${vatEffective ? 'tax invoice' : 'invoice'} ${formattedInvoiceNumber} is ready.`,
+                ],
+                rows: [
+                    { label: 'Invoice number', value: formattedInvoiceNumber },
+                    { label: 'Deposit due (60%)', value: formatMoneyZA(depositTotal, currency), strong: true },
+                    { label: 'Site', value: quote.site || 'N/A' },
+                ],
+                afterParagraphs: [
+                    ...(settings?.bankDetails && settings.bankDetails.trim()
+                        ? [`Banking details:\n${settings.bankDetails.trim()}\nPayment reference: ${formattedInvoiceNumber}`]
+                        : []),
+                    'Once payment is received, our scheduling team will contact you to confirm the access schedule.',
+                ],
+                signOff: {},
+            },
+        })
 
         await sendRealEmail({
             to: clientEmail,
-            from: 'AeroWash Accounts <info@aerowash.co.za>',
-            replyTo: 'info@aerowash.co.za',
-            subject: `Deposit ${vatEffective ? 'Tax Invoice' : 'Invoice'} ${formattedInvoiceNumber} (60%) – AeroWash`,
-            body: `Dear ${clientName},\n\nThank you for accepting quotation ${quote.quoteNumber || quote.number} for ${quote.client.name}.\n\nPlease find your 60% deposit invoice details below:\nInvoice Number: ${formattedInvoiceNumber}\nAmount Due: R${depositTotal.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\nSite: ${quote.site || 'N/A'}\n\nYou can view and download your deposit invoice here:\n${depositViewUrl}\n\nBank Details:\n${settings?.bankDetails || 'Standard Bank - AeroWash (Pty) Ltd'}\n\nUpon payment receipt, our scheduling team will contact you to confirm the access schedule.\n\nWarm regards,\nAeroWash Operations Team`
+            from: depositEmail.from,
+            replyTo: depositEmail.replyTo,
+            subject: depositEmail.subject,
+            body: depositEmail.text,
+            html: depositEmail.html,
+            attachments: depositEmail.attachments,
+            companyId,
+            companyName: depositEmail.brand.name,
+            actorName: data.acceptedByName,
+            triggeredByUserAction: true,
         })
 
         // 8. Notify Owner (uthmaan@aerowash.co.za + info@aerowash.co.za)
@@ -225,12 +266,38 @@ export async function acceptQuotePublicAction(data: {
             ownerEmails.push(settings.copyNotificationsTo)
         }
 
+        const acceptedNotice = await composeBrandedEmail({
+            companyId,
+            settings,
+            email: {
+                subject: `Quote Accepted: ${quoteLabel} (${quote.client.name} — ${formatMoneyZA(quote.total, currency)})`,
+                greeting: 'Hello,',
+                paragraphs: [
+                    `Quotation ${quoteLabel} for ${quote.client.name} has been accepted by ${data.acceptedByName} (${data.acceptedByPosition}).`,
+                ],
+                rows: [
+                    { label: 'Total quote value', value: formatMoneyZA(quote.total, currency), strong: true },
+                    { label: 'PO number', value: data.poNumber || 'None provided' },
+                    { label: 'Client email', value: data.acceptedByEmail },
+                    { label: 'Project', value: `${quote.client.name} - ${quote.site || 'Facade Maintenance'}` },
+                    { label: '60% deposit invoice', value: `${formattedInvoiceNumber} (${formatMoneyZA(depositTotal, currency)})` },
+                ],
+                cta: { label: 'View accepted quote', url: `${appUrl}/invoices/${quote.id}` },
+            },
+        })
+
         await sendRealEmail({
             to: ownerEmails,
-            from: 'AeroWash Notifications <info@aerowash.co.za>',
-            replyTo: 'info@aerowash.co.za',
-            subject: `🎉 Quote Accepted: ${quote.quoteNumber || quote.number} (${quote.client.name} — R${quote.total.toLocaleString()})`,
-            body: `Great news!\n\nQuotation ${quote.quoteNumber || quote.number} for ${quote.client.name} has been officially accepted by ${data.acceptedByName} (${data.acceptedByPosition}).\n\nDetails:\n- Total Quote Value: R${quote.total.toFixed(2)}\n- PO Number: ${data.poNumber || 'None provided'}\n- Client Email: ${data.acceptedByEmail}\n- Project auto-created: ${quote.client.name} - ${quote.site || 'Facade Maintenance'}\n- 60% Deposit Invoice issued: ${formattedInvoiceNumber} (R${depositTotal.toFixed(2)})\n\nView the accepted quote:\n${appUrl}/invoices/${quote.id}\n\nUROps Automated Workflow`
+            from: acceptedNotice.from,
+            replyTo: acceptedNotice.replyTo,
+            subject: acceptedNotice.subject,
+            body: acceptedNotice.text,
+            html: acceptedNotice.html,
+            attachments: acceptedNotice.attachments,
+            companyId,
+            companyName: acceptedNotice.brand.name,
+            actorName: data.acceptedByName,
+            triggeredByUserAction: true,
         })
 
         revalidatePath(`/quote/${quote.id}`)
@@ -300,13 +367,34 @@ export async function requestQuoteChangesPublicAction(data: {
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'
         const quoteUrl = `${appUrl}/invoices/${quote.id}`
+        const quoteLabel = quote.quoteNumber || String(quote.number)
+
+        const changeNotice = await composeBrandedEmail({
+            companyId: quote.companyId,
+            settings,
+            email: {
+                subject: `Client Revision Request: ${quoteLabel} (${quote.client.name})`,
+                greeting: 'Hello,',
+                paragraphs: [
+                    `${data.name} (${data.email}) from ${quote.client.name} has requested changes to quotation ${quoteLabel}:`,
+                    `"${data.message.trim()}"`,
+                ],
+                cta: { label: 'Open & revise quotation', url: quoteUrl },
+            },
+        })
 
         await sendRealEmail({
             to: ownerEmails,
-            from: 'AeroWash Review <info@aerowash.co.za>',
-            replyTo: 'info@aerowash.co.za',
-            subject: `Client Revision Request: ${quote.quoteNumber || quote.number} (${quote.client.name})`,
-            body: `Hello Uthmaan,\n\n${data.name} (${data.email}) from ${quote.client.name} has requested changes to quotation ${quote.quoteNumber || quote.number}:\n\n"${data.message.trim()}"\n\nOpen and revise the quotation here:\n${quoteUrl}\n\nUROps Client Review System`
+            from: changeNotice.from,
+            replyTo: changeNotice.replyTo,
+            subject: changeNotice.subject,
+            body: changeNotice.text,
+            html: changeNotice.html,
+            attachments: changeNotice.attachments,
+            companyId: quote.companyId,
+            companyName: changeNotice.brand.name,
+            actorName: data.name,
+            triggeredByUserAction: true,
         })
 
         revalidatePath(`/quote/${quote.id}`)

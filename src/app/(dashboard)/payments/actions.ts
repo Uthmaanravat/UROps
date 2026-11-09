@@ -1,10 +1,14 @@
 'use server'
 
 import { prisma } from "@/lib/prisma"
-import { ensureAuth } from "@/lib/auth-actions"
+import { ensureAuth, getAuthUser } from "@/lib/auth-actions"
 import { revalidatePath } from "next/cache"
 import { sendRealEmail } from "@/lib/email"
 import { formatCurrency } from "@/lib/utils"
+import { composeBrandedEmail } from "@/lib/email-compose"
+import { formatLongDate, formatMoneyZA, resolveGreetingName } from "@/lib/email-templates"
+import { isVatEffective } from "@/lib/vat-utils"
+import { buildAeroWashDocumentPdf } from "@/lib/server-document-pdf"
 
 export async function sendOverdueReminderAction(invoiceId: string, customMessage?: string) {
     try {
@@ -14,6 +18,7 @@ export async function sendOverdueReminderAction(invoiceId: string, customMessage
             where: { id: invoiceId, companyId },
             include: {
                 client: true,
+                contact: true,
                 payments: true,
                 company: { include: { settings: true } }
             }
@@ -35,23 +40,68 @@ export async function sendOverdueReminderAction(invoiceId: string, customMessage
         }
 
         const formattedNumber = invoice.quoteNumber || `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`
-        const dueDateStr = invoice.dueDate
-            ? new Date(invoice.dueDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })
-            : 'Payment upon presentation'
+        const currency = settings?.currency || 'R'
+        const docLabel = isVatEffective(invoice.date, settings) ? 'Tax Invoice' : 'Invoice'
+        const authUser = await getAuthUser()
 
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'
-        const invoiceUrl = `${appUrl}/invoices/${invoice.id}`
+        // Same PDF as the invoice (AeroWash can be generated server-side; no attachment is claimed otherwise)
+        const pdf = await buildAeroWashDocumentPdf(invoice.id)
 
-        const defaultBody = `Dear ${invoice.attentionTo || invoice.client.name},\n\nThis is a friendly reminder that invoice ${formattedNumber} for ${invoice.client.name} has an outstanding balance of ${formatCurrency(balanceDue, 'R')}.\n\nInvoice Details:\n- Invoice Number: ${formattedNumber}\n- Balance Due: R${balanceDue.toFixed(2)}\n- Due Date: ${dueDateStr}\n- Site: ${invoice.site || 'N/A'}\n\nYou can view and download your tax invoice online here:\n${invoiceUrl}\n\nBanking Details:\n${settings?.bankDetails || 'Standard Bank - AeroWash (Pty) Ltd'}\n\nIf payment has already been dispatched, please reply with proof of payment so we can update your account.\n\nWarm regards,\nAccounts Department\n${settings?.name || 'AeroWash (Pty) Ltd'}`
+        const greetingName = resolveGreetingName({
+            contactName: invoice.contact?.name,
+            attentionTo: invoice.attentionTo,
+            clientAttentionTo: invoice.client.attentionTo,
+            clientCompanyName: invoice.client.companyName,
+            clientName: invoice.client.name,
+        })
 
-        const body = customMessage?.trim() ? customMessage.trim() : defaultBody
+        const custom = customMessage?.trim()
+        const composed = await composeBrandedEmail({
+            companyId,
+            settings,
+            fallbackSenderEmail: authUser?.email,
+            extraAttachments: pdf ? [{ filename: pdf.filename, content: pdf.buffer, contentType: 'application/pdf' }] : [],
+            email: custom
+                ? {
+                    subject: `Payment reminder: ${docLabel} ${formattedNumber} (${formatMoneyZA(balanceDue, currency)} outstanding)`,
+                    paragraphs: custom.split(/\n{2,}/),
+                }
+                : {
+                    subject: `Payment reminder: ${docLabel} ${formattedNumber} (${formatMoneyZA(balanceDue, currency)} outstanding)`,
+                    greeting: `Hi ${greetingName},`,
+                    paragraphs: [
+                        `This is a friendly reminder that ${docLabel.toLowerCase()} ${formattedNumber} has an outstanding balance.`,
+                        pdf ? 'A copy of the invoice is attached for your convenience.' : '',
+                    ],
+                    rows: [
+                        { label: 'Invoice number', value: formattedNumber },
+                        { label: 'Balance due', value: formatMoneyZA(balanceDue, currency), strong: true },
+                        ...(invoice.dueDate ? [{ label: 'Due date', value: formatLongDate(invoice.dueDate) }] : []),
+                        ...(invoice.site ? [{ label: 'Site', value: invoice.site }] : []),
+                    ],
+                    afterParagraphs: [
+                        ...(settings?.bankDetails && settings.bankDetails.trim()
+                            ? [`Banking details:\n${settings.bankDetails.trim()}\nPayment reference: ${formattedNumber}`]
+                            : []),
+                        'If payment has already been made, please reply with proof of payment so we can update your account.',
+                    ],
+                    signOff: { name: (authUser?.name || '').trim() || undefined },
+                },
+        })
 
         const res = await sendRealEmail({
             to: clientEmail,
-            from: 'AeroWash Accounts <info@aerowash.co.za>',
-            replyTo: 'info@aerowash.co.za',
-            subject: `Overdue Payment Reminder: Invoice ${formattedNumber} (${formatCurrency(balanceDue, 'R')})`,
-            body
+            from: composed.from,
+            replyTo: composed.replyTo,
+            subject: composed.subject,
+            body: composed.text,
+            html: composed.html,
+            attachments: composed.attachments,
+            companyId,
+            companyName: composed.brand.name,
+            actorUserId: authUser?.id,
+            actorName: authUser?.name || authUser?.email,
+            triggeredByUserAction: true,
         })
 
         if (!res.success) {

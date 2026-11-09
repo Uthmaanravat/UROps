@@ -4,6 +4,16 @@ import { sendRealEmail } from "@/lib/email"
 import { prisma } from "@/lib/prisma"
 import { ensureAuth, getAuthUser } from "@/lib/auth-actions"
 import { isVatEffective, isInvalidLineItem } from "@/lib/vat-utils"
+import { composeBrandedEmail } from "@/lib/email-compose"
+import {
+    formatLongDate,
+    formatMoneyZA,
+    getQuoteValidity,
+    isAeroWashCompany,
+    resolveGreetingName,
+    type EmailRow,
+} from "@/lib/email-templates"
+import type { EmailAttachment } from "@/lib/email-assets"
 
 /**
  * Server-side gatekeeper:
@@ -67,12 +77,37 @@ export async function verifyQuoteActionPermission(
     }
 }
 
-export async function sendInvoiceEmail(invoiceId: string, recipients?: string[], customBody?: string) {
+async function ensureShareToken(invoiceId: string): Promise<string> {
+    const row = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { metadata: true } });
+    const currentMeta = (row?.metadata as any) || {};
+    if (currentMeta.shareToken) return currentMeta.shareToken as string;
+    const crypto = await import("crypto");
+    const shareToken = crypto.randomBytes(16).toString('hex');
+    await prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { metadata: { ...currentMeta, shareToken } }
+    });
+    return shareToken;
+}
+
+/**
+ * Sends a quote or invoice to the client as a branded HTML email (plain-text fallback included).
+ * - Branding, sender, phone, logo and sign-off come from the sending company's own settings.
+ * - The PDF (generated client-side, identical to the PDF download) is attached when supplied.
+ * - AeroWash quotes get a secure "View & accept quote" button that stops accepting on the Valid until date.
+ */
+export async function sendInvoiceEmail(
+    invoiceId: string,
+    recipients?: string[],
+    customBody?: string,
+    pdf?: { filename: string; base64: string }
+) {
     try {
         const companyId = await ensureAuth()
+        const authUser = await getAuthUser()
         const invoice = await prisma.invoice.findFirst({
             where: { id: invoiceId, companyId },
-            include: { client: true, items: true }
+            include: { client: true, items: true, contact: true }
         })
 
         if (!invoice) {
@@ -105,29 +140,111 @@ export async function sendInvoiceEmail(invoiceId: string, recipients?: string[],
 
         const settings = await prisma.companySettings.findUnique({ where: { companyId: invoice.companyId } });
         const isVatActive = isVatEffective(invoice.date, settings);
-        const isAW = invoice.quoteNumber?.startsWith('AW-') || invoice.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9';
-        const formattedNumber = invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
-        const docTypeLabel = invoice.type === 'QUOTE' ? (isAW ? 'Quotation' : 'Quote') : (isVatActive ? 'Tax Invoice' : 'Invoice');
-        const subject = `${docTypeLabel} ${formattedNumber} from UROps`
-        const body = customBody || `Hi ${invoice.client.name},
+        const isAW = isAeroWashCompany(invoice.companyId, settings) || Boolean(invoice.quoteNumber?.startsWith('AW-'));
+        const isQuote = invoice.type === 'QUOTE';
+        const formattedNumber = invoice.quoteNumber || (isQuote ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
+        const docTypeLabel = isQuote ? (isAW ? 'Quotation' : 'Quote') : (isVatActive ? 'Tax Invoice' : 'Invoice');
+        const currency = settings?.currency || 'R';
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
 
-Please find attached your ${invoice.type.toLowerCase()} ${formattedNumber}.
-Total Amount: R${invoice.total.toFixed(2)}
+        // PDF attachment (same document as the PDF download)
+        const extraAttachments: EmailAttachment[] = [];
+        let pdfAttached = false;
+        if (pdf?.base64) {
+            const b64 = pdf.base64.includes('base64,') ? pdf.base64.split('base64,')[1] : pdf.base64;
+            const buf = Buffer.from(b64, 'base64');
+            if (buf.length > 4 && buf.subarray(0, 4).toString('latin1') === '%PDF') {
+                const safeName = (pdf.filename || `${formattedNumber}.pdf`).replace(/[^A-Za-z0-9._ -]/g, '_');
+                extraAttachments.push({ filename: safeName.toLowerCase().endsWith('.pdf') ? safeName : `${safeName}.pdf`, content: buf, contentType: 'application/pdf' });
+                pdfAttached = true;
+            }
+        }
 
-Best regards,
-The UROps Team`
+        const greetingName = resolveGreetingName({
+            contactName: invoice.contact?.name,
+            attentionTo: invoice.attentionTo,
+            clientAttentionTo: invoice.client.attentionTo,
+            clientCompanyName: invoice.client.companyName,
+            clientName: invoice.client.name,
+        });
 
-        const fromEmail = settings?.email || 'info@aerowash.co.za';
-        const fromName = settings?.name || 'AeroWash';
+        const siteText = invoice.site ? ` for ${invoice.site.replace(/^Site:\s*/i, '')}` : '';
+        const rows: EmailRow[] = [];
+        const afterParagraphs: string[] = [];
+        let cta: { label: string; url: string } | undefined;
+        let ctaNote: string | undefined;
 
-        const formattedFrom = fromEmail.includes('<') ? fromEmail : `${fromName} <${fromEmail}>`;
+        if (isQuote) {
+            const { expiry } = getQuoteValidity(invoice as any, settings);
+            const validUntil = formatLongDate(expiry);
+            rows.push({ label: 'Total', value: formatMoneyZA(invoice.total, currency), strong: true });
+            if (validUntil) rows.push({ label: 'Valid until', value: validUntil });
+            if (isAW) {
+                const token = await ensureShareToken(invoice.id);
+                cta = { label: 'View & accept quote', url: `${appUrl}/quote/${token}` };
+                ctaNote = validUntil ? `This secure link is valid until ${validUntil}.` : undefined;
+            }
+        } else {
+            const pct = invoice.firstPaymentPercentage;
+            const isDepositInvoice = Boolean((invoice.metadata as any)?.isDepositInvoice);
+            const hasPartial = Boolean(pct && pct > 0 && pct < 100 && !isDepositInvoice);
+            if (hasPartial) {
+                rows.push({ label: 'Invoice total', value: formatMoneyZA(invoice.total, currency) });
+                rows.push({ label: `Deposit due (${pct}%)`, value: formatMoneyZA(invoice.total * (pct! / 100), currency), strong: true });
+            } else {
+                rows.push({ label: 'Amount due', value: formatMoneyZA(invoice.total, currency), strong: true });
+            }
+            if (invoice.dueDate) rows.push({ label: 'Due date', value: formatLongDate(invoice.dueDate) });
+            if (settings?.bankDetails && settings.bankDetails.trim()) {
+                afterParagraphs.push(`Banking details:\n${settings.bankDetails.trim()}\nPayment reference: ${formattedNumber}`);
+            }
+        }
+
+        const intro = pdfAttached
+            ? `Please find attached your ${docTypeLabel} ${formattedNumber}${siteText}.`
+            : `Your ${docTypeLabel} ${formattedNumber}${siteText} is ready.`;
+
+        const senderName = (authUser?.name || '').trim() || undefined;
+        const composed = await composeBrandedEmail({
+            companyId: invoice.companyId,
+            settings,
+            fallbackSenderEmail: authUser?.email,
+            extraAttachments,
+            email: customBody
+                ? {
+                    subject: (b) => `${docTypeLabel} ${formattedNumber} from ${b.shortName}`,
+                    greeting: undefined,
+                    paragraphs: customBody.split(/\n{2,}/),
+                    cta: undefined,
+                }
+                : {
+                    subject: (b) => `${docTypeLabel} ${formattedNumber} from ${b.shortName}`,
+                    greeting: `Hi ${greetingName},`,
+                    paragraphs: [intro, ...(isQuote ? ['Review the details below, or reply to this email if you have any questions.'] : ['Reply to this email if you have any questions.'])],
+                    rows,
+                    cta,
+                    ctaNote,
+                    afterParagraphs,
+                    signOff: { name: senderName },
+                },
+        });
+
+        // Subject uses the sending company's short name (e.g. "Quotation AW-2026-008 from AeroWash")
+        const subject = `${docTypeLabel} ${formattedNumber} from ${composed.brand.shortName}`;
 
         const result = await sendRealEmail({
             to: toEmails,
             subject,
-            body: body,
-            from: formattedFrom,
-            replyTo: fromEmail,
+            body: composed.text,
+            html: composed.html,
+            from: composed.from,
+            replyTo: composed.replyTo,
+            attachments: composed.attachments,
+            companyId: invoice.companyId,
+            companyName: composed.brand.name,
+            actorUserId: authUser?.id,
+            actorName: authUser?.name || authUser?.email,
+            triggeredByUserAction: true,
         })
 
         if (!result.success) {
@@ -145,7 +262,8 @@ The UROps Team`
             success: true, 
             messageId: (result as any).id || (result as any).data?.id,
             sandboxRerouted: (result as any).sandboxRerouted,
-            note: (result as any).note
+            note: (result as any).note,
+            attachmentIncluded: pdfAttached
         }
     } catch (error: any) {
         console.error("sendInvoiceEmail error:", error)
@@ -205,24 +323,51 @@ export async function requestQuoteApprovalAction(invoiceId: string, isResubmissi
             }
         }
 
-        const formattedNumber = invoice.quoteNumber || `AW-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`;
+        const formattedNumber = invoice.quoteNumber || `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`;
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
         const quoteUrl = `${appUrl}/invoices/${invoice.id}`;
+        const currency = settings?.currency || 'R';
 
         if (ownerEmails.length > 0) {
-            const subject = isResubmission
-                ? `Resubmitted for Approval: Quotation ${formattedNumber} (${invoice.client.name} — R${invoice.total.toLocaleString()})`
-                : `Approval Required: Quotation ${formattedNumber} (${invoice.client.name} — R${invoice.total.toLocaleString()})`;
-
-            const body = isResubmission
-                ? `Hello,\n\nQuotation ${formattedNumber} for ${invoice.client.name} has been revised and resubmitted for owner approval.\n\nTotal: R${invoice.total.toFixed(2)}\nUpdated by: ${authUser?.name || authUser?.email}\nSite: ${invoice.site || 'N/A'}\n\nYou can review and approve it at:\n${quoteUrl}\n\nUROps Automated Notification`
-                : `Hello,\n\nQuotation ${formattedNumber} for ${invoice.client.name} exceeds the approval limit.\n\nTotal: R${invoice.total.toFixed(2)}\nRequested by: ${authUser?.name || authUser?.email}\nSite: ${invoice.site || 'N/A'}\n\nYou can review and 1-click approve or send it back with a note at:\n${quoteUrl}\n\nUROps Automated Notification`;
+            const composed = await composeBrandedEmail({
+                companyId,
+                settings,
+                fallbackSenderEmail: authUser?.email,
+                email: {
+                    subject: isResubmission
+                        ? `Resubmitted for Approval: Quotation ${formattedNumber} (${invoice.client.name} — ${formatMoneyZA(invoice.total, currency)})`
+                        : `Approval Required: Quotation ${formattedNumber} (${invoice.client.name} — ${formatMoneyZA(invoice.total, currency)})`,
+                    greeting: 'Hello,',
+                    paragraphs: [
+                        isResubmission
+                            ? `Quotation ${formattedNumber} for ${invoice.client.name} has been revised and resubmitted for owner approval.`
+                            : `Quotation ${formattedNumber} for ${invoice.client.name} exceeds the approval limit and needs your approval before it can be sent.`,
+                    ],
+                    rows: [
+                        { label: 'Quotation', value: formattedNumber },
+                        { label: 'Client', value: invoice.client.name },
+                        { label: 'Total', value: formatMoneyZA(invoice.total, currency), strong: true },
+                        { label: isResubmission ? 'Updated by' : 'Requested by', value: authUser?.name || authUser?.email || 'Team member' },
+                        { label: 'Site', value: invoice.site || 'N/A' },
+                    ],
+                    cta: { label: 'Review quote', url: quoteUrl },
+                    ctaNote: 'Sign in to approve it, or send it back with a note.',
+                },
+            });
 
             const emailRes = await sendRealEmail({
                 to: ownerEmails,
-                subject,
-                body,
-                from: 'AeroWash Notifications <info@aerowash.co.za>'
+                subject: composed.subject,
+                body: composed.text,
+                html: composed.html,
+                from: composed.from,
+                replyTo: composed.replyTo,
+                attachments: composed.attachments,
+                companyId,
+                companyName: composed.brand.name,
+                actorUserId: authUser?.id,
+                actorName: authUser?.name || authUser?.email,
+                triggeredByUserAction: true,
             });
 
             if (!emailRes.success) {
@@ -366,16 +511,40 @@ export async function sendBackQuoteAction(invoiceId: string, note: string) {
             }
         }
 
-        const formattedNumber = invoice.quoteNumber || `AW-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`;
+        const formattedNumber = invoice.quoteNumber || `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`;
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
         const quoteUrl = `${appUrl}/invoices/${invoice.id}`;
 
         if (recipients.length > 0) {
+            const composed = await composeBrandedEmail({
+                companyId,
+                settings: compSettings,
+                fallbackSenderEmail: authUser?.email,
+                email: {
+                    subject: `Changes Requested: Quotation ${formattedNumber} (${invoice.client.name})`,
+                    greeting: 'Hello,',
+                    paragraphs: [
+                        `The company owner has reviewed quotation ${formattedNumber} for ${invoice.client.name} and requested the following revisions:`,
+                        `"${note.trim()}"`,
+                    ],
+                    afterParagraphs: ['Please open the quote, make the requested adjustments, and save to resubmit for approval.'],
+                    cta: { label: 'Open quote', url: quoteUrl },
+                },
+            });
+
             const emailRes = await sendRealEmail({
                 to: recipients,
-                from: 'AeroWash Review <info@aerowash.co.za>',
-                subject: `Changes Requested: Quotation ${formattedNumber} (${invoice.client.name})`,
-                body: `Hello,\n\nThe company owner has reviewed quotation ${formattedNumber} for ${invoice.client.name} and requested the following revisions:\n\n"${note.trim()}"\n\nPlease open the quote, make the requested adjustments, and save to resubmit for approval:\n${quoteUrl}\n\nUROps Quotation Review`,
+                from: composed.from,
+                replyTo: composed.replyTo,
+                subject: composed.subject,
+                body: composed.text,
+                html: composed.html,
+                attachments: composed.attachments,
+                companyId,
+                companyName: composed.brand.name,
+                actorUserId: authUser?.id,
+                actorName: authUser?.name || authUser?.email,
+                triggeredByUserAction: true,
             });
 
             if (!emailRes.success) {

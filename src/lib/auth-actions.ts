@@ -30,10 +30,13 @@ export const getAuthCompanyId = cache(async () => {
     return user?.companyId || null
 })
 
-export async function ensureAuth() {
-    const companyId = await getAuthCompanyId()
-    if (!companyId) {
+export async function ensureAuth(options?: { allowCrew?: boolean }) {
+    const user = await getAuthUser()
+    if (!user?.companyId) {
         redirect("/login")
     }
-    return companyId
+    if (user.role === "CREW" && !options?.allowCrew) {
+        redirect("/my-jobs")
+    }
+    return user.companyId
 }

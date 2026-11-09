@@ -43,7 +43,7 @@ export async function sendMeetingReminders(meetingId: string, isUpdate = false) 
         });
 
         const fromEmail = companySettings?.email || 'onboarding@resend.dev';
-        const fromName = companySettings?.name || 'UROps';
+        const fromName = companySettings?.name || 'Notifications';
         const formattedFrom = fromEmail.includes('<') ? fromEmail : `${fromName} <${fromEmail}>`;
 
         for (const manager of managers) {
@@ -65,13 +65,16 @@ Details of the meeting:
 - Client: ${clientName}
 - Project: ${projectName}
 
-Best regards,
-The UROps Team`;
+Kind regards,
+${companySettings?.name || 'Your team'}`;
 
             console.log(`[REMINDERS] Dispatching email to manager ${manager.email}`);
             await sendRealEmail({
                 to: manager.email,
                 from: formattedFrom,
+                companyId: meeting.companyId,
+                companyName: companySettings?.name || 'Workspace',
+                triggeredByUserAction: true,
                 subject: emailSubject,
                 body: emailBody
             });

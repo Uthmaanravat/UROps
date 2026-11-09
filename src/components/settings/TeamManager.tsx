@@ -546,6 +546,14 @@ export function TeamManager({
                                 if (log.action === 'ROLE_UPDATED') label = `Updated ${log.targetEmail || 'user'}'s role to ${log.details?.newRole}`
                                 if (log.action === 'USER_REMOVED') label = `Removed ${log.targetEmail || 'user'} from company`
                                 if (log.action === 'OWNERSHIP_TRANSFERRED') label = `Transferred company ownership to ${log.targetEmail}`
+                                if (log.action === 'EMAIL_SENT_TEST' || log.action === 'EMAIL_SENT_REAL') {
+                                    const mode = log.details?.mode || (log.action === 'EMAIL_SENT_TEST' ? 'TEST' : 'REAL')
+                                    const intended = Array.isArray(log.details?.intendedTo) ? log.details.intendedTo.join(', ') : ''
+                                    const delivered = log.targetEmail || (Array.isArray(log.details?.to) ? log.details.to.join(', ') : '')
+                                    const subj = log.details?.subject || 'Email'
+                                    const comp = log.details?.company || ''
+                                    label = `[${mode}] Email to ${delivered}${intended && intended !== delivered ? ` (intended: ${intended})` : ''} — "${subj}"${comp ? ` · ${comp}` : ''}`
+                                }
 
                                 return (
                                     <div key={log.id} className="p-3 text-xs flex items-center justify-between gap-4">

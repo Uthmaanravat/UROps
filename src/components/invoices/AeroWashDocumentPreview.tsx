@@ -396,7 +396,7 @@ export function AeroWashDocumentPreview({
                                 const effectiveTax = taxAmount > 0 ? taxAmount : (subtotal * (vatRate / 100));
                                 const effectiveTotal = isVatRegistered ? (subtotal + effectiveTax) : (total || subtotal);
                                 const firstPaymentPct = (invoice as any).firstPaymentPercentage ?? (invoice.metadata as any)?.firstPaymentPercentage;
-                                const hasFirstPayment = Boolean(isInvoice && firstPaymentPct && firstPaymentPct > 0 && firstPaymentPct < 100);
+                                const hasFirstPayment = Boolean(isInvoice && firstPaymentPct && firstPaymentPct > 0 && firstPaymentPct < 100 && !(invoice.metadata as any)?.isDepositInvoice);
                                 const firstPaymentAmount = hasFirstPayment ? (effectiveTotal * (firstPaymentPct / 100)) : 0;
                                 const balanceRemaining = hasFirstPayment ? (effectiveTotal - firstPaymentAmount) : 0;
                                 const paymentLabel = firstPaymentPct === 60 ? "Deposit (60%)" : `First Payment (${firstPaymentPct}%)`;

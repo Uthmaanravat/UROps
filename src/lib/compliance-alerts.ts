@@ -202,6 +202,9 @@ export async function checkAndNotifyCompanyComplianceAlerts(
             to: recipients,
             from: `${companyDisplay} Compliance <info@aerowash.co.za>`,
             replyTo: settings?.email || "info@aerowash.co.za",
+            companyId,
+            companyName: companyDisplay,
+            triggeredByUserAction: Boolean(options?.forceSend),
             subject: `[Compliance Alert] ${triggeredDocs.length} document(s) expiring/expired — ${companyDisplay}`,
             body: lines.join("\n"),
         })
@@ -214,11 +217,14 @@ export async function checkAndNotifyCompanyComplianceAlerts(
                 to: [td.pilotEmail],
                 from: `${companyDisplay} Compliance <info@aerowash.co.za>`,
                 replyTo: settings?.email || "info@aerowash.co.za",
+                companyId,
+                companyName: companyDisplay,
+                triggeredByUserAction: Boolean(options?.forceSend),
                 subject: `[Pilot RPL Alert] ${td.title} — ${td.statusLabel}`,
                 body:
                     `Hi ${td.pilotName || "Pilot"},\n\n` +
                     `Your Remote Pilot Licence record "${td.title}"${td.referenceNumber ? ` (${td.referenceNumber})` : ""} is marked: ${td.statusLabel} (Expiry: ${td.expiryStr}).\n\n` +
-                    `Please upload your renewed RPL in UROps Compliance:\n${appUrl}/compliance\n`,
+                    `Please upload your renewed RPL in the Compliance section:\n${appUrl}/compliance\n`,
             }).catch(err => console.warn("[Compliance Alerts] Pilot RPL email warning:", err))
         }
     }

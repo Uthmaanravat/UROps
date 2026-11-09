@@ -74,7 +74,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
 
     if ((invoice as any).metadata?.siteVisitPhotos && Array.isArray((invoice as any).metadata.siteVisitPhotos)) {
         const { resolvePhotoUrls } = await import("@/lib/supabase-storage");
-        (invoice as any).metadata.siteVisitPhotos = await resolvePhotoUrls((invoice as any).metadata.siteVisitPhotos);
+        (invoice as any).metadata.siteVisitPhotos = await resolvePhotoUrls((invoice as any).metadata.siteVisitPhotos, companyId);
     }
 
     const isTendersEnabled = companySettings?.tendersEnabled === true;
