@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS public."FlightLogEntry" (
     CONSTRAINT "FlightLogEntry_pkey" PRIMARY KEY ("id")
 );
 
+ALTER TABLE public."FlightLogEntry" ENABLE ROW LEVEL SECURITY;
+
 CREATE UNIQUE INDEX IF NOT EXISTS "FlightLogEntry_jobSheetId_key" ON public."FlightLogEntry"("jobSheetId");
 CREATE INDEX IF NOT EXISTS "FlightLogEntry_companyId_flightDate_idx" ON public."FlightLogEntry"("companyId", "flightDate" DESC);
 CREATE INDEX IF NOT EXISTS "FlightLogEntry_companyId_pilotUserId_idx" ON public."FlightLogEntry"("companyId", "pilotUserId");
@@ -133,6 +135,8 @@ CREATE TABLE IF NOT EXISTS public."DroneMaintenanceLog" (
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "DroneMaintenanceLog_pkey" PRIMARY KEY ("id")
 );
+
+ALTER TABLE public."DroneMaintenanceLog" ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS "DroneMaintenanceLog_companyId_droneId_performedAt_idx"
   ON public."DroneMaintenanceLog"("companyId", "droneId", "performedAt" DESC);
@@ -161,6 +165,8 @@ CREATE TABLE IF NOT EXISTS public."DroneBattery" (
     CONSTRAINT "DroneBattery_pkey" PRIMARY KEY ("id")
 );
 
+ALTER TABLE public."DroneBattery" ENABLE ROW LEVEL SECURITY;
+
 CREATE UNIQUE INDEX IF NOT EXISTS "DroneBattery_companyId_label_key" ON public."DroneBattery"("companyId", "label");
 CREATE INDEX IF NOT EXISTS "DroneBattery_companyId_status_idx" ON public."DroneBattery"("companyId", "status");
 
@@ -182,6 +188,8 @@ CREATE TABLE IF NOT EXISTS public."BatteryChargeLog" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "BatteryChargeLog_pkey" PRIMARY KEY ("id")
 );
+
+ALTER TABLE public."BatteryChargeLog" ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS "BatteryChargeLog_batteryId_loggedAt_idx" ON public."BatteryChargeLog"("batteryId", "loggedAt" DESC);
 CREATE INDEX IF NOT EXISTS "BatteryChargeLog_companyId_loggedAt_idx" ON public."BatteryChargeLog"("companyId", "loggedAt" DESC);
@@ -214,6 +222,8 @@ CREATE TABLE IF NOT EXISTS public."ComplianceDocument" (
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ComplianceDocument_pkey" PRIMARY KEY ("id")
 );
+
+ALTER TABLE public."ComplianceDocument" ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS "ComplianceDocument_companyId_category_isArchived_idx"
   ON public."ComplianceDocument"("companyId", "category", "isArchived");
@@ -274,7 +284,7 @@ BEGIN
     END IF;
 END $$;
 
--- 10. Private Supabase Storage buckets: server-only (service_role) access, no broad anon/authenticated policies
+-- 10. Private Supabase Storage buckets: server-only (service_role) + strict tenant-isolated authenticated RLS
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
     'compliance-documents',
