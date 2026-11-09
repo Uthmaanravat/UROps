@@ -1,12 +1,13 @@
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createClient as createServerSupabaseClient } from '@/lib/supabase/server';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
 export const BUCKET_NAME = 'quotation-photos';
 
 export function getSupabaseAdmin() {
+    const runtimeEnv = process.env as Record<string, string | undefined>;
+    const supabaseUrl = (runtimeEnv['NEXT_PUBLIC_SUPABASE_URL'] || '').trim();
+    const serviceRoleKey = (runtimeEnv['SUPABASE_SERVICE_ROLE_KEY'] || '').trim();
+
     if (supabaseUrl && serviceRoleKey) {
         return createServiceClient(supabaseUrl, serviceRoleKey, {
             auth: { persistSession: false, autoRefreshToken: false },
