@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
+import { getAppUrl } from "@/lib/app-url"
 
 export async function updateUserRoleAction(targetUserId: string, newRole: Role) {
     const { updateUserRoleAction: updateRole } = await import("@/app/(dashboard)/settings/team/actions")
@@ -75,7 +76,7 @@ export async function signUpAction(formData: FormData) {
                     full_name: name.trim(),
                     role: invite.role
                 },
-                emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/auth/callback`,
+                emailRedirectTo: `${getAppUrl()}/api/auth/callback`,
             },
         })
 
@@ -176,6 +177,23 @@ export async function signInAction(formData: FormData) {
     } catch (error: any) {
         console.error("SignIn Error:", error.message)
         return { success: false, error: error.message }
+    }
+}
+
+export async function requestPasswordResetAction(emailInput: string) {
+    const email = (emailInput || "").trim().toLowerCase()
+    if (!email || !email.includes("@")) {
+        return { success: false, error: "Please enter a valid email address." }
+    }
+    try {
+        const supabase = createClient()
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${getAppUrl()}/api/auth/callback`
+        })
+        if (error) throw error
+        return { success: true }
+    } catch (error: any) {
+        return { success: false, error: error.message || "Failed to send password reset email." }
     }
 }
 

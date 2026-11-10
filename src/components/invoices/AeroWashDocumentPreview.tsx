@@ -5,7 +5,7 @@ import { formatCurrency, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Edit3, Check, FileText, CheckCircle2 } from "lucide-react";
 import { parseClauses } from "@/lib/terms-utils";
-import { AEROWASH_STANDARD_TERMS_BODY } from "@/lib/aerowash-catalogue";
+import { AEROWASH_STANDARD_TERMS_BODY, formatConditionTypeLabel, normalizeConditionFlagWording } from "@/lib/aerowash-catalogue";
 
 interface AeroWashDocumentPreviewProps {
     invoice: any;
@@ -188,8 +188,8 @@ export function AeroWashDocumentPreview({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                         {/* FROM Column */}
                         <div className="space-y-2">
-                            <div className="text-[10px] font-black tracking-[0.25em] text-[#D05E00] uppercase border-b border-gray-200 pb-1">
-                                F R O M
+                            <div className="text-[10px] font-black tracking-[0.2em] text-[#D05E00] uppercase border-b border-gray-200 pb-1">
+                                FROM
                             </div>
                             <div className="text-xs space-y-1 text-gray-600">
                                 <div className="font-bold text-sm text-zinc-900">
@@ -209,8 +209,8 @@ export function AeroWashDocumentPreview({
 
                         {/* ATTENTION Column */}
                         <div className="space-y-2">
-                            <div className="text-[10px] font-black tracking-[0.25em] text-[#D05E00] uppercase border-b border-gray-200 pb-1">
-                                A T T E N T I O N
+                            <div className="text-[10px] font-black tracking-[0.2em] text-[#D05E00] uppercase border-b border-gray-200 pb-1">
+                                ATTENTION
                             </div>
                             <div className="text-xs space-y-1 text-gray-600">
                                 <div className="font-bold text-sm text-zinc-900">
@@ -237,8 +237,8 @@ export function AeroWashDocumentPreview({
 
                     {/* SCOPE OF WORKS */}
                     <div className="space-y-2">
-                        <div className="text-[10px] font-black tracking-[0.25em] text-[#D05E00] uppercase border-b border-gray-200 pb-1">
-                            S C O P E   O F   W O R K S
+                        <div className="text-[10px] font-black tracking-[0.2em] text-[#D05E00] uppercase border-b border-gray-200 pb-1">
+                            SCOPE OF WORKS
                         </div>
                         <p className="text-xs text-gray-700 leading-relaxed">
                             {scopeOfWorksText}
@@ -358,7 +358,7 @@ export function AeroWashDocumentPreview({
                                                                 Existing condition noted
                                                             </div>
                                                             <div className="text-[11px] text-[#7C2D12] leading-relaxed">
-                                                                {flag.wording}
+                                                                {normalizeConditionFlagWording(flag, formattedDate)}
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -554,18 +554,39 @@ export function AeroWashDocumentPreview({
                                     </span>
                                 </div>
                                 <ul className="space-y-1.5 text-xs text-gray-700">
-                                    {(invoice.metadata?.elevations || []).map((e: any, idx: number) => e.exclusions ? (
-                                        <li key={`elev-ex-${idx}`} className="flex items-start gap-2 font-bold text-zinc-900">
-                                            <span className="text-[#D05E00]">•</span>
-                                            <span>{e.name ? `${e.name}: ` : ''}{e.exclusions}</span>
-                                        </li>
-                                    ) : null)}
-                                    {(invoice.metadata?.conditionFlags || invoice.conditionFlags || []).map((f: any, idx: number) => (
-                                        <li key={`flag-ex-${idx}`} className="flex items-start gap-2 font-bold text-zinc-900">
-                                            <span className="text-[#D05E00]">•</span>
-                                            <span>{f.elevation || 'Elevation'} ({f.location || 'defect area'}) — existing {(f.conditionType || 'defect').replace(/_/g, ' ').toLowerCase()} excluded from warranty</span>
-                                        </li>
-                                    ))}
+                                    {(() => {
+                                        const boldExclusions: string[] = [];
+                                        const elevs = invoice.metadata?.elevations || [];
+                                        elevs.forEach((e: any) => {
+                                            if (e.exclusions && String(e.exclusions).trim()) {
+                                                boldExclusions.push(`${e.name ? `${e.name}: ` : ''}${String(e.exclusions).trim()}`);
+                                            }
+                                        });
+                                        (invoice.metadata?.conditionFlags || invoice.conditionFlags || []).forEach((f: any) => {
+                                            const loc = (f.location || '').trim();
+                                            const elev = (f.elevation || f.elevationName || 'Elevation').trim();
+                                            const alreadyInElev = boldExclusions.some(ex =>
+                                                loc && ex.toLowerCase().includes(loc.toLowerCase()) && (!elev || ex.toLowerCase().includes(elev.toLowerCase()) || elevs.length <= 1)
+                                            );
+                                            if (!alreadyInElev) {
+                                                const readableCond = formatConditionTypeLabel(f.conditionType || f.type, f.conditionText).toLowerCase();
+                                                boldExclusions.push(`${elev}${loc ? ` (${loc})` : ''} — existing ${readableCond} excluded from warranty`);
+                                            }
+                                        });
+                                        const seen = new Set<string>();
+                                        const uniqueBold = boldExclusions.filter(item => {
+                                            const k = item.toLowerCase().replace(/\s+/g, ' ').trim();
+                                            if (seen.has(k)) return false;
+                                            seen.add(k);
+                                            return true;
+                                        });
+                                        return uniqueBold.map((exText, idx) => (
+                                            <li key={`bold-ex-${idx}`} className="flex items-start gap-2 font-bold text-zinc-900">
+                                                <span className="text-[#D05E00]">•</span>
+                                                <span>{exText}</span>
+                                            </li>
+                                        ));
+                                    })()}
                                     <li className="flex items-start gap-2">
                                         <span className="text-[#D05E00] font-bold">•</span>
                                         <span>Internal faces of glass, unless separately agreed</span>

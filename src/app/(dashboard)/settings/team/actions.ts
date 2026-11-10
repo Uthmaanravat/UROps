@@ -6,6 +6,7 @@ import { Role } from "@prisma/client"
 import { ensureAuth } from "@/lib/auth-actions"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
+import { getAppUrl } from "@/lib/app-url"
 
 async function getCallerAdmin(companyId: string) {
     const supabase = createClient()
@@ -137,7 +138,7 @@ export async function createInviteAction(data: { email: string; role: Role }) {
         }
     })
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const baseUrl = getAppUrl()
     const inviteLink = `${baseUrl}/signup?token=${rawToken}`
 
     revalidatePath('/settings/team')

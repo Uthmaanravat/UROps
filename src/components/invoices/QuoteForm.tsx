@@ -230,7 +230,7 @@ export function QuoteForm({
     const [isProjectNameManual, setIsProjectNameManual] = useState(false)
     const [paymentNotes, setPaymentNotes] = useState("")
     const [showPaymentNotes, setShowPaymentNotes] = useState(true)
-    const [firstPaymentOption, setFirstPaymentOption] = useState<string>("none")
+    const [firstPaymentOption, setFirstPaymentOption] = useState<string>(isAeroWashWorkspace ? "60" : "none")
     const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>("")
 
     // Contacts state
@@ -369,7 +369,7 @@ export function QuoteForm({
         setProjectName("")
         setIsProjectNameManual(false)
         setPaymentNotes("")
-        setFirstPaymentOption("none")
+        setFirstPaymentOption(isAeroWashWorkspace ? "60" : "none")
         setCustomFirstPaymentPercentage("")
         setAeroWashPayload(null)
     }
@@ -628,7 +628,8 @@ export function QuoteForm({
         setLoading(true)
 
         let finalFirstPaymentPercentage: number | undefined = undefined
-        if (firstPaymentOption === "20") finalFirstPaymentPercentage = 20
+        if (firstPaymentOption === "60") finalFirstPaymentPercentage = 60
+        else if (firstPaymentOption === "20") finalFirstPaymentPercentage = 20
         else if (firstPaymentOption === "50") finalFirstPaymentPercentage = 50
         else if (firstPaymentOption === "75") finalFirstPaymentPercentage = 75
         else if (firstPaymentOption === "custom") {
@@ -636,6 +637,8 @@ export function QuoteForm({
             if (!isNaN(parsed) && parsed > 0 && parsed <= 100) {
                 finalFirstPaymentPercentage = parsed
             }
+        } else if (isAeroWashWorkspace && docType === "QUOTE" && firstPaymentOption !== "none") {
+            finalFirstPaymentPercentage = 60
         }
 
         try {

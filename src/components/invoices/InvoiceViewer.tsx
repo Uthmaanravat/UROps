@@ -321,8 +321,16 @@ export function InvoiceViewer({
         }
     }, [invoice.id, invoice.project?.commercialStatus]);
 
+    // Determine contract and visit parameters for payment option defaults
+    const isAeroWashDoc = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash') || invoice?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9');
+    const docProgInfo = (invoice as any)?.metadata?.programmeInfo;
+    const isDocContract = Boolean(docProgInfo && docProgInfo.id !== 'ONCE_OFF');
+    const docVisitsPerYear = Number(docProgInfo?.visitsPerYear) || 1;
+
     const [firstPaymentOption, setFirstPaymentOption] = useState<string>(
-        invoice.firstPaymentPercentage ? invoice.firstPaymentPercentage.toString() : "none"
+        invoice.firstPaymentPercentage
+            ? invoice.firstPaymentPercentage.toString()
+            : (isAeroWashDoc ? "60" : "none")
     );
     const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>(
         invoice.firstPaymentPercentage && ![20, 50, 60, 75].includes(invoice.firstPaymentPercentage)
@@ -334,12 +342,6 @@ export function InvoiceViewer({
     const [convertError, setConvertError] = useState<string | null>(null);
     const [convertPoNumber, setConvertPoNumber] = useState("");
     const [convertPresentationStyle, setConvertPresentationStyle] = useState<'AS_PER_QUOTATION' | 'DETAILED'>('AS_PER_QUOTATION');
-
-    // Determine contract and visit parameters for payment option defaults
-    const isAeroWashDoc = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash'));
-    const docProgInfo = (invoice as any)?.metadata?.programmeInfo;
-    const isDocContract = Boolean(docProgInfo && docProgInfo.id !== 'ONCE_OFF');
-    const docVisitsPerYear = Number(docProgInfo?.visitsPerYear) || 1;
 
     const getInitialConvertPaymentOption = () => {
         if (invoice.firstPaymentPercentage) return invoice.firstPaymentPercentage.toString();

@@ -14,6 +14,7 @@ import {
     type EmailRow,
 } from "@/lib/email-templates"
 import type { EmailAttachment } from "@/lib/email-assets"
+import { getAppUrl } from "@/lib/app-url"
 
 /**
  * Server-side gatekeeper:
@@ -145,7 +146,7 @@ export async function sendInvoiceEmail(
         const formattedNumber = invoice.quoteNumber || (isQuote ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
         const docTypeLabel = isQuote ? (isAW ? 'Quotation' : 'Quote') : (isVatActive ? 'Tax Invoice' : 'Invoice');
         const currency = settings?.currency || 'R';
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
+        const appUrl = getAppUrl();
 
         // PDF attachment (same document as the PDF download)
         const extraAttachments: EmailAttachment[] = [];
@@ -324,7 +325,7 @@ export async function requestQuoteApprovalAction(invoiceId: string, isResubmissi
         }
 
         const formattedNumber = invoice.quoteNumber || `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`;
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
+        const appUrl = getAppUrl();
         const quoteUrl = `${appUrl}/invoices/${invoice.id}`;
         const currency = settings?.currency || 'R';
 
@@ -512,7 +513,7 @@ export async function sendBackQuoteAction(invoiceId: string, note: string) {
         }
 
         const formattedNumber = invoice.quoteNumber || `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`;
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
+        const appUrl = getAppUrl();
         const quoteUrl = `${appUrl}/invoices/${invoice.id}`;
 
         if (recipients.length > 0) {
@@ -586,7 +587,7 @@ export async function getQuoteShareLinkAction(invoiceId: string) {
         });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
+    const appUrl = getAppUrl();
     return { success: true, shareUrl: `${appUrl}/quote/${shareToken}` };
 }
 

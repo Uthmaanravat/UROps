@@ -385,7 +385,8 @@ export async function pauseJobAction(input: {
 
         if (isStandbyReason) {
             const { emails } = await getNotificationRecipients(companyId)
-            const appUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://ur-ops.vercel.app"
+            const { getAppUrl } = await import("@/lib/app-url")
+            const appUrl = getAppUrl()
             if (emails.length > 0) {
                 await sendRealEmail({
                     to: emails,
@@ -876,7 +877,8 @@ export async function finishJobAction(input: {
 
         // 6. Notify Owner
         if (settingsData.emails.length > 0) {
-            const appUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://ur-ops.vercel.app"
+            const { getAppUrl } = await import("@/lib/app-url")
+            const appUrl = getAppUrl()
             await sendRealEmail({
                 to: settingsData.emails,
                 from: "AeroWash Flight Ops <info@aerowash.co.za>",

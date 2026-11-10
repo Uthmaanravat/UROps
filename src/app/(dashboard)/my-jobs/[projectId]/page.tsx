@@ -4,16 +4,27 @@ import { ensureAuth, getAuthUser } from "@/lib/auth-actions"
 import { getSignedPhotoUrl } from "@/lib/supabase-storage"
 import { getOpenMeteoSiteForecastForDate, evaluateFlightWeatherStatus } from "@/lib/weather"
 import { MobileJobSheetClient } from "@/components/jobs/MobileJobSheetClient"
+import { formatConditionTypeLabel } from "@/lib/aerowash-catalogue"
 
 export const dynamic = "force-dynamic"
 
-function formatWhatsAppUrl(phone?: string | null): string | null {
+function normalizePhoneZA(phone?: string | null): string | null {
     if (!phone) return null
     let digits = phone.replace(/[^0-9]/g, "")
     if (!digits) return null
-    if (digits.startsWith("0") && digits.length === 10) {
+    if (digits.startsWith("0027")) {
+        digits = "27" + digits.slice(4)
+    } else if (digits.startsWith("0") && digits.length === 10) {
         digits = "27" + digits.slice(1)
+    } else if (!digits.startsWith("27") && digits.length === 9) {
+        digits = "27" + digits
     }
+    return digits
+}
+
+function formatWhatsAppUrl(phone?: string | null): string | null {
+    const digits = normalizePhoneZA(phone)
+    if (!digits) return null
     return `https://wa.me/${digits}`
 }
 
@@ -189,28 +200,53 @@ export default async function MobileJobSheetPage({
         return {
             id: f.id || `flag-${idx + 1}`,
             elevationName: f.elevationName || f.elevation || "Site",
-            type: f.type || f.conditionType || "Pre-existing condition",
+            type: formatConditionTypeLabel(f.type || f.conditionType, f.conditionText),
+            rawType: f.type || f.conditionType || "",
             location: f.location || "",
-            notes: f.notes || f.description || "",
+            notes: f.notes || f.description || f.wording || "",
             photos: linkedPhotos
         }
     })
 
-    // Exclusions list
-    const exclusionsList: string[] = []
+    // Exclusions list (deduplicated — show each exclusion once)
+    const rawExclusions: string[] = []
     for (const el of elevations) {
         if (el.exclusions) {
-            exclusionsList.push(`${el.name}: ${el.exclusions}`)
+            // Split comma/semicolon-separated or keep full exclusion, prefixed if multiple elevations differ
+            const prefix = elevations.length > 1 ? `${el.name}: ` : ""
+            rawExclusions.push(`${prefix}${el.exclusions}`)
         }
     }
     for (const fl of conditionFlags) {
-        if (String(fl.type).toLowerCase().includes("crack") || String(fl.type).toLowerCase().includes("damage")) {
-            exclusionsList.push(`Damaged / cracked area excluded (${fl.elevationName}${fl.location ? ` — ${fl.location}` : ""})`)
+        const typeLower = `${fl.type} ${fl.rawType}`.toLowerCase()
+        if (typeLower.includes("crack") || typeLower.includes("damage") || typeLower.includes("loose")) {
+            const locNorm = (fl.location || "").trim().toLowerCase()
+            const elevNorm = (fl.elevationName || "").trim().toLowerCase()
+            // Skip if an elevation exclusion already mentions this location on the same elevation
+            const alreadyCovered = rawExclusions.some(ex => {
+                const exLower = ex.toLowerCase()
+                return locNorm && exLower.includes(locNorm) && (!elevNorm || exLower.includes(elevNorm) || elevations.length === 1)
+            })
+            if (!alreadyCovered) {
+                rawExclusions.push(`${fl.type} excluded (${fl.elevationName}${fl.location ? ` — ${fl.location}` : ""})`)
+            }
         }
     }
-    exclusionsList.push("Internal faces of glass (unless separately agreed)")
-    exclusionsList.push("Hardened cement, paint and adhesive residue")
-    exclusionsList.push("Repair of pre-existing damage, failed sealant or penetrated staining")
+    rawExclusions.push("Internal faces of glass (unless separately agreed)")
+    rawExclusions.push("Hardened cement, paint and adhesive residue")
+    rawExclusions.push("Repair of pre-existing damage, failed sealant or penetrated staining")
+
+    const seenExclusions = new Set<string>()
+    const exclusionsList: string[] = []
+    for (const item of rawExclusions) {
+        const cleaned = item.trim()
+        if (!cleaned) continue
+        const key = cleaned.toLowerCase().replace(/\s+/g, " ")
+        if (!seenExclusions.has(key)) {
+            seenExclusions.add(key)
+            exclusionsList.push(cleaned)
+        }
+    }
 
     // Contact details
     const primaryContact = quote?.contact || project.client?.contacts?.[0] || null
@@ -221,8 +257,19 @@ export default async function MobileJobSheetPage({
         project.client?.name ||
         "Site Contact"
     const contactPhone = primaryContact?.phone || project.client?.phone || null
+    const whatsappNumber = normalizePhoneZA(contactPhone)
     const siteAddress = quote?.site || project.client?.address || project.name
     const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(siteAddress)}`
+
+    const rawPo = String(
+        (project as any).poNumber ||
+        (project as any).clientPoNumber ||
+        quote?.clientPoNumber ||
+        quoteMeta?.acceptance?.poNumber ||
+        project.invoices.find((i: any) => i.clientPoNumber)?.clientPoNumber ||
+        ""
+    ).trim()
+    const poNumber = rawPo || "No PO"
 
     // Resolve signed URLs for already-uploaded JobSheet photos
     const existingSheet = project.jobSheet
@@ -270,8 +317,9 @@ export default async function MobileJobSheetPage({
         mapsUrl,
         contactName,
         contactPhone,
-        whatsappUrl: formatWhatsAppUrl(contactPhone),
-        poNumber: quote?.clientPoNumber || quote?.reference || "PO on file",
+        whatsappNumber,
+        whatsappUrl: whatsappNumber ? `https://wa.me/${whatsappNumber}` : null,
+        poNumber,
         scheduledDate: project.startDate ? project.startDate.toISOString() : null,
         projectStatus: project.status,
         elevations,

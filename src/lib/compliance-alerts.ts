@@ -151,10 +151,8 @@ export async function checkAndNotifyCompanyComplianceAlerts(
         ])
     )
 
-    const appUrl =
-        process.env.NEXT_PUBLIC_SITE_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "https://ur-ops.vercel.app"
+    const { getAppUrl } = await import("@/lib/app-url")
+    const appUrl = getAppUrl()
     const companyDisplay = settings?.name || company.name
 
     const lines: string[] = [

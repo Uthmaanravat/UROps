@@ -570,6 +570,8 @@ export async function generateAndSendLeadQuoteAction(leadId: string) {
         const clientName = lead.contactName || "Property Manager"
         const addressStr = lead.address || "your facility"
         
+        const { getAppUrl } = await import("@/lib/app-url")
+        const appUrl = getAppUrl()
         const customBody = `Dear ${clientName},
 
 I hope this email finds you well.
@@ -584,7 +586,7 @@ ${weatherUrgencyCopy}
 ${dustRiskCopy}
 
 Soft-wash drone cleaning is 3x faster, requires zero scaffolding, and eliminates structural risk. You can view the quote details and approve SOW directly at the link below:
-http://localhost:3000/invoices/${quoteRes}
+${appUrl}/invoices/${quoteRes}
 
 Please let us know if you have a quick 5 minutes to discuss this schedule this week.
 

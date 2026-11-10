@@ -139,7 +139,8 @@ export async function checkAndNotifyTomorrowRedWeatherAlerts(companyId: string) 
             ])
         )
 
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'
+        const { getAppUrl } = await import("@/lib/app-url")
+        const appUrl = getAppUrl()
 
         for (const job of redJobs) {
             const specs = ((job.jobSpecs as any) || {})

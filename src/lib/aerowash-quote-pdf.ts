@@ -3,7 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatCurrency } from "@/lib/utils";
 import { parseClauses } from "@/lib/terms-utils";
-import { AEROWASH_STANDARD_TERMS_BODY } from "@/lib/aerowash-catalogue";
+import { AEROWASH_STANDARD_TERMS_BODY, formatConditionTypeLabel, normalizeConditionFlagWording } from "@/lib/aerowash-catalogue";
 
 export interface AeroWashQuotePdfOptions {
     invoice: {
@@ -145,8 +145,8 @@ export async function generateAeroWashQuotePdf({
         (await resolveImageBase64('/aerowash_header_logo.png'));
 
     const docHeading = isInvoice
-        ? (isVatActive ? 'T A X   I N V O I C E' : 'I N V O I C E')
-        : 'Q U O T A T I O N';
+        ? (isVatActive ? 'TAX INVOICE' : 'INVOICE')
+        : 'QUOTATION';
 
     // Validity: quote date + validity days (default 45)
     const validityDays = companySettings?.validityDays || 45;
@@ -258,7 +258,7 @@ export async function generateAeroWashQuotePdf({
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    doc.text("F R O M", 14, y);
+    doc.text("FROM", 14, y);
     doc.setDrawColor(lightLineRGB[0], lightLineRGB[1], lightLineRGB[2]);
     doc.setLineWidth(0.3);
     doc.line(14, y + 2, 98, y + 2);
@@ -303,7 +303,7 @@ export async function generateAeroWashQuotePdf({
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    doc.text("A T T E N T I O N", 112, y);
+    doc.text("ATTENTION", 112, y);
     doc.setDrawColor(lightLineRGB[0], lightLineRGB[1], lightLineRGB[2]);
     doc.setLineWidth(0.3);
     doc.line(112, y + 2, 196, y + 2);
@@ -369,7 +369,7 @@ export async function generateAeroWashQuotePdf({
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-    doc.text("S C O P E   O F   W O R K S", 14, y);
+    doc.text("SCOPE OF WORKS", 14, y);
     doc.setDrawColor(lightLineRGB[0], lightLineRGB[1], lightLineRGB[2]);
     doc.setLineWidth(0.3);
     doc.line(14, y + 2, 196, y + 2);
@@ -478,7 +478,7 @@ export async function generateAeroWashQuotePdf({
         matchingFlags.forEach((flag: any) => {
             tableBody.push([
                 {
-                    content: `Existing condition noted:\n${flag.wording}`,
+                    content: `Existing condition noted:\n${normalizeConditionFlagWording(flag, formattedDate)}`,
                     colSpan: 2,
                     styles: {
                         fillColor: [255, 247, 237], // #FFF7ED light orange
@@ -511,7 +511,7 @@ export async function generateAeroWashQuotePdf({
     unhandledFlags.forEach((flag: any) => {
         tableBody.push([
             {
-                content: `Existing condition noted (${flag.elevation}):\n${flag.wording}`,
+                content: `Existing condition noted (${flag.elevation}):\n${normalizeConditionFlagWording(flag, formattedDate)}`,
                 colSpan: 2,
                 styles: {
                     fillColor: [255, 247, 237],
@@ -873,7 +873,7 @@ export async function generateAeroWashQuotePdf({
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.setTextColor(255, 255, 255);
-    doc.text("T E R M S", 196, 12, { align: "right" });
+    doc.text("TERMS", 196, 12, { align: "right" });
 
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
@@ -894,13 +894,12 @@ export async function generateAeroWashQuotePdf({
 
     let p2Y = 36;
 
-    // Helper: Draw orange spaced heading with underline
+    // Helper: Draw orange section heading with underline (preserving word spaces)
     const drawSpacedHeading = (title: string, x: number, y: number, width: number) => {
-        const spaced = title.split('').join(' ');
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-        doc.text(spaced, x, y);
+        doc.text(title.toUpperCase(), x, y);
         doc.setDrawColor(lightLineRGB[0], lightLineRGB[1], lightLineRGB[2]);
         doc.setLineWidth(0.3);
         doc.line(x, y + 2, x + width, y + 2);
@@ -944,28 +943,34 @@ export async function generateAeroWashQuotePdf({
         { text: "All labour, equipment and remote pilot crew", isBold: false }
     );
 
-    // Excluded Bullets
+    // Excluded Bullets (deduplicated)
     const excludedList: Array<{ text: string; isBold?: boolean }> = [];
-    // Bold: Exclusions from elevations
+    const rawBoldExclusions: string[] = [];
     const elevs = invoice.metadata?.elevations || [];
     elevs.forEach((e: any) => {
         if (e.exclusions && typeof e.exclusions === 'string' && e.exclusions.trim().length > 0) {
-            excludedList.push({
-                text: `${e.name ? `${e.name}: ` : ''}${e.exclusions.trim()}`,
-                isBold: true
-            });
+            rawBoldExclusions.push(`${e.name ? `${e.name}: ` : ''}${e.exclusions.trim()}`);
         }
     });
-    // Bold: Cracked/damaged condition flags
     const flags = invoice.metadata?.conditionFlags || invoice.conditionFlags || [];
     flags.forEach((f: any) => {
-        const loc = f.location || 'specific panels';
-        const elev = f.elevation || 'Elevation';
-        const cond = (f.conditionType || 'Defect').replace(/_/g, ' ').toLowerCase();
-        excludedList.push({
-            text: `${elev} (${loc}) — existing ${cond} excluded from cleaning/restoration warranty`,
-            isBold: true
-        });
+        const loc = (f.location || '').trim();
+        const elev = (f.elevation || f.elevationName || 'Elevation').trim();
+        const alreadyInElev = rawBoldExclusions.some(ex =>
+            loc && ex.toLowerCase().includes(loc.toLowerCase()) && (!elev || ex.toLowerCase().includes(elev.toLowerCase()) || elevs.length <= 1)
+        );
+        if (!alreadyInElev) {
+            const cond = formatConditionTypeLabel(f.conditionType || f.type, f.conditionText).toLowerCase();
+            rawBoldExclusions.push(`${elev}${loc ? ` (${loc})` : ''} — existing ${cond} excluded from cleaning/restoration warranty`);
+        }
+    });
+    const seenEx = new Set<string>();
+    rawBoldExclusions.forEach(exText => {
+        const k = exText.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (!seenEx.has(k)) {
+            seenEx.add(k);
+            excludedList.push({ text: exText, isBold: true });
+        }
     });
     // Standard Exclusions
     excludedList.push(
@@ -1116,7 +1121,7 @@ export async function generateAeroWashQuotePdf({
 
         // Right: APPENDIX heading & doc reference
         doc.setFontSize(11);
-        doc.text("S I T E   I N S P E C T I O N   P H O T O G R A P H S", 196, 12, { align: "right" });
+        doc.text("SITE INSPECTION PHOTOGRAPHS", 196, 12, { align: "right" });
 
         doc.setFontSize(7.5);
         doc.setFont("helvetica", "bold");
@@ -1136,7 +1141,7 @@ export async function generateAeroWashQuotePdf({
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7.5);
         doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-        doc.text("P H O T O G R A P H I C   R E C O R D", 14, photoY);
+        doc.text("PHOTOGRAPHIC RECORD", 14, photoY);
         doc.setDrawColor(lightLineRGB[0], lightLineRGB[1], lightLineRGB[2]);
         doc.setLineWidth(0.3);
         doc.line(14, photoY + 2, 196, photoY + 2);
@@ -1164,9 +1169,9 @@ export async function generateAeroWashQuotePdf({
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(10);
                 doc.setTextColor(255, 255, 255);
-                doc.text("A E R O W A S H", 38, 16);
+                doc.text("AEROWASH", 38, 16);
                 doc.setFontSize(11);
-                doc.text("S I T E   I N S P E C T I O N   P H O T O G R A P H S   ( C O N T . )", 196, 12, { align: "right" });
+                doc.text("SITE INSPECTION PHOTOGRAPHS (CONT.)", 196, 12, { align: "right" });
                 photoY = 36;
             }
 

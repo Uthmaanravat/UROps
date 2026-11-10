@@ -568,6 +568,40 @@ export const CONDITION_TYPE_PRESETS: Record<string, ConditionTypePreset> = {
     }
 };
 
+/**
+ * Converts a condition type code (e.g. "CRACKED_GLAZING") or custom string into a human-readable label.
+ */
+export function formatConditionTypeLabel(raw?: string | null, fallbackCustomText?: string | null): string {
+    if (raw && CONDITION_TYPE_PRESETS[raw] && raw !== 'OTHER') {
+        return CONDITION_TYPE_PRESETS[raw].label;
+    }
+    if (raw === 'OTHER' && fallbackCustomText && fallbackCustomText.trim()) {
+        const clean = fallbackCustomText.trim();
+        return clean.charAt(0).toUpperCase() + clean.slice(1);
+    }
+    const candidate = (raw && raw !== 'OTHER' ? raw : fallbackCustomText) || '';
+    const trimmed = candidate.trim();
+    if (!trimmed) return 'Pre-existing condition';
+    if (trimmed.includes('_') || trimmed === trimmed.toUpperCase()) {
+        const lower = trimmed.replace(/_/g, ' ').toLowerCase();
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+    }
+    return trimmed;
+}
+
+/**
+ * Formats an elevation name for natural prose (e.g. "North" -> "North elevation", "North Elevation" -> "North elevation").
+ */
+export function formatElevationPhrase(elevation?: string | null): string {
+    const raw = (elevation || '').trim();
+    if (!raw) return 'specified elevation';
+    const hasNoun = /\b(elevation|facade|frontage|courtyard|tower|block|roof|wing|building|podium|atrium)\b/i.test(raw);
+    if (hasNoun) {
+        return raw.replace(/\bElevation\b/g, 'elevation').replace(/\bFacade\b/g, 'facade');
+    }
+    return `${raw} elevation`;
+}
+
 export interface ConditionFlag {
     id: string;
     elevation: string;
@@ -618,35 +652,31 @@ export function formatPhotoSentenceRef(refs?: string[]): string {
 }
 
 /**
- * Lowercases location text mid-sentence, unless it's a proper noun or level reference (e.g. "Level 4").
+ * Lowercases location text mid-sentence, unless it's a proper noun or compass/acronym reference.
+ * Converts "Floor 3" -> "floor 3", "Level 4" -> "level 4".
  */
 export function formatLocationForSentence(text: string): string {
     if (!text) return '';
     const trimmed = text.trim();
 
-    // Preserve words that are references to levels, floors, blocks, or acronyms
     return trimmed.replace(/\b([A-Za-z0-9–\-]+)\b/g, (match) => {
         const lower = match.toLowerCase();
-        // Preserved capitalized words or user's exact case for level/floor
-        if (['level', 'levels', 'floor', 'floors', 'block', 'unit', 'bay', 'tower'].includes(lower)) {
-            return match;
-        }
         // Roman numerals or acronyms
         if (/^(ii|iii|iv|v|vi|vii|viii|ix|x|hvac|cctv|db)$/i.test(match)) {
             return match.toUpperCase();
         }
         // If it starts with a number or digit (e.g. "2nd", "3rd"), leave as is
         if (/^\d/.test(match)) return match;
-        // Default: lowercase mid-sentence (e.g. "Cracked Windows" -> "cracked windows")
+        // Default: lowercase mid-sentence (e.g. "Floor 3" -> "floor 3", "Cracked Windows" -> "cracked windows")
         return lower;
     });
 }
 
 /**
  * Smarter wording generator for AeroWash condition flags:
- * - Natural phrasing reusing user's location input
- * - Lowercases mid-sentence words, keeps "Level 4", etc.
- * - Detects item vs place (e.g. "2 cracked windows" vs "Level 4" / "east end, levels 2–3")
+ * - Natural phrasing reusing user's location input ("on floor 3 of the North elevation")
+ * - Lowercases mid-sentence words ("floor 3", "level 4")
+ * - Detects item vs place (e.g. "2 cracked windows" vs "floor 3" / "east end, levels 2–3")
  * - Distinguishes singular/plural ("This" vs "These")
  * - Full date format ("28 October 2026")
  * - Singular/plural photo reference ("photograph 01 attached" vs "photographs 01–02 attached")
@@ -663,6 +693,7 @@ export function generateConditionFlagWording(params: {
 }): string {
     const rawLoc = (params.location || '').trim();
     const formattedLoc = formatLocationForSentence(rawLoc);
+    const elevPhrase = formatElevationPhrase(params.elevation);
     const photoStr = formatPhotoSentenceRef(params.photoRefs);
 
     // Format full date (e.g. "28 October 2026")
@@ -676,7 +707,7 @@ export function generateConditionFlagWording(params: {
     }
 
     // Determine if location is an ITEM/OBJECT (e.g. "2 cracked windows", "1 scratched panel")
-    // vs a PLACE (e.g. "Level 4", "east end, levels 2–3", "Ground floor")
+    // vs a PLACE (e.g. "floor 3", "Level 4", "east end, levels 2–3", "Ground floor")
     const isPlacePrefix = /^(level|levels|floor|floors|bay|section|elevation|ground|roof|parapet|east|west|north|south|top|bottom|corner)/i.test(rawLoc);
     const startsWithCount = /^(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b/i.test(rawLoc);
     const hasItemNoun = /\b(window|windows|panel|panels|pane|panes|glass|render|cladding|joint|joints|seal|seals|tile|tiles|bracket|brackets|downpipe|gutter)\b/i.test(rawLoc);
@@ -706,7 +737,7 @@ export function generateConditionFlagWording(params: {
 
     if (isItem) {
         // Sentence 1: "Pre-clean inspection on [date] recorded [location] on the [elevation] (photographs...)"
-        sentence1 = `Pre-clean inspection on ${displayDate} recorded ${formattedLoc} on the ${params.elevation}${photoStr}.`;
+        sentence1 = `Pre-clean inspection on ${displayDate} recorded ${formattedLoc} on the ${elevPhrase}${photoStr}.`;
 
         // Consequence:
         if (params.isExcludedFromCleaning || conditionLower.includes('cracked') || conditionLower.includes('loose') || (params.consequence && params.consequence.toLowerCase().includes('excluded'))) {
@@ -720,10 +751,15 @@ export function generateConditionFlagWording(params: {
                 .replace(/^Scratches are permanent damage and will/i, `${pronoun} will`);
         }
     } else {
-        // Location is a place: "Level 4", "east end, levels 2–3"
-        // Sentence 1: "Pre-clean inspection on [date] recorded [condition] on the [elevation], [location] (photographs...)"
+        // Location is a place: "floor 3", "level 4", "east end, levels 2–3"
+        // Sentence 1: "Pre-clean inspection on [date] recorded [condition] on [location] of the [elevation] (photographs...)"
         const conditionText = params.condition || 'cracked or damaged glazing';
-        sentence1 = `Pre-clean inspection on ${displayDate} recorded ${conditionText} on the ${params.elevation}, ${formattedLoc}${photoStr}.`;
+        if (formattedLoc) {
+            const locWithPrep = /^(on|at|in)\s+/i.test(formattedLoc) ? formattedLoc : `on ${formattedLoc}`;
+            sentence1 = `Pre-clean inspection on ${displayDate} recorded ${conditionText} ${locWithPrep} of the ${elevPhrase}${photoStr}.`;
+        } else {
+            sentence1 = `Pre-clean inspection on ${displayDate} recorded ${conditionText} on the ${elevPhrase}${photoStr}.`;
+        }
 
         // Consequence for a place:
         if (params.isExcludedFromCleaning || conditionLower.includes('cracked') || conditionLower.includes('loose') || (params.consequence && params.consequence.toLowerCase().includes('excluded'))) {
@@ -748,4 +784,35 @@ export function generateConditionFlagWording(params: {
     const full = [sentence1, consequenceSentence, restorationSentence].filter(Boolean).join(' ');
     return full.replace(/\s+/g, ' ').trim();
 }
+
+/**
+ * Normalizes any stored or live condition flag wording so legacy "on the North, Floor 3"
+ * phrasing is automatically upgraded to "on floor 3 of the North elevation".
+ */
+export function normalizeConditionFlagWording(flag: any, fallbackDate?: string): string {
+    const rawWording = (flag?.wording || '').trim();
+    if (rawWording) {
+        return rawWording.replace(
+            /recorded\s+(.+?)\s+on\s+the\s+([^,().]+?),\s*((?:floor|floors|level|levels)\s+[^().]+?)(?=\s*\(|\.)/gi,
+            (_match: string, cond: string, elev: string, loc: string) => {
+                const cleanLoc = formatLocationForSentence(loc.trim());
+                const locWithPrep = /^(on|at|in)\s+/i.test(cleanLoc) ? cleanLoc : `on ${cleanLoc}`;
+                const cleanElev = formatElevationPhrase(elev.trim());
+                return `recorded ${cond.trim()} ${locWithPrep} of the ${cleanElev}`;
+            }
+        );
+    }
+    const preset = CONDITION_TYPE_PRESETS[flag?.conditionType || flag?.type || ''];
+    return generateConditionFlagWording({
+        date: fallbackDate || new Date().toISOString().split('T')[0],
+        condition: flag?.conditionText || preset?.condition || formatConditionTypeLabel(flag?.conditionType || flag?.type).toLowerCase(),
+        elevation: flag?.elevation || flag?.elevationName || 'Main facade',
+        location: flag?.location || '',
+        photoRefs: flag?.photoRefs || [],
+        consequence: flag?.consequenceText || preset?.consequence,
+        restoration: flag?.restorationText || preset?.restoration,
+        isExcludedFromCleaning: preset?.isExcludedFromCleaning
+    });
+}
+
 

@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf"
 import "jspdf-autotable"
 import QRCode from "qrcode"
+import { formatConditionTypeLabel } from "@/lib/aerowash-catalogue"
 
 // Declare autoTable plugin on jsPDF
 declare module "jspdf" {
@@ -196,7 +197,12 @@ export async function generateSchedulePdf(
 
         const clientName = p.client?.name || "Client"
         const site = p.site || p.client?.address || p.name || "Site on file"
-        const po = p.poNumber || p.clientPoNumber || p.invoices?.[0]?.clientPoNumber || p.invoices?.[0]?.reference || "PO-Awaiting"
+        const po = (
+            p.poNumber ||
+            p.clientPoNumber ||
+            p.invoices?.find((i: any) => i.clientPoNumber)?.clientPoNumber ||
+            ""
+        ).toString().trim() || "No PO"
         const crew = p.assignedTeam || p.team || p.crew || (isAeroWash ? "Flight Alpha" : "—")
         const type = p.isRecurring || p.parentProjectId ? "Recurring Contract" : "Direct Work Order"
         const status = p.status?.replace(/_/g, " ") || "SCHEDULED"
@@ -384,7 +390,12 @@ export async function generateJobSheetPdf(
     const siteAddress = project.site || project.client?.address || "Address on file"
     const contactName = project.client?.attentionTo || project.client?.contacts?.[0]?.name || "Site Representative"
     const contactPhone = project.client?.phone || project.client?.contacts?.[0]?.phone || "N/A"
-    const poNumber = project.poNumber || project.clientPoNumber || project.invoices?.[0]?.clientPoNumber || project.invoices?.[0]?.reference || "PO-AWAITING"
+    const poNumber = (
+        project.poNumber ||
+        project.clientPoNumber ||
+        project.invoices?.find((i: any) => i.clientPoNumber)?.clientPoNumber ||
+        ""
+    ).toString().trim() || "No PO"
     const jobDate = project.startDate ? new Date(project.startDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "Scheduled"
 
     doc.setFontSize(8)
@@ -604,7 +615,9 @@ export async function generateJobSheetPdf(
             curY += 7.5;
 
             conditionFlags.forEach((flag: any) => {
-                const flagLines = doc.splitTextToSize(flag.wording, pageWidth - 36);
+                const readableType = formatConditionTypeLabel(flag.type || flag.conditionType, flag.conditionText);
+                const flagBodyText = flag.wording || flag.notes || flag.description || readableType;
+                const flagLines = doc.splitTextToSize(flagBodyText, pageWidth - 36);
                 const boxHeight = Math.max(12, (flagLines.length * 3.8) + 7);
 
                 doc.setFillColor(255, 247, 237); // #FFF7ED
@@ -617,7 +630,8 @@ export async function generateJobSheetPdf(
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(7.5);
                 doc.setTextColor(154, 52, 18);
-                doc.text(`EXISTING CONDITION NOTED: ${flag.elevation || 'ELEVATION'} ${flag.location ? `(${flag.location})` : ''}`, 18, curY + 4);
+                const elevHeader = flag.elevationName || flag.elevation || 'ELEVATION';
+                doc.text(`${readableType.toUpperCase()} — ${elevHeader}${flag.location ? ` (${flag.location})` : ''}`, 18, curY + 4);
 
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(7);

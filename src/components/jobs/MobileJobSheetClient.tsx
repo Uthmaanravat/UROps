@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { WeatherBadge } from "@/components/projects/WeatherBadge"
+import { formatConditionTypeLabel } from "@/lib/aerowash-catalogue"
 import {
     compressJobPhotoFile,
     enqueueOfflinePhoto,
@@ -653,7 +654,7 @@ export function MobileJobSheetClient({
                         </h1>
                     </div>
                     <span className="shrink-0 rounded-lg bg-primary/15 border border-primary/30 px-2.5 py-1 font-mono text-xs font-black text-primary">
-                        PO: {job.poNumber}
+                        {job.poNumber && job.poNumber !== "No PO" ? `PO: ${job.poNumber}` : "No PO"}
                     </span>
                 </div>
 
@@ -691,36 +692,104 @@ export function MobileJobSheetClient({
                         Google Maps Directions
                     </a>
 
-                    <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2">
-                        <p className="text-[11px] font-bold text-zinc-400">
-                            On-Site Contact: <strong className="text-white">{job.contactName}</strong>
-                            {job.contactPhone ? ` · ${job.contactPhone}` : ""}
-                        </p>
-                        {job.contactPhone ? (
-                            <div className="grid grid-cols-2 gap-2">
-                                <a
-                                    href={`tel:${job.contactPhone}`}
-                                    className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white font-black text-xs uppercase tracking-wider"
-                                >
-                                    <Phone className="h-4 w-4" />
-                                    Call
-                                </a>
-                                {job.whatsappUrl && (
-                                    <a
-                                        href={job.whatsappUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#25D366] text-black font-black text-xs uppercase tracking-wider"
-                                    >
-                                        <MessageCircle className="h-4 w-4" />
-                                        WhatsApp
-                                    </a>
+                    {(() => {
+                        const rawDigits = String(job.whatsappNumber || job.contactPhone || "").replace(/[^0-9]/g, "")
+                        const waNumber = rawDigits.startsWith("0027")
+                            ? "27" + rawDigits.slice(4)
+                            : rawDigits.startsWith("0") && rawDigits.length === 10
+                                ? "27" + rawDigits.slice(1)
+                                : !rawDigits.startsWith("27") && rawDigits.length === 9
+                                    ? "27" + rawDigits
+                                    : rawDigits
+                        const quickMessages = waNumber
+                            ? [
+                                {
+                                    label: "Confirm tomorrow",
+                                    href: `https://wa.me/${waNumber}?text=${encodeURIComponent(
+                                        `Hi ${job.contactName}, confirming AeroWash is scheduled at ${job.siteAddress} tomorrow. Please let us know if site access and water points are ready.`
+                                    )}`
+                                },
+                                {
+                                    label: "On our way",
+                                    href: `https://wa.me/${waNumber}?text=${encodeURIComponent(
+                                        `Hi ${job.contactName}, the AeroWash crew is on our way to ${job.siteAddress}.`
+                                    )}`
+                                },
+                                {
+                                    label: "Arrived",
+                                    href: `https://wa.me/${waNumber}?text=${encodeURIComponent(
+                                        `Hi ${job.contactName}, the AeroWash crew has arrived on site at ${job.siteAddress}.`
+                                    )}`
+                                },
+                                {
+                                    label: "Job complete",
+                                    href: `https://wa.me/${waNumber}?text=${encodeURIComponent(
+                                        `Hi ${job.contactName}, cleaning at ${job.siteAddress} is now complete and ready for inspection / sign-off.`
+                                    )}`
+                                },
+                                {
+                                    label: "Blank",
+                                    href: `https://wa.me/${waNumber}`
+                                }
+                            ]
+                            : []
+
+                        return (
+                            <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2.5">
+                                <p className="text-[11px] font-bold text-zinc-400">
+                                    On-Site Contact: <strong className="text-white">{job.contactName}</strong>
+                                    {waNumber ? ` · ${waNumber}` : job.contactPhone ? ` · ${job.contactPhone}` : ""}
+                                </p>
+                                {job.contactPhone ? (
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <a
+                                                href={`tel:+${waNumber || job.contactPhone}`}
+                                                className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white font-black text-xs uppercase tracking-wider"
+                                            >
+                                                <Phone className="h-4 w-4" />
+                                                Call
+                                            </a>
+                                            {waNumber && (
+                                                <a
+                                                    href={`https://wa.me/${waNumber}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#25D366] text-black font-black text-xs uppercase tracking-wider"
+                                                >
+                                                    <MessageCircle className="h-4 w-4" />
+                                                    WhatsApp ({waNumber})
+                                                </a>
+                                            )}
+                                        </div>
+                                        {quickMessages.length > 0 && (
+                                            <div className="space-y-1.5 pt-1">
+                                                <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                                                    WhatsApp Quick Messages
+                                                </p>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {quickMessages.map((qm) => (
+                                                        <a
+                                                            key={qm.label}
+                                                            href={qm.href}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 rounded-lg border border-[#25D366]/40 bg-[#25D366]/15 px-2.5 py-1.5 text-[11px] font-bold text-[#25D366] hover:bg-[#25D366]/25 active:scale-[0.98]"
+                                                        >
+                                                            <MessageCircle className="h-3 w-3" />
+                                                            {qm.label}
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs italic text-zinc-500">No phone number on file for site contact.</p>
                                 )}
                             </div>
-                        ) : (
-                            <p className="text-xs italic text-zinc-500">No phone number on file for site contact.</p>
-                        )}
-                    </div>
+                        )
+                    })()}
                 </div>
             </div>
 
@@ -783,7 +852,7 @@ export function MobileJobSheetClient({
                             <div key={flag.id} className="rounded-lg bg-black/40 p-2.5 space-y-2 border border-white/5">
                                 <div className="text-xs">
                                     <span className="font-black text-rose-200">{flag.elevationName}: </span>
-                                    <span className="font-bold text-white">{flag.type}</span>
+                                    <span className="font-bold text-white">{formatConditionTypeLabel(flag.type)}</span>
                                     {flag.location && <span className="text-zinc-300"> ({flag.location})</span>}
                                     {flag.notes && <p className="text-zinc-400 mt-0.5">{flag.notes}</p>}
                                 </div>

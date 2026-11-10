@@ -9,6 +9,7 @@ import { generateAeroWashQuotePdf } from "@/lib/aerowash-quote-pdf"
 import { composeBrandedEmail } from "@/lib/email-compose"
 import { formatMoneyZA } from "@/lib/email-templates"
 import { buildAeroWashDocumentPdf } from "@/lib/server-document-pdf"
+import { getAppUrl } from "@/lib/app-url"
 
 export async function acceptQuotePublicAction(data: {
     quoteId: string
@@ -209,7 +210,7 @@ export async function acceptQuotePublicAction(data: {
         })
 
         // 7. Email Deposit Invoice to Client (branded, PDF attached; no login-only links)
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'
+        const appUrl = getAppUrl()
         const clientEmail = data.acceptedByEmail.trim()
         const clientName = data.acceptedByName.trim()
         const currency = settings?.currency || 'R'
@@ -365,7 +366,7 @@ export async function requestQuoteChangesPublicAction(data: {
             ownerEmails.push(settings.copyNotificationsTo)
         }
 
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'
+        const appUrl = getAppUrl()
         const quoteUrl = `${appUrl}/invoices/${quote.id}`
         const quoteLabel = quote.quoteNumber || String(quote.number)
 

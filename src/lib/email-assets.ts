@@ -68,7 +68,8 @@ async function readPublicOrData(src: string): Promise<Resolved | null> {
         return { buffer: fs.readFileSync(full), contentType }
     }
     // Deployed fallback: fetch from the app's own public URL
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app'
+    const { getAppUrl } = await import('@/lib/app-url')
+    const appUrl = getAppUrl()
     const res = await fetch(`${appUrl}/${clean}`)
     if (!res.ok) return null
     return { buffer: Buffer.from(await res.arrayBuffer()), contentType: res.headers.get('content-type') || 'image/png' }

@@ -101,7 +101,8 @@ export async function updateProjectStatus(id: string, status: string) {
                         if (settings?.copyNotificationsTo && !ownerEmails.includes(settings.copyNotificationsTo)) {
                             ownerEmails.push(settings.copyNotificationsTo);
                         }
-                        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ur-ops.vercel.app';
+                        const { getAppUrl } = await import("@/lib/app-url");
+                        const appUrl = getAppUrl();
                         await sendRealEmail({
                             to: ownerEmails,
                             from: 'AeroWash Review <info@aerowash.co.za>',
