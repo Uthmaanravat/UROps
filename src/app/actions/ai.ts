@@ -84,43 +84,54 @@ export async function getPricingSuggestions(items: { description: string }[]) {
     const companyId = await ensureAuth();
     const suggestions: Record<string, { typicalPrice: number; source: string; minPrice?: number; maxPrice?: number }> = {};
 
-    for (const item of items) {
-        const desc = item.description?.trim();
-        if (!desc || desc.length < 2) continue;
+    const wanted = items
+        .map(i => ({ original: i.description, desc: i.description?.trim() || "" }))
+        .filter(i => i.desc.length >= 2);
+    if (wanted.length === 0) return suggestions;
 
-        // 1. Check Standard Catalog (FixedPriceItem)
-        const catalogItem = await prisma.fixedPriceItem.findFirst({
-            where: {
-                companyId,
-                description: {
-                    contains: desc,
-                    mode: 'insensitive'
-                },
-                unitPrice: { gt: 0 }
-            }
-        });
+    // PERFORMANCE: previously this ran up to 4 sequential queries PER line item
+    // (336 round trips for an 84-line quote). Server actions are queued one at a
+    // time per browser tab, so a slow suggestions call blocked "Save Changes" and
+    // caused the 25s save timeout on large quotes. We now load the 3 lookup sources
+    // once (3 parallel queries) and match in memory, preserving the same precedence:
+    // 1) Standard catalog  2) Pricing knowledge (contains, then keyword)  3) Historical items.
+    const [catalogItems, knowledgeAll, historicalItems] = await Promise.all([
+        prisma.fixedPriceItem.findMany({
+            where: { companyId, unitPrice: { gt: 0 } },
+            select: { description: true, unitPrice: true }
+        }),
+        prisma.pricingKnowledge.findMany({
+            where: { companyId },
+            orderBy: { frequency: 'desc' },
+            select: { description: true, typicalPrice: true, minPrice: true, maxPrice: true }
+        }),
+        prisma.invoiceItem.findMany({
+            where: { invoice: { companyId }, unitPrice: { gt: 0 } },
+            orderBy: { invoice: { createdAt: 'desc' } },
+            select: { description: true, unitPrice: true, reason: true },
+            take: 5000
+        })
+    ]);
+
+    const catalogLower = catalogItems.map(c => ({ ...c, lower: (c.description || "").toLowerCase() }));
+    const knowledgeLower = knowledgeAll.map(k => ({ ...k, lower: (k.description || "").toLowerCase() }));
+    const topKnowledge = knowledgeLower.slice(0, 100);
+    const historicalLower = historicalItems.map(h => ({ ...h, lower: (h.description || "").toLowerCase() }));
+
+    for (const { original, desc } of wanted) {
+        const descLower = desc.toLowerCase();
+
+        // 1. Standard Catalog (description ILIKE %desc%)
+        const catalogItem = catalogLower.find(c => c.lower.includes(descLower));
         if (catalogItem) {
-            suggestions[item.description] = {
-                typicalPrice: catalogItem.unitPrice,
-                source: 'Standard Catalog'
-            };
+            suggestions[original] = { typicalPrice: catalogItem.unitPrice, source: 'Standard Catalog' };
             continue;
         }
 
-        // 2. Check PricingKnowledge (Direct or partial match)
-        const knowledge = await prisma.pricingKnowledge.findFirst({
-            where: {
-                companyId,
-                description: {
-                    contains: desc,
-                    mode: 'insensitive'
-                }
-            },
-            orderBy: { frequency: 'desc' }
-        });
-
+        // 2. PricingKnowledge direct/partial match (highest frequency first)
+        const knowledge = knowledgeLower.find(k => k.lower.includes(descLower));
         if (knowledge) {
-            suggestions[item.description] = {
+            suggestions[original] = {
                 typicalPrice: knowledge.typicalPrice,
                 minPrice: knowledge.minPrice,
                 maxPrice: knowledge.maxPrice,
@@ -129,30 +140,24 @@ export async function getPricingSuggestions(items: { description: string }[]) {
             continue;
         }
 
-        // 2b. Check PricingKnowledge bidirectional / keyword match
-        const words = desc.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        // 2b. PricingKnowledge bidirectional / keyword match over top 100 by frequency
+        const words = descLower.split(/\s+/).filter(w => w.length > 3);
         if (words.length > 0) {
-            const allKnowledge = await prisma.pricingKnowledge.findMany({
-                where: { companyId },
-                orderBy: { frequency: 'desc' },
-                take: 100
-            });
             let bestK: any = null;
             let bestScore = 0;
-            for (const k of allKnowledge) {
-                const kLower = k.description.toLowerCase();
-                if (kLower.includes(desc.toLowerCase()) || desc.toLowerCase().includes(kLower)) {
+            for (const k of topKnowledge) {
+                if (k.lower.includes(descLower) || descLower.includes(k.lower)) {
                     bestK = k;
                     break;
                 }
-                const matches = words.filter(w => kLower.includes(w)).length;
+                const matches = words.filter(w => k.lower.includes(w)).length;
                 if (matches > bestScore && matches >= 1) {
                     bestScore = matches;
                     bestK = k;
                 }
             }
             if (bestK) {
-                suggestions[item.description] = {
+                suggestions[original] = {
                     typicalPrice: bestK.typicalPrice,
                     minPrice: bestK.minPrice,
                     maxPrice: bestK.maxPrice,
@@ -162,25 +167,10 @@ export async function getPricingSuggestions(items: { description: string }[]) {
             }
         }
 
-        // 3. Check previous InvoiceItem history
-        const historicalItem = await prisma.invoiceItem.findFirst({
-            where: {
-                invoice: { companyId },
-                description: {
-                    contains: desc,
-                    mode: 'insensitive'
-                },
-                unitPrice: { gt: 0 }
-            },
-            orderBy: {
-                invoice: {
-                    createdAt: 'desc'
-                }
-            }
-        });
-
+        // 3. Previous InvoiceItem history (most recent invoice first)
+        const historicalItem = historicalLower.find(h => h.lower.includes(descLower));
         if (historicalItem && historicalItem.unitPrice) {
-            suggestions[item.description] = {
+            suggestions[original] = {
                 typicalPrice: historicalItem.unitPrice,
                 source: historicalItem.reason ? `Historical (${historicalItem.reason})` : 'Historical Quotes'
             };

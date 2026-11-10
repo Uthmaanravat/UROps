@@ -70,9 +70,16 @@ export function InvoiceViewer({
     const [saveError, setSaveError] = useState<string | null>(null);
     const [justSavedManually, setJustSavedManually] = useState(false);
     const [savedCount, setSavedCount] = useState<number>(0);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    const markUnsaved = useCallback(() => {
+        hasUserEditedRef.current = true;
+        setHasUnsavedChanges(true);
+    }, []);
 
     const updateItems = useCallback((newItems: any[]) => {
         hasUserEditedRef.current = true;
+        setHasUnsavedChanges(true);
         itemsRef.current = newItems;
         setItems(newItems);
     }, []);
@@ -705,7 +712,10 @@ export function InvoiceViewer({
         if (!pendingDraft || !pendingDraft.data) return;
         isRestoring.current = true;
         const d = pendingDraft.data;
-        if (d.items) setItems(d.items);
+        if (d.items) {
+            setItems(d.items);
+            itemsRef.current = d.items;
+        }
         if (d.site !== undefined) setSite(d.site);
         if (d.reference !== undefined) setReference(d.reference);
         if (d.quoteNumber !== undefined) setQuoteNumber(d.quoteNumber);
@@ -717,6 +727,8 @@ export function InvoiceViewer({
         if (d.attentionTo !== undefined) setAttentionTo(d.attentionTo);
         setLastSavedTimestamp(pendingDraft.updatedAt);
         setPendingDraft(null);
+        hasUserEditedRef.current = true;
+        setHasUnsavedChanges(true);
         setTimeout(() => {
             isRestoring.current = false;
         }, 200);
@@ -727,6 +739,8 @@ export function InvoiceViewer({
     const handleDiscardDraft = () => {
         isDiscardedRef.current = true;
         hasUserEditedRef.current = false;
+        setHasUnsavedChanges(false);
+        setSaveError(null);
         clearDraft(DRAFT_KEY);
         setPendingDraft(null);
         setLastSavedTimestamp(null);
@@ -784,11 +798,11 @@ export function InvoiceViewer({
         };
     }, [items, site, reference, quoteNumber, date, note, firstPaymentOption, customFirstPaymentPercentage, contactId, attentionTo, loading, pendingDraft]);
 
-    const saveChanges = async () => {
+    const saveChanges = async (): Promise<boolean> => {
         // Concurrency safeguard: queue pending save if a save is currently in-flight to prevent dropped edits!
         if (isSavingRef.current) {
             queuedSaveRef.current = true;
-            return;
+            return false;
         }
         isSavingRef.current = true;
         queuedSaveRef.current = false;
@@ -931,13 +945,17 @@ export function InvoiceViewer({
             setPendingDraft(null);
             setLastSavedTimestamp(null);
             setSaveError(null);
+            setHasUnsavedChanges(false);
             hasUserEditedRef.current = false;
             justSavedRef.current = true;
             setTimeout(() => { justSavedRef.current = false; }, 3000);
+            return true;
         } catch (error: any) {
             console.error("Error saving changes:", error);
             const msg = error?.message || "Failed to save changes. Please try again.";
             setSaveError(msg);
+            setHasUnsavedChanges(true);
+            return false;
         } finally {
             setLoading(false);
             isSavingRef.current = false;
@@ -986,6 +1004,21 @@ export function InvoiceViewer({
     }
 
     const handleApprove = async () => {
+        if (loading || isSavingRef.current) {
+            alert("Please wait: changes are currently being saved.");
+            return;
+        }
+
+        if (saveError) {
+            alert(`Cannot approve & convert quote: A previous save failed with error:\n"${saveError}"\n\nPlease click "Retry Save" and resolve the error before converting.`);
+            return;
+        }
+
+        if (hasUnsavedChanges || Boolean(pendingDraft) || hasUserEditedRef.current) {
+            alert("Cannot approve & convert quote: You have unsaved changes. Please click 'Save Changes' to save your work before approving.");
+            return;
+        }
+
         const currentList = itemsRef.current || items;
         const invalid = checkInvalidItems(currentList);
         if (invalid.length > 0) {
@@ -995,11 +1028,21 @@ export function InvoiceViewer({
 
         if (!confirm("Approve this Quote? This will lock it and generate a Draft Invoice.")) return;
         setLoading(true);
-        await saveChanges();
-        const newInvoiceId = await convertToInvoiceAction(invoice.id);
-        setLoading(false);
-        router.push(`/invoices/${newInvoiceId}`);
-    }
+        try {
+            const saveSuccess = await saveChanges();
+            if (!saveSuccess) {
+                alert("Cannot generate invoice: Failed to save latest quote changes. Please check the error message and retry.");
+                return;
+            }
+            const newInvoiceId = await convertToInvoiceAction(invoice.id);
+            router.push(`/invoices/${newInvoiceId}`);
+        } catch (err: any) {
+            console.error("Error approving quote:", err);
+            alert("Failed to convert quote: " + (err?.message || String(err)));
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const isAeroWashDocument = (companySettings?.theme === 'dark-orange' || companySettings?.companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' || companySettings?.name?.toLowerCase().includes('aerowash'));
 
@@ -2131,6 +2174,17 @@ export function InvoiceViewer({
 
     const executeConvert = async () => {
         setConvertError(null);
+
+        if (saveError) {
+            setConvertError(`Cannot convert quotation: A previous save failed (${saveError}). Please save successfully before converting.`);
+            return;
+        }
+
+        if (hasUnsavedChanges || Boolean(pendingDraft) || hasUserEditedRef.current) {
+            setConvertError("Cannot convert quotation: There are unsaved changes. Please click 'Save Changes' to save your edits first.");
+            return;
+        }
+
         const currentList = itemsRef.current || items;
         const invalid = checkInvalidItems(currentList);
         if (invalid.length > 0) {
@@ -2156,6 +2210,12 @@ export function InvoiceViewer({
         }
 
         try {
+            const saveSuccess = await saveChanges();
+            if (!saveSuccess) {
+                setConvertError("Failed to save latest quotation changes. Invoice generation blocked.");
+                setLoading(false);
+                return;
+            }
             const newInvoiceId = await convertToInvoiceAction(invoice.id, convertPoNumber || undefined, finalPct, convertPresentationStyle);
             setIsConvertDialogOpen(false);
             setLoading(false);
@@ -2763,7 +2823,18 @@ export function InvoiceViewer({
                                     }
                                 }}>
                                     <DialogTrigger asChild>
-                                        <Button disabled={loading} variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl">
+                                        <Button 
+                                            disabled={loading || isSavingRef.current || Boolean(saveError) || hasUnsavedChanges || Boolean(pendingDraft) || hasUserEditedRef.current} 
+                                            variant="outline" 
+                                            className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase tracking-widest text-[10px] h-12 px-6 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title={
+                                                saveError 
+                                                    ? `Save failed (${saveError}). Resolve before converting.` 
+                                                    : (hasUnsavedChanges || Boolean(pendingDraft) || hasUserEditedRef.current) 
+                                                        ? "Please save quote changes before converting to an invoice." 
+                                                        : undefined
+                                            }
+                                        >
                                             <FileCheck className="mr-2 h-4 w-4" /> Convert to Invoice
                                         </Button>
                                     </DialogTrigger>
@@ -3068,7 +3139,10 @@ export function InvoiceViewer({
                             <span className="text-primary font-mono text-xs md:text-base font-black">#</span>
                             <input
                                 value={quoteNumber}
-                                onChange={(e) => setQuoteNumber(e.target.value)}
+                                onChange={(e) => {
+                                    setQuoteNumber(e.target.value);
+                                    markUnsaved();
+                                }}
                                 onBlur={saveChanges}
                                 className="bg-transparent border-none text-primary font-mono font-black text-sm md:text-xl w-32 md:w-48 text-center md:text-right outline-none focus:ring-2 focus:ring-primary/20 rounded-lg transition-all"
                                 disabled={isLocked}
@@ -3114,7 +3188,10 @@ export function InvoiceViewer({
                                             <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Tender</span>
                                             <select
                                                 value={selectedTenderId}
-                                                onChange={(e) => setSelectedTenderId(e.target.value)}
+                                                onChange={(e) => {
+                                                    setSelectedTenderId(e.target.value);
+                                                    markUnsaved();
+                                                }}
                                                 onBlur={saveChanges}
                                                 className="bg-transparent border-none text-right font-bold text-amber-300 outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
                                                 disabled={isLocked}
@@ -3131,7 +3208,10 @@ export function InvoiceViewer({
                                         <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Rate Year</span>
                                         <select
                                             value={effectiveRateYear}
-                                            onChange={(e) => handleRateYearChange(Number(e.target.value) as 1 | 2 | 3)}
+                                            onChange={(e) => {
+                                                handleRateYearChange(Number(e.target.value) as 1 | 2 | 3);
+                                                markUnsaved();
+                                            }}
                                             onBlur={saveChanges}
                                             className="bg-transparent border-none text-right font-bold text-amber-300 outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
                                             disabled={isLocked}
@@ -3148,7 +3228,10 @@ export function InvoiceViewer({
                                 <input
                                     type="date"
                                     value={date}
-                                    onChange={(e) => setDate(e.target.value)}
+                                    onChange={(e) => {
+                                        setDate(e.target.value);
+                                        markUnsaved();
+                                    }}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer"
                                     disabled={isLocked}
                                 />
@@ -3167,6 +3250,7 @@ export function InvoiceViewer({
                                             setContactId("");
                                             setAttentionTo(val || invoice.client.attentionTo || "");
                                         }
+                                        markUnsaved();
                                     }}
                                     onBlur={saveChanges}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 max-w-[120px] md:max-w-[150px] text-[10px] md:text-xs cursor-pointer"
@@ -3194,7 +3278,10 @@ export function InvoiceViewer({
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Attention To</span>
                                 <input
                                     value={attentionTo}
-                                    onChange={(e) => setAttentionTo(e.target.value)}
+                                    onChange={(e) => {
+                                        setAttentionTo(e.target.value);
+                                        markUnsaved();
+                                    }}
                                     onBlur={saveChanges}
                                     placeholder="e.g. Mr. Smith"
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
@@ -3292,7 +3379,10 @@ export function InvoiceViewer({
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Site Location</span>
                                 <input
                                     value={site}
-                                    onChange={(e) => setSite(e.target.value)}
+                                    onChange={(e) => {
+                                        setSite(e.target.value);
+                                        markUnsaved();
+                                    }}
                                     onBlur={saveChanges}
                                     placeholder="Enter Site..."
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
@@ -3303,7 +3393,10 @@ export function InvoiceViewer({
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Reference</span>
                                 <input
                                     value={reference}
-                                    onChange={(e) => setReference(e.target.value)}
+                                    onChange={(e) => {
+                                        setReference(e.target.value);
+                                        markUnsaved();
+                                    }}
                                     onBlur={saveChanges}
                                     placeholder="Customer Ref"
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-full max-w-[150px]"
@@ -3314,7 +3407,10 @@ export function InvoiceViewer({
                                 <span className="text-gray-500 font-black uppercase tracking-widest text-[8px]">Partial Payment Option</span>
                                 <select
                                     value={firstPaymentOption}
-                                    onChange={(e) => setFirstPaymentOption(e.target.value)}
+                                    onChange={(e) => {
+                                        setFirstPaymentOption(e.target.value);
+                                        markUnsaved();
+                                    }}
                                     onBlur={saveChanges}
                                     className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer font-bold"
                                     disabled={isLocked}
@@ -3338,7 +3434,10 @@ export function InvoiceViewer({
                                         min="1"
                                         max="99"
                                         value={customFirstPaymentPercentage}
-                                        onChange={(e) => setCustomFirstPaymentPercentage(e.target.value)}
+                                        onChange={(e) => {
+                                            setCustomFirstPaymentPercentage(e.target.value);
+                                            markUnsaved();
+                                        }}
                                         onBlur={saveChanges}
                                         className="bg-transparent border-none text-right font-bold text-white outline-none focus:ring-0 text-[10px] md:text-xs w-16"
                                         disabled={isLocked}
@@ -3853,7 +3952,10 @@ export function InvoiceViewer({
                             {isPricingMode || !isLocked ? (
                                 <textarea
                                     value={note}
-                                    onChange={(e) => setNote(e.target.value)}
+                                    onChange={(e) => {
+                                        setNote(e.target.value);
+                                        markUnsaved();
+                                    }}
                                     placeholder="ADD SPECIALIZED TERMS, SITE CONDITIONS, OR PROJECT REQUIREMENTS..."
                                     className="w-full min-h-[120px] bg-transparent text-gray-300 text-[13px] border-none focus:ring-0 resize-none font-medium leading-relaxed placeholder:opacity-20"
                                 />
@@ -4052,7 +4154,10 @@ export function InvoiceViewer({
                                         <select
                                             id="viewerTermsTemplate"
                                             value={selectedTermsTemplateId}
-                                            onChange={(e) => setSelectedTermsTemplateId(e.target.value)}
+                                            onChange={(e) => {
+                                                setSelectedTermsTemplateId(e.target.value);
+                                                markUnsaved();
+                                            }}
                                             className="flex h-10 w-full rounded-xl border border-white/10 bg-[#0F172A] px-3 py-2 text-xs font-medium text-white focus:outline-none focus:ring-1 focus:ring-primary"
                                         >
                                             <option value="">None (Omit terms section)</option>
@@ -4090,7 +4195,10 @@ export function InvoiceViewer({
                                             id="viewerCustomTerms"
                                             rows={3}
                                             value={customTermsText}
-                                            onChange={(e) => setCustomTermsText(e.target.value)}
+                                            onChange={(e) => {
+                                                setCustomTermsText(e.target.value);
+                                                markUnsaved();
+                                            }}
                                             placeholder="Enter any client or job-specific clauses (one per line). These will append after the template clauses..."
                                             className="bg-[#0F172A] border-white/10 text-xs font-sans text-gray-200 min-h-[80px]"
                                         />
@@ -4210,17 +4318,42 @@ export function InvoiceViewer({
                                     "Save Changes"
                                 )}
                             </Button>
-                            {invoice.type === 'QUOTE' && (
-                                <Button 
-                                    size="lg" 
-                                    onClick={handleApprove} 
-                                    disabled={loading} 
-                                    className={`h-14 px-10 font-bold shadow-xl ${checkInvalidItems(items).length > 0 ? 'bg-blue-600/70 hover:bg-blue-600 border border-amber-400/40' : 'bg-blue-600 hover:bg-blue-700'}`}
-                                    title={checkInvalidItems(items).length > 0 ? `${checkInvalidItems(items).length} items require valid price and quantity before converting` : undefined}
-                                >
-                                    {loading ? "Processing..." : "Approve & Generate Invoice"}
-                                </Button>
-                            )}
+                            {invoice.type === 'QUOTE' && (() => {
+                                const isBlocked = loading || isSavingRef.current || Boolean(saveError) || hasUnsavedChanges || Boolean(pendingDraft) || hasUserEditedRef.current;
+                                return (
+                                    <Button 
+                                        size="lg" 
+                                        onClick={handleApprove} 
+                                        disabled={isBlocked} 
+                                        className={`h-14 px-10 font-bold shadow-xl transition-all ${
+                                            saveError
+                                                ? 'border-2 border-red-500/60 bg-red-500/20 text-red-200 cursor-not-allowed opacity-60'
+                                                : (hasUnsavedChanges || Boolean(pendingDraft) || hasUserEditedRef.current)
+                                                    ? 'border-2 border-amber-500/40 bg-amber-500/20 text-amber-200 cursor-not-allowed opacity-75'
+                                                    : checkInvalidItems(items).length > 0 
+                                                        ? 'bg-blue-600/70 hover:bg-blue-600 border border-amber-400/40' 
+                                                        : 'bg-blue-600 hover:bg-blue-700'
+                                        }`}
+                                        title={
+                                            saveError 
+                                                ? `Save failed: ${saveError}. Resolve save error before converting.` 
+                                                : (hasUnsavedChanges || Boolean(pendingDraft) || hasUserEditedRef.current)
+                                                    ? "You have unsaved changes. Click 'Save Changes' to save your work before approving and generating an invoice."
+                                                    : checkInvalidItems(items).length > 0 
+                                                        ? `${checkInvalidItems(items).length} items require valid price and quantity before converting` 
+                                                        : undefined
+                                        }
+                                    >
+                                        {loading 
+                                            ? "Processing..." 
+                                            : saveError 
+                                                ? "Save Failed — Cannot Approve" 
+                                                : (hasUnsavedChanges || Boolean(pendingDraft) || hasUserEditedRef.current)
+                                                    ? "Save Changes to Approve"
+                                                    : "Approve & Generate Invoice"}
+                                    </Button>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}
