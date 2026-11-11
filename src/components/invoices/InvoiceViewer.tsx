@@ -21,7 +21,7 @@ import ExcelJS from "exceljs"
 import { saveAs } from "file-saver"
 import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from "@/app/(dashboard)/invoices/actions"
 import { sendInvoiceEmail, requestQuoteApprovalAction, ownerApproveQuoteAction, verifyQuoteActionPermission, getQuoteShareLinkAction, sendBackQuoteAction, resubmitQuoteApprovalAction } from "@/app/(dashboard)/invoices/email-actions"
-import { updateInvoiceItemsAction, finalizeQuoteAction, updateInvoiceNoteAction, getPricingSuggestionsAction } from "@/app/(dashboard)/invoices/pricing-actions"
+import { updateInvoiceItemsAction, finalizeQuoteAction, updateInvoiceNoteAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction, renameProjectAction } from "@/app/(dashboard)/invoices/project-actions"
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react"
 import { useRouter } from "next/navigation"
@@ -590,29 +590,70 @@ export function InvoiceViewer({
     const hasUserEditedRef = useRef(false);
     const justSavedRef = useRef(false);
 
-    // Pricing Intelligence state
+    // Pricing Intelligence state (Non-blocking: runs via route handler, never queues in front of saves)
     const [pricingSuggestions, setPricingSuggestions] = useState<Record<string, { typicalPrice: number; source: string }>>({});
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+    const queriedDescriptionsRef = useRef<Set<string>>(new Set());
+    const suggestionsAbortControllerRef = useRef<AbortController | null>(null);
 
     const descriptionsKey = items.map(i => i.description).join('||');
-    // Debounced fetch of pricing suggestions when item descriptions change in quotes
+    // Debounced fetch of pricing suggestions ONLY for new or changed lines (skips if save is in-flight)
     useEffect(() => {
         if (invoice.type !== 'QUOTE') return;
-        const descriptions = items.map(i => i.description).filter(d => d && d.trim().length > 1);
-        if (descriptions.length === 0) return;
+        if (isSavingRef.current || loading) return;
+
+        // Only query lines that don't already have suggestions and haven't been queried
+        const unqueried = items
+            .map(i => i.description?.trim())
+            .filter((d): d is string => Boolean(d && d.length > 1 && !pricingSuggestions[d] && !queriedDescriptionsRef.current.has(d)));
+
+        const uniqueToQuery = Array.from(new Set(unqueried));
+        if (uniqueToQuery.length === 0) return;
+
+        // Cancel any pending debounced suggestion request
+        if (suggestionsAbortControllerRef.current) {
+            suggestionsAbortControllerRef.current.abort();
+            suggestionsAbortControllerRef.current = null;
+        }
+
+        const controller = new AbortController();
+        suggestionsAbortControllerRef.current = controller;
 
         const timer = setTimeout(async () => {
+            // Check again in case a save started during debounce
+            if (isSavingRef.current || loading) return;
             try {
-                const res = await getPricingSuggestionsAction(descriptions.map(d => ({ description: d })));
-                setPricingSuggestions(res || {});
-            } catch (err) {
-                console.error("Failed to fetch pricing suggestions:", err);
-            }
-        }, 500);
+                uniqueToQuery.forEach(d => queriedDescriptionsRef.current.add(d));
 
-        return () => clearTimeout(timer);
+                const res = await fetch('/api/pricing-suggestions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: uniqueToQuery.map(d => ({ description: d })) }),
+                    signal: controller.signal
+                });
+
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data?.suggestions && Object.keys(data.suggestions).length > 0) {
+                    setPricingSuggestions(prev => ({ ...prev, ...data.suggestions }));
+                }
+            } catch (err: any) {
+                if (err.name !== 'AbortError') {
+                    console.error("Non-blocking pricing suggestions fetch error:", err);
+                }
+            } finally {
+                if (suggestionsAbortControllerRef.current === controller) {
+                    suggestionsAbortControllerRef.current = null;
+                }
+            }
+        }, 600);
+
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [descriptionsKey, invoice.type]);
+    }, [descriptionsKey, invoice.type, loading]);
 
     const handleAutoSuggestAll = async () => {
         const currentList = itemsRef.current || items;
@@ -623,10 +664,17 @@ export function InvoiceViewer({
         }
         setIsLoadingSuggestions(true);
         try {
-            const res = await getPricingSuggestionsAction(currentList.map(i => ({ description: i.description })));
+            const res = await fetch('/api/pricing-suggestions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: currentList.map(i => ({ description: i.description })) })
+            });
+            if (!res.ok) throw new Error("Failed to fetch suggestions");
+            const data = await res.json();
+            const suggestions = data.suggestions || {};
             let appliedCount = 0;
             const nextItems = currentList.map(item => {
-                const sug = res[item.description];
+                const sug = suggestions[item.description];
                 if (sug && (!item.unitPrice || Number(item.unitPrice) <= 0)) {
                     appliedCount++;
                     const q = Number(item.quantity) || 1;
@@ -635,7 +683,8 @@ export function InvoiceViewer({
                 return item;
             });
             updateItems(nextItems);
-            setPricingSuggestions(res || {});
+            setPricingSuggestions(prev => ({ ...prev, ...suggestions }));
+            currentList.forEach(i => { if (i.description) queriedDescriptionsRef.current.add(i.description.trim()); });
             alert(`Applied ${appliedCount} pricing rate${appliedCount === 1 ? '' : 's'} from Pricing Intelligence!`);
         } catch (err) {
             console.error("Auto suggest error:", err);
@@ -811,6 +860,12 @@ export function InvoiceViewer({
         if (draftTimeoutRef.current) {
             clearTimeout(draftTimeoutRef.current);
             draftTimeoutRef.current = null;
+        }
+
+        // Immediately abort any background pricing suggestions request so save has 100% priority
+        if (suggestionsAbortControllerRef.current) {
+            suggestionsAbortControllerRef.current.abort();
+            suggestionsAbortControllerRef.current = null;
         }
 
         setLoading(true);
