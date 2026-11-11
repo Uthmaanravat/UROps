@@ -396,9 +396,159 @@ export async function generateAeroWashQuotePdf({
     doc.text(scopeLines, 14, y);
     y += (scopeLines.length * 4.2) + 4;
 
+    const drawContinuationHeader = (docInstance: jsPDF) => {
+        docInstance.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
+        docInstance.rect(0, 0, 210, 28, 'F');
+        docInstance.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+        docInstance.rect(0, 28, 210, 1.2, 'F');
+
+        if (headerLogoBase64) {
+            try {
+                const imgProps = docInstance.getImageProperties(headerLogoBase64);
+                const maxH = 20;
+                const aspect = imgProps.width / imgProps.height;
+                const renderW = Math.min(maxH * aspect, 50);
+                const renderH = renderW / aspect;
+                const renderY = 4 + (maxH - renderH) / 2;
+                docInstance.addImage(headerLogoBase64, 'PNG', 14, renderY, renderW, renderH);
+            } catch {
+                docInstance.addImage(headerLogoBase64, 'PNG', 14, 4, 20, 20);
+            }
+        } else {
+            docInstance.setFont("helvetica", "bold");
+            docInstance.setFontSize(10);
+            docInstance.setTextColor(255, 255, 255);
+            docInstance.text("A E R O W A S H", 14, 16);
+        }
+
+        docInstance.setFont("helvetica", "bold");
+        docInstance.setFontSize(11);
+        docInstance.setTextColor(255, 255, 255);
+        docInstance.text(docHeading, 196, 12, { align: "right" });
+
+        docInstance.setFontSize(7.5);
+        docInstance.setFont("helvetica", "bold");
+        docInstance.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+        docInstance.text(`${isInvoice ? "Invoice No. " : "Quote No. "}${numberLabel}`, 196, 17, { align: "right" });
+
+        if (clientRef) {
+            docInstance.setFont("helvetica", "normal");
+            docInstance.setTextColor(209, 213, 219);
+            docInstance.text(`Client ref: ${clientRef}`, 196, 22, { align: "right" });
+        }
+    };
+
     // ==========================================
     // 4. ITEMS TABLE (ITEM | AMOUNT only)
     // ==========================================
+    const hasOptions = Boolean(!isInvoice && invoice.metadata?.hasOptions && Array.isArray(invoice.metadata?.options) && invoice.metadata.options.length > 1);
+
+    if (hasOptions) {
+        const options: any[] = invoice.metadata.options;
+        for (let optIdx = 0; optIdx < options.length; optIdx++) {
+            const option = options[optIdx];
+            const optItems: any[] = option.items || [];
+            const optTableBody: any[] = [];
+            let optItemNumber = 1;
+
+            optItems.forEach((item: any) => {
+                const isIncluded = item.isIncluded || item.metadata?.isIncluded || (item.unitPrice === 0 && item.originalPrice && item.originalPrice > 0);
+                const originalAmount = item.originalPrice || (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
+                const amount = (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
+
+                const rawDesc = item.description || "";
+                let title = rawDesc;
+                let subDesc = "";
+
+                if (rawDesc.includes("\n")) {
+                    const parts = rawDesc.split("\n");
+                    title = parts[0].trim();
+                    subDesc = parts.slice(1).join(" ").trim();
+                } else if (rawDesc.includes(" – ")) {
+                    const parts = rawDesc.split(" – ");
+                    title = parts[0].trim();
+                    subDesc = parts.slice(1).join(" – ").trim();
+                } else if (rawDesc.includes(" - ")) {
+                    const parts = rawDesc.split(" - ");
+                    title = parts[0].trim();
+                    subDesc = parts.slice(1).join(" - ").trim();
+                }
+
+                const cleanTitle = `${optItemNumber++}. ${title.replace(/^\d+[\.\)]\s*/, '')}`;
+                const itemCellContent = subDesc ? `${cleanTitle}\n${subDesc}` : cleanTitle;
+
+                let amountCellContent: any = formatCurrency(amount, currencySymbol);
+                if (isIncluded) {
+                    amountCellContent = `${formatCurrency(originalAmount, currencySymbol)}\nINCLUDED`;
+                } else if (amount === 0) {
+                    amountCellContent = "INCLUDED";
+                }
+
+                optTableBody.push([itemCellContent, amountCellContent]);
+            });
+
+            const optTitle = (option.name || `Option ${option.id}`).toUpperCase();
+
+            autoTable(doc, {
+                margin: { top: 36, bottom: 25, left: 14, right: 14 },
+                head: [[
+                    { content: optTitle, styles: { halign: 'left', fillColor: [243, 244, 246], textColor: [darkGreyRGB[0], darkGreyRGB[1], darkGreyRGB[2]], fontStyle: 'bold' } },
+                    { content: 'AMOUNT', styles: { halign: 'right', fillColor: [243, 244, 246], textColor: [darkGreyRGB[0], darkGreyRGB[1], darkGreyRGB[2]], fontStyle: 'bold' } }
+                ]],
+                body: optTableBody,
+                startY: y,
+                theme: 'plain',
+                rowPageBreak: 'avoid',
+                headStyles: {
+                    fontSize: 7.5,
+                    cellPadding: 2.8
+                },
+                bodyStyles: {
+                    fontSize: 7.5,
+                    textColor: [darkGreyRGB[0], darkGreyRGB[1], darkGreyRGB[2]],
+                    cellPadding: 3,
+                    lineColor: [243, 244, 246],
+                    lineWidth: 0.2
+                },
+                columnStyles: {
+                    0: { cellWidth: 145, halign: 'left' },
+                    1: { cellWidth: 37, halign: 'right', fontStyle: 'bold' }
+                },
+                didParseCell: data => {
+                    if (data.column.index === 1 && typeof data.cell.raw === 'string' && data.cell.raw.includes('INCLUDED')) {
+                        data.cell.styles.textColor = greenRGB;
+                    }
+                },
+                didDrawPage: data => {
+                    if (data.pageNumber > 1) {
+                        drawContinuationHeader(doc);
+                    }
+                }
+            });
+
+            y = (doc as any).lastAutoTable.finalY + 3;
+
+            // Option total line
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.setTextColor(darkGreyRGB[0], darkGreyRGB[1], darkGreyRGB[2]);
+            doc.text(`${optTitle} TOTAL:`, 150, y, { align: "right" });
+            doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+            doc.text(formatCurrency(option.total || option.subtotal || 0, currencySymbol), 196, y, { align: "right" });
+            y += 7;
+        }
+
+        // Fixed Prices Callout Banner
+        doc.setFillColor(255, 247, 237); // light orange #FFF7ED
+        doc.rect(14, y, 182, 8, 'F');
+        doc.setFillColor(208, 94, 0);     // orange bar
+        doc.rect(14, y, 1.2, 8, 'F');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(124, 45, 18);
+        doc.text("Fixed prices for the option chosen. Please state your chosen option upon acceptance.", 18, y + 5.2);
+        y += 12;
+    } else {
     const tableBody: any[] = [];
     let itemNumber = 1;
 
@@ -540,48 +690,6 @@ export async function generateAeroWashQuotePdf({
         ]);
     });
 
-    const drawContinuationHeader = (docInstance: jsPDF) => {
-        docInstance.setFillColor(blackRGB[0], blackRGB[1], blackRGB[2]);
-        docInstance.rect(0, 0, 210, 28, 'F');
-        docInstance.setFillColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-        docInstance.rect(0, 28, 210, 1.2, 'F');
-
-        if (headerLogoBase64) {
-            try {
-                const imgProps = docInstance.getImageProperties(headerLogoBase64);
-                const maxH = 20;
-                const aspect = imgProps.width / imgProps.height;
-                const renderW = Math.min(maxH * aspect, 50);
-                const renderH = renderW / aspect;
-                const renderY = 4 + (maxH - renderH) / 2;
-                docInstance.addImage(headerLogoBase64, 'PNG', 14, renderY, renderW, renderH);
-            } catch {
-                docInstance.addImage(headerLogoBase64, 'PNG', 14, 4, 20, 20);
-            }
-        } else {
-            docInstance.setFont("helvetica", "bold");
-            docInstance.setFontSize(10);
-            docInstance.setTextColor(255, 255, 255);
-            docInstance.text("A E R O W A S H", 14, 16);
-        }
-
-        docInstance.setFont("helvetica", "bold");
-        docInstance.setFontSize(11);
-        docInstance.setTextColor(255, 255, 255);
-        docInstance.text(docHeading, 196, 12, { align: "right" });
-
-        docInstance.setFontSize(7.5);
-        docInstance.setFont("helvetica", "bold");
-        docInstance.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
-        docInstance.text(`${isInvoice ? "Invoice No. " : "Quote No. "}${numberLabel}`, 196, 17, { align: "right" });
-
-        if (clientRef) {
-            docInstance.setFont("helvetica", "normal");
-            docInstance.setTextColor(209, 213, 219);
-            docInstance.text(`Client ref: ${clientRef}`, 196, 22, { align: "right" });
-        }
-    };
-
     autoTable(doc, {
         margin: { top: 36, bottom: 25, left: 14, right: 14 },
         head: [[
@@ -634,38 +742,13 @@ export async function generateAeroWashQuotePdf({
             }
         }
     });
+    }
 
-    let currentY = (doc as any).lastAutoTable.finalY + 4;
+    let currentY = (doc as any).lastAutoTable ? ((doc as any).lastAutoTable.finalY + 4) : y;
     const pageHeight = doc.internal.pageSize.getHeight();
     const maxContentY = pageHeight - 22; // 275mm reserved footer boundary
 
-    // ==========================================
-    // 5. TOTALS BLOCK (Right-aligned)
-    // ==========================================
-    const totalsWidth = 85;
-    const totalsRightX = 196;
-    const totalsLeftX = totalsRightX - totalsWidth;
-
-    // Full scope subtotal at standard rates
-    const allowanceAmount = invoice.metadata?.allowanceAmount || 0;
-    const allowanceName = invoice.metadata?.allowanceName || "Introductory allowance";
-    const subtotalStandardRates = invoice.subtotal + allowanceAmount;
-
-    // VAT line if registered
-    const vatRate = (company as any).vatRate ?? 15;
-    const isVatRegistered = isVatActive;
-    const effectiveTaxAmount = isVatRegistered 
-        ? (invoice.taxAmount > 0 ? invoice.taxAmount : (invoice.subtotal * (vatRate / 100))) 
-        : 0;
-    const effectiveTotal = isVatRegistered 
-        ? (invoice.subtotal + effectiveTaxAmount) 
-        : (invoice.total || invoice.subtotal);
-
     const isBalanceInvoice = Boolean(invoice.metadata?.isBalanceInvoice);
-    const showPdfSubtotalRow = allowanceAmount > 0 || !isBalanceInvoice || isVatRegistered;
-
-    // Height calculation for keep-together logic
-    const totalsHeight = (allowanceAmount > 0 ? 9.5 : (showPdfSubtotalRow ? 5 : 0)) + (isVatRegistered ? 5 : 0) + 14;
 
     // Notice box logic
     const siteVisitCompleted = !isBalanceInvoice && Boolean(
@@ -688,6 +771,34 @@ export async function generateAeroWashQuotePdf({
 
     const noticeHeight = siteVisitCompleted ? 14 : (siteVisitRequired ? 26 : 0);
     const bankBoxHeight = isInvoice ? 26 : 0;
+
+    // ==========================================
+    // 5. TOTALS BLOCK (Right-aligned)
+    // ==========================================
+    if (!hasOptions) {
+    const totalsWidth = 85;
+    const totalsRightX = 196;
+    const totalsLeftX = totalsRightX - totalsWidth;
+
+    // Full scope subtotal at standard rates
+    const allowanceAmount = invoice.metadata?.allowanceAmount || 0;
+    const allowanceName = invoice.metadata?.allowanceName || "Introductory allowance";
+    const subtotalStandardRates = invoice.subtotal + allowanceAmount;
+
+    // VAT line if registered
+    const vatRate = (company as any).vatRate ?? 15;
+    const isVatRegistered = isVatActive;
+    const effectiveTaxAmount = isVatRegistered 
+        ? (invoice.taxAmount > 0 ? invoice.taxAmount : (invoice.subtotal * (vatRate / 100))) 
+        : 0;
+    const effectiveTotal = isVatRegistered 
+        ? (invoice.subtotal + effectiveTaxAmount) 
+        : (invoice.total || invoice.subtotal);
+
+    const showPdfSubtotalRow = allowanceAmount > 0 || !isBalanceInvoice || isVatRegistered;
+
+    // Height calculation for keep-together logic
+    const totalsHeight = (allowanceAmount > 0 ? 9.5 : (showPdfSubtotalRow ? 5 : 0)) + (isVatRegistered ? 5 : 0) + 14;
     const combinedBottomHeight = totalsHeight + noticeHeight + bankBoxHeight + 4;
 
     // KEEP TOGETHER RULE:
@@ -771,6 +882,7 @@ export async function generateAeroWashQuotePdf({
     doc.text(formatCurrency(barAmount, currencySymbol), totalsRightX - 4, barY + 6.5, { align: "right" });
 
     currentY = barY + 14;
+    } // End if (!hasOptions) for Totals Block
 
     // ==========================================
     // 6. NOTICE BOX (Site visit completed vs required)
@@ -949,13 +1061,19 @@ export async function generateAeroWashQuotePdf({
     p2Y += 6;
 
     // Included Bullets
-    const itemNames = invoice.items.map(i => i.description.split('\n')[0].trim());
-    const uniqueItems = Array.from(new Set(itemNames));
-    const includedList: Array<{ text: string; isBold?: boolean }> = uniqueItems.map(name => ({ text: name, isBold: false }));
-    includedList.push(
-        { text: "Pre- and post-clean photographic record", isBold: false },
-        { text: "All labour, equipment and remote pilot crew", isBold: false }
-    );
+    const customInclusions = invoice.metadata?.customInclusions;
+    let includedList: Array<{ text: string; isBold?: boolean }>;
+    if (Array.isArray(customInclusions) && customInclusions.length > 0) {
+        includedList = customInclusions.map((t: string) => ({ text: t, isBold: false }));
+    } else {
+        const itemNames = invoice.items.map(i => i.description.split('\n')[0].trim());
+        const uniqueItems = Array.from(new Set(itemNames));
+        includedList = uniqueItems.map(name => ({ text: name, isBold: false }));
+        includedList.push(
+            { text: "Pre- and post-clean photographic record", isBold: false },
+            { text: "All labour, equipment and remote pilot crew", isBold: false }
+        );
+    }
 
     // Excluded Bullets (deduplicated - show each exclusion once)
     const excludedList: Array<{ text: string; isBold?: boolean }> = [];
@@ -968,6 +1086,18 @@ export async function generateAeroWashQuotePdf({
             .replace(/[^a-z0-9]/g, '')
             .trim();
     };
+
+    // Custom Exclusions from quote builder if provided
+    const customExclusions = invoice.metadata?.customExclusions;
+    if (Array.isArray(customExclusions) && customExclusions.length > 0) {
+        customExclusions.forEach((ex: string) => {
+            const key = normalizeExclusionKey(ex);
+            if (!seenEx.has(key)) {
+                seenEx.add(key);
+                excludedList.push({ text: ex, isBold: ex.toLowerCase().includes('tiled roof') });
+            }
+        });
+    }
 
     // 1. Condition Flags (the most descriptive exclusions with warranty notice)
     const flags = invoice.metadata?.conditionFlags || invoice.conditionFlags || [];
@@ -1042,10 +1172,13 @@ export async function generateAeroWashQuotePdf({
     drawSpacedHeading("COMMERCIAL TERMS", col1X, p2Y, 182);
     p2Y += 6;
 
+    const paymentTermsOption = invoice.metadata?.paymentTermsOption;
     const commercialLeft = [
         { text: "Quotations are fixed price for the scope and elevations stated.", isBold: false },
-        { text: "A 60% deposit is payable on acceptance to secure the booking.", isBold: false },
-        { text: "The balance is payable on completion.", isBold: false },
+        paymentTermsOption === 'EFT_ON_COMPLETION'
+            ? { text: "Payment by EFT on completion.", isBold: true }
+            : { text: "A 60% deposit is payable on acceptance to secure the booking.", isBold: false },
+        ...(paymentTermsOption === 'EFT_ON_COMPLETION' ? [] : [{ text: "The balance is payable on completion.", isBold: false }]),
         { text: "This quotation is valid for 45 days from the date of issue.", isBold: false }
     ];
     const commercialRight = [
@@ -1093,10 +1226,22 @@ export async function generateAeroWashQuotePdf({
     drawSpacedHeading("ACCEPTANCE", col1X, p2Y, 182);
     p2Y += 5;
 
+    if (hasOptions) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(orangeRGB[0], orangeRGB[1], orangeRGB[2]);
+        const optionsLabels = invoice.metadata.options.map((o: any) => `[   ] ${o.name || `Option ${o.id}`}`).join('         ');
+        doc.text(`Chosen Option:    ${optionsLabels}`, col1X, p2Y);
+        p2Y += 5;
+    }
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(bodyGreyRGB[0], bodyGreyRGB[1], bodyGreyRGB[2]);
-    doc.text("To proceed, sign below and return, or confirm by email to info@aerowash.co.za.", col1X, p2Y);
+    const acceptMsg = hasOptions
+        ? "To proceed, please indicate your chosen option, sign below and return, or confirm by email to info@aerowash.co.za."
+        : "To proceed, sign below and return, or confirm by email to info@aerowash.co.za.";
+    doc.text(acceptMsg, col1X, p2Y);
     p2Y += 10;
 
     // Signature lines

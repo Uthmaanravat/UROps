@@ -53,6 +53,11 @@ export function ClientQuoteAcceptance({
     const [submitSuccess, setSubmitSuccess] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
+    // Quote Options State (Option A vs Option B)
+    const hasQuoteOptions = Boolean(quote.metadata?.hasOptions && Array.isArray(quote.metadata?.options) && quote.metadata.options.length > 1)
+    const quoteOptionsList: any[] = hasQuoteOptions ? quote.metadata.options : []
+    const [chosenOptionId, setChosenOptionId] = useState<string>(() => quoteOptionsList[0]?.id || 'A')
+
     // Revision request state
     const [revisionName, setRevisionName] = useState(quote.attentionTo || "")
     const [revisionEmail, setRevisionEmail] = useState(quote.client?.email || "")
@@ -145,7 +150,8 @@ export function ClientQuoteAcceptance({
                 acceptedByEmail: email,
                 poNumber,
                 termsAccepted,
-                signatureDataUrl
+                signatureDataUrl,
+                chosenOptionId: hasQuoteOptions ? chosenOptionId : undefined
             })
 
             if (res.success) {
@@ -284,50 +290,112 @@ export function ClientQuoteAcceptance({
                         </div>
                     </div>
 
-                    {/* Scope / Elevation Line Items */}
-                    <div className="space-y-3">
-                        <div className="text-xs font-black uppercase tracking-wider text-gray-400">
-                            Quotation Breakdown
-                        </div>
-                        <div className="divide-y divide-white/5 border border-white/10 rounded-xl overflow-hidden bg-black/20">
-                            {quote.items.map((item: any, idx: number) => (
-                                <div key={item.id || idx} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:bg-white/[0.02]">
-                                    <div className="space-y-1 pr-4">
-                                        <div className="text-xs font-bold text-white">
-                                            {item.description.split('\n')[0]}
-                                        </div>
-                                        {item.description.includes('\n') && (
-                                            <div className="text-[11px] text-gray-400 leading-relaxed">
-                                                {item.description.split('\n').slice(1).join('\n')}
+                    {/* Scope / Elevation Line Items or Multi-Option Breakdown */}
+                    {hasQuoteOptions ? (
+                        <div className="space-y-4">
+                            <div className="p-3.5 rounded-xl bg-[#D05E00]/10 border border-[#D05E00]/30 text-xs">
+                                <span className="font-bold text-[#D05E00] uppercase tracking-wider block">
+                                    Option-Based Quotation
+                                </span>
+                                <span className="text-gray-300 text-[11px] mt-0.5 block">
+                                    Fixed prices for the option chosen. Please select your preferred option in the acceptance section below.
+                                </span>
+                            </div>
+
+                            {quoteOptionsList.map((opt: any) => {
+                                const optItems: any[] = opt.items || [];
+                                const optTotal = opt.total || opt.subtotal || 0;
+                                return (
+                                    <div key={opt.id} className="border border-white/10 rounded-xl overflow-hidden bg-black/20 space-y-2 p-4">
+                                        <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                                            <div className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
+                                                <span className="w-5 h-5 rounded-md bg-[#D05E00]/20 text-[#D05E00] flex items-center justify-center font-mono text-[10px]">
+                                                    {opt.id}
+                                                </span>
+                                                {opt.name || `Option ${opt.id}`}
                                             </div>
-                                        )}
+                                            <div className="font-mono font-bold text-xs text-[#D05E00]">
+                                                {formatCurrency(optTotal, "R")}
+                                            </div>
+                                        </div>
+                                        <div className="divide-y divide-white/5">
+                                            {optItems.map((item: any, idx: number) => (
+                                                <div key={idx} className="py-2.5 flex justify-between items-start gap-4">
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-xs font-bold text-white">
+                                                            {item.description ? item.description.split('\n')[0] : (item.name || `Item ${idx + 1}`)}
+                                                        </div>
+                                                        {item.description && item.description.includes('\n') && (
+                                                            <div className="text-[11px] text-gray-400">
+                                                                {item.description.split('\n').slice(1).join(' ')}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs font-mono font-bold text-white shrink-0">
+                                                        {item.unitPrice === 0 || item.amount === 0 || item.total === 0 ? (
+                                                            <span className="text-emerald-400">Included</span>
+                                                        ) : (
+                                                            formatCurrency(item.total !== undefined ? item.total : item.amount, "R")
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="text-xs sm:text-sm font-bold text-white shrink-0 self-end sm:self-center font-mono">
-                                        {formatCurrency(item.total, "R")}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
-                    </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="text-xs font-black uppercase tracking-wider text-gray-400">
+                                Quotation Breakdown
+                            </div>
+                            <div className="divide-y divide-white/5 border border-white/10 rounded-xl overflow-hidden bg-black/20">
+                                {quote.items.map((item: any, idx: number) => (
+                                    <div key={item.id || idx} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:bg-white/[0.02]">
+                                        <div className="space-y-1 pr-4">
+                                            <div className="text-xs font-bold text-white">
+                                                {item.description.split('\n')[0]}
+                                            </div>
+                                            {item.description.includes('\n') && (
+                                                <div className="text-[11px] text-gray-400 leading-relaxed">
+                                                    {item.description.split('\n').slice(1).join('\n')}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="text-xs sm:text-sm font-bold text-white shrink-0 self-end sm:self-center font-mono">
+                                            {formatCurrency(item.total, "R")}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Totals Summary */}
                     <div className="flex flex-col items-end gap-1.5 pt-4 border-t border-white/10 text-xs">
-                        <div className="flex justify-between w-full max-w-xs text-gray-400">
-                            <span>Subtotal:</span>
-                            <span className="font-mono text-white">{formatCurrency(quote.subtotal, "R")}</span>
-                        </div>
-                        {quote.taxAmount > 0 && (
-                            <div className="flex justify-between w-full max-w-xs text-gray-400">
-                                <span>VAT ({(quote.taxRate * 100).toFixed(0)}%):</span>
-                                <span className="font-mono text-white">{formatCurrency(quote.taxAmount, "R")}</span>
-                            </div>
+                        {!hasQuoteOptions && (
+                            <>
+                                <div className="flex justify-between w-full max-w-xs text-gray-400">
+                                    <span>Subtotal:</span>
+                                    <span className="font-mono text-white">{formatCurrency(quote.subtotal, "R")}</span>
+                                </div>
+                                {quote.taxAmount > 0 && (
+                                    <div className="flex justify-between w-full max-w-xs text-gray-400">
+                                        <span>VAT ({(quote.taxRate * 100).toFixed(0)}%):</span>
+                                        <span className="font-mono text-white">{formatCurrency(quote.taxAmount, "R")}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between w-full max-w-xs text-base font-extrabold text-[#D05E00] pt-2 border-t border-white/10">
+                                    <span>TOTAL DUE:</span>
+                                    <span className="font-mono">{formatCurrency(quote.total, "R")}</span>
+                                </div>
+                            </>
                         )}
-                        <div className="flex justify-between w-full max-w-xs text-base font-extrabold text-[#D05E00] pt-2 border-t border-white/10">
-                            <span>TOTAL DUE:</span>
-                            <span className="font-mono">{formatCurrency(quote.total, "R")}</span>
-                        </div>
                         <div className="text-[10px] text-gray-400 text-right pt-1">
-                            Payment terms: 60% Deposit upon quotation acceptance; 40% balance upon completion.
+                            {quote.metadata?.paymentTermsOption === 'EFT_ON_COMPLETION'
+                                ? "Payment terms: Payment by EFT on completion (No advance deposit)."
+                                : "Payment terms: 60% Deposit upon quotation acceptance; 40% balance upon completion."}
                         </div>
                     </div>
                 </div>
@@ -373,6 +441,57 @@ export function ClientQuoteAcceptance({
                                         Please complete your details and sign below to officially authorize this quotation.
                                     </p>
                                 </div>
+
+                                {hasQuoteOptions && (
+                                    <div className="space-y-3 p-4 rounded-xl bg-black/40 border border-[#D05E00]/40">
+                                        <Label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-[#D05E00]" />
+                                            State Your Chosen Option *
+                                        </Label>
+                                        <p className="text-[11px] text-gray-400">
+                                            Please choose which quotation option you accept. Your selected option will be converted to the invoice.
+                                        </p>
+                                        <div className="space-y-2 pt-1">
+                                            {quoteOptionsList.map((opt: any) => {
+                                                const isSelected = opt.id === chosenOptionId;
+                                                const optTotal = opt.total || opt.subtotal || 0;
+                                                return (
+                                                    <label
+                                                        key={opt.id}
+                                                        className={cn(
+                                                            "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
+                                                            isSelected
+                                                                ? "bg-[#D05E00]/15 border-[#D05E00] shadow-md"
+                                                                : "bg-white/[0.02] border-white/10 hover:border-white/20"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <input
+                                                                type="radio"
+                                                                name="chosenOption"
+                                                                value={opt.id}
+                                                                checked={isSelected}
+                                                                onChange={() => setChosenOptionId(opt.id)}
+                                                                className="text-[#D05E00] focus:ring-[#D05E00]"
+                                                            />
+                                                            <div>
+                                                                <div className="text-xs font-bold text-white">{opt.name || `Option ${opt.id}`}</div>
+                                                                {opt.items && (
+                                                                    <div className="text-[10px] text-gray-400">
+                                                                        {opt.items.length} line item{opt.items.length === 1 ? '' : 's'} included
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-sm font-black font-mono text-[#D05E00]">
+                                                            {formatCurrency(optTotal, "R")}
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div className="space-y-1.5">

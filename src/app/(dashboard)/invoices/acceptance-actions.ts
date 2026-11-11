@@ -19,6 +19,7 @@ export async function acceptQuotePublicAction(data: {
     poNumber?: string
     termsAccepted: boolean
     signatureDataUrl: string
+    chosenOptionId?: string
 }) {
     try {
         if (!data.quoteId) throw new Error("Missing quote ID")
@@ -65,6 +66,11 @@ export async function acceptQuotePublicAction(data: {
         }
 
         const now = new Date()
+        const hasOptions = Boolean(currentMeta?.hasOptions && Array.isArray(currentMeta?.options) && currentMeta.options.length > 0)
+        const chosenOption = hasOptions
+            ? (currentMeta.options.find((o: any) => o.id === data.chosenOptionId) || currentMeta.options[0])
+            : null
+
         const acceptanceRecord = {
             acceptedAt: now.toISOString(),
             acceptedByName: data.acceptedByName.trim(),
@@ -72,11 +78,14 @@ export async function acceptQuotePublicAction(data: {
             acceptedByEmail: data.acceptedByEmail.trim(),
             poNumber: data.poNumber?.trim() || null,
             clientIp,
-            signatureDataUrl: data.signatureDataUrl
+            signatureDataUrl: data.signatureDataUrl,
+            chosenOptionId: chosenOption ? chosenOption.id : null,
+            chosenOptionName: chosenOption ? chosenOption.name : null
         }
 
         const updatedMeta = {
             ...currentMeta,
+            chosenOption: chosenOption || undefined,
             acceptance: acceptanceRecord
         }
 
@@ -149,12 +158,17 @@ export async function acceptQuotePublicAction(data: {
             })
         }
 
-        // 6. Auto-Create 60% DEPOSIT Invoice
-        const depositPercentage = 60
-        const depositSubtotal = Math.round((quote.subtotal * (depositPercentage / 100)) * 100) / 100
+        // 6. Invoicing on Acceptance (Option Conversion & Payment Terms)
+        const isEftOnCompletion = currentMeta?.paymentTermsOption === 'EFT_ON_COMPLETION'
+        const baseSubtotal = chosenOption ? (chosenOption.subtotal || quote.subtotal) : quote.subtotal
+        const depositPercentage = isEftOnCompletion ? 0 : 60
+        const invoiceSubtotal = isEftOnCompletion
+            ? baseSubtotal
+            : Math.round((baseSubtotal * (depositPercentage / 100)) * 100) / 100
         const vatEffective = isVatEffective(now, settings)
         const vatRate = getVatRate(settings)
-        const { taxRate, taxAmount, total: depositTotal } = calculateVatAndTotal(depositSubtotal, vatEffective, vatRate)
+        const { taxRate, taxAmount, total: invoiceTotalAmount } = calculateVatAndTotal(invoiceSubtotal, vatEffective, vatRate)
+        const depositTotal = invoiceTotalAmount
 
         const year = now.getFullYear()
         let nextInvoiceNumber = 1
@@ -169,6 +183,31 @@ export async function acceptQuotePublicAction(data: {
         })
         const formattedInvoiceNumber = `INV-${year}-${nextInvoiceNumber.toString().padStart(3, '0')}`
 
+        const optionTitleSuffix = chosenOption ? ` — ${chosenOption.name}` : ''
+
+        // Prepare line items: if chosen option has items, or single deposit line
+        const invoiceLines = (isEftOnCompletion && chosenOption?.items && chosenOption.items.length > 0)
+            ? chosenOption.items.map((it: any, idx: number) => ({
+                description: it.description || it.name,
+                quantity: it.quantity || 1,
+                unit: it.unit || 'sum',
+                unitPrice: it.unitPrice !== undefined ? it.unitPrice : it.amount,
+                total: it.total !== undefined ? it.total : it.amount,
+                position: idx
+            }))
+            : [
+                {
+                    description: isEftOnCompletion
+                        ? `Services as per accepted quotation ${quote.quoteNumber || quote.number}${optionTitleSuffix}`
+                        : `60% Deposit Payment – ${quote.quoteNumber || 'Quotation'}${optionTitleSuffix} (${quote.site || 'Facade Maintenance'})`,
+                    quantity: 1,
+                    unit: 'sum',
+                    unitPrice: invoiceSubtotal,
+                    total: invoiceSubtotal,
+                    position: 0
+                }
+            ]
+
         const depositInvoice = await prisma.invoice.create({
             data: {
                 companyId,
@@ -180,36 +219,32 @@ export async function acceptQuotePublicAction(data: {
                 quoteNumber: formattedInvoiceNumber,
                 reference: quote.quoteNumber || `Quote #${quote.number}`,
                 clientPoNumber: data.poNumber?.trim() || quote.clientPoNumber,
-                subtotal: depositSubtotal,
+                subtotal: invoiceSubtotal,
                 taxRate,
                 taxAmount,
-                total: depositTotal,
+                total: invoiceTotalAmount,
                 site: quote.site,
-                paymentNotes: `Deposit invoice (60% advance payment) as per accepted quotation ${quote.quoteNumber || quote.number}. Balance of 40% due upon project completion.`,
-                firstPaymentPercentage: depositPercentage,
+                paymentNotes: isEftOnCompletion
+                    ? `Invoice payable by EFT on completion as per accepted quotation ${quote.quoteNumber || quote.number}${optionTitleSuffix}.`
+                    : `Deposit invoice (60% advance payment) as per accepted quotation ${quote.quoteNumber || quote.number}${optionTitleSuffix}. Balance of 40% due upon project completion.`,
+                firstPaymentPercentage: isEftOnCompletion ? 0 : depositPercentage,
                 date: now,
                 metadata: {
-                    isDepositInvoice: true,
+                    isDepositInvoice: !isEftOnCompletion,
+                    isEftOnCompletion,
                     originalQuoteId: quote.id,
-                    depositPercentage: 60,
+                    chosenOptionId: chosenOption?.id || null,
+                    chosenOptionName: chosenOption?.name || null,
+                    depositPercentage: isEftOnCompletion ? 0 : 60,
                     acceptedBy: data.acceptedByName
                 },
                 items: {
-                    create: [
-                        {
-                            description: `60% Deposit Payment – ${quote.quoteNumber || 'Quotation'} (${quote.site || 'Facade Maintenance'})`,
-                            quantity: 1,
-                            unit: 'sum',
-                            unitPrice: depositSubtotal,
-                            total: depositSubtotal,
-                            position: 0
-                        }
-                    ]
+                    create: invoiceLines
                 }
             }
         })
 
-        // 7. Email Deposit Invoice to Client (branded, PDF attached; no login-only links)
+        // 7. Email Invoice to Client (branded, PDF attached; no login-only links)
         const appUrl = getAppUrl()
         const clientEmail = data.acceptedByEmail.trim()
         const clientName = data.acceptedByName.trim()
@@ -224,24 +259,33 @@ export async function acceptQuotePublicAction(data: {
                 ? [{ filename: depositPdf.filename, content: depositPdf.buffer, contentType: 'application/pdf' }]
                 : [],
             email: {
-                subject: (b) => `Deposit ${vatEffective ? 'Tax Invoice' : 'Invoice'} ${formattedInvoiceNumber} (60%) from ${b.shortName}`,
+                subject: (b) => isEftOnCompletion
+                    ? `${vatEffective ? 'Tax Invoice' : 'Invoice'} ${formattedInvoiceNumber} from ${b.shortName}`
+                    : `Deposit ${vatEffective ? 'Tax Invoice' : 'Invoice'} ${formattedInvoiceNumber} (60%) from ${b.shortName}`,
                 greeting: `Hi ${clientName},`,
                 paragraphs: [
-                    `Thank you for accepting quotation ${quoteLabel}.`,
+                    `Thank you for accepting quotation ${quoteLabel}${optionTitleSuffix}.`,
                     depositPdf
-                        ? `Please find attached your 60% deposit ${vatEffective ? 'tax invoice' : 'invoice'} ${formattedInvoiceNumber}.`
-                        : `Your 60% deposit ${vatEffective ? 'tax invoice' : 'invoice'} ${formattedInvoiceNumber} is ready.`,
+                        ? `Please find attached your ${isEftOnCompletion ? '' : '60% deposit '}${vatEffective ? 'tax invoice' : 'invoice'} ${formattedInvoiceNumber}.`
+                        : `Your ${isEftOnCompletion ? '' : '60% deposit '}${vatEffective ? 'tax invoice' : 'invoice'} ${formattedInvoiceNumber} is ready.`,
                 ],
                 rows: [
                     { label: 'Invoice number', value: formattedInvoiceNumber },
-                    { label: 'Deposit due (60%)', value: formatMoneyZA(depositTotal, currency), strong: true },
+                    {
+                        label: isEftOnCompletion ? 'Total Due' : 'Deposit due (60%)',
+                        value: formatMoneyZA(invoiceTotalAmount, currency),
+                        strong: true
+                    },
+                    ...(isEftOnCompletion ? [{ label: 'Payment Terms', value: 'Payment by EFT on completion' }] : []),
                     { label: 'Site', value: quote.site || 'N/A' },
                 ],
                 afterParagraphs: [
                     ...(settings?.bankDetails && settings.bankDetails.trim()
                         ? [`Banking details:\n${settings.bankDetails.trim()}\nPayment reference: ${formattedInvoiceNumber}`]
                         : []),
-                    'Once payment is received, our scheduling team will contact you to confirm the access schedule.',
+                    isEftOnCompletion
+                        ? 'Our operations team will contact you shortly to coordinate access and confirm the work schedule.'
+                        : 'Once payment is received, our scheduling team will contact you to confirm the access schedule.',
                 ],
                 signOff: {},
             },
@@ -281,7 +325,7 @@ export async function acceptQuotePublicAction(data: {
                     { label: 'PO number', value: data.poNumber || 'None provided' },
                     { label: 'Client email', value: data.acceptedByEmail },
                     { label: 'Project', value: `${quote.client.name} - ${quote.site || 'Facade Maintenance'}` },
-                    { label: '60% deposit invoice', value: `${formattedInvoiceNumber} (${formatMoneyZA(depositTotal, currency)})` },
+                    { label: isEftOnCompletion ? 'Invoice generated' : '60% deposit invoice', value: `${formattedInvoiceNumber} (${formatMoneyZA(depositTotal, currency)})` },
                 ],
                 cta: { label: 'View accepted quote', url: `${appUrl}/invoices/${quote.id}` },
             },

@@ -140,7 +140,7 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
             'Pure water clean of photovoltaic panel surfaces. No detergents or abrasives are used, and no contact is made with panel wiring or mountings.',
         category: 'CLEANING',
         pricingMethod: 'SOLAR_PER_PANEL',
-        internalNotes: 'Per panel: R6 client-supplied water / R10 AeroWash-supplied water. Ask panel count + water source.'
+        internalNotes: 'Method selector: Drone (default R150/panel) or Water-fed pole (default R85/panel). Rate is editable. Description changes with method.'
     },
     {
         itemNumber: 7,
@@ -316,6 +316,26 @@ export const AEROWASH_CATALOGUE_ITEMS: CatalogueItemDef[] = [
         internalNotes: 'Subcontractor cost + markup % (default 20%, editable in Settings), rounded up to next R50. Client sees only amount. Requires subcontractor name, quote reference, quote amount, and subcontractor insurance confirmed tick.',
         requiresElevation: true,
         adminHelpText: 'Restoration clean using specialist access (rope access / scaffolding) ahead of regular AeroWash maintenance. Use when elevation condition is Heavy.'
+    },
+    {
+        itemNumber: 25,
+        name: 'Window cleaning — water-fed pole',
+        clientDescription:
+            'Exterior window cleaning using water-fed telescopic pole with purified demineralised water for a spot-free finish without chemical residue.',
+        category: 'CLEANING',
+        pricingMethod: 'WATER_FED_POLE_WINDOWS',
+        adminHelpText: 'Window cleaning using water-fed telescopic pole from ground / roof. Enter window count, price per window or fixed total, and floor/location.',
+        internalNotes: 'Quantity = number of windows, editable price per window (or fixed total), with floor/location text.'
+    },
+    {
+        itemNumber: 26,
+        name: 'Aviation regulatory compliance',
+        clientDescription:
+            'SACAA compliant flight planning, site risk assessment, airspace authorization and remote pilot operations compliance.',
+        category: 'SITE CONDITIONS',
+        pricingMethod: 'AVIATION_COMPLIANCE',
+        adminHelpText: 'SACAA compliance fee for drone flight operations. Auto-added when any drone method is selected, editable (default R800), removable.',
+        internalNotes: 'Fixed fee per site (default R800). Auto-added when any drone method is selected, removable.'
     }
 ];
 

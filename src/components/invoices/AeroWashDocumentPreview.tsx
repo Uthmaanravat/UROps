@@ -254,7 +254,80 @@ export function AeroWashDocumentPreview({
                         </p>
                     </div>
 
-                    {/* ITEMS TABLE (ITEM | AMOUNT only) */}
+                    {/* ITEMS TABLE (ITEM | AMOUNT only or Multi-Option Breakdown) */}
+                    {Boolean(!isInvoice && invoice.metadata?.hasOptions && Array.isArray(invoice.metadata?.options) && invoice.metadata.options.length > 1) ? (
+                        <div className="space-y-6">
+                            {(invoice.metadata?.options as any[]).map((option: any) => {
+                                const optItems: any[] = option.items || [];
+                                const optTitle = (option.name || `Option ${option.id}`).toUpperCase();
+                                const optTotal = option.total || option.subtotal || 0;
+
+                                return (
+                                    <div key={option.id} className="space-y-2 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                        <div className="bg-[#F3F4F6] px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
+                                            <span className="font-black text-xs text-zinc-900 tracking-wider">
+                                                {optTitle}
+                                            </span>
+                                            <span className="font-mono font-bold text-xs text-[#D05E00]">
+                                                {formatCurrency(optTotal, currencySymbol)}
+                                            </span>
+                                        </div>
+                                        <table className="w-full text-left text-xs">
+                                            <tbody className="divide-y divide-gray-100">
+                                                {optItems.map((item: any, idx: number) => {
+                                                    const rawDesc = item.description || "";
+                                                    let title = rawDesc;
+                                                    let subDesc = "";
+                                                    if (rawDesc.includes("\n")) {
+                                                        const parts = rawDesc.split("\n");
+                                                        title = parts[0].trim();
+                                                        subDesc = parts.slice(1).join(" ").trim();
+                                                    }
+                                                    const cleanTitle = `${idx + 1}. ${title.replace(/^\d+[\.\)]\s*/, '')}`;
+                                                    const isIncluded = item.isIncluded || item.metadata?.isIncluded || (item.unitPrice === 0 && item.originalPrice && item.originalPrice > 0);
+                                                    const originalAmount = item.originalPrice || (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
+                                                    const amount = (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
+
+                                                    return (
+                                                        <tr key={idx} className="hover:bg-gray-50/60">
+                                                            <td className="py-2.5 px-4 align-top space-y-0.5">
+                                                                <div className="font-bold text-zinc-900 text-xs">{cleanTitle}</div>
+                                                                {subDesc && <div className="text-gray-500 text-[11px]">{subDesc}</div>}
+                                                            </td>
+                                                            <td className="py-2.5 px-4 text-right align-top font-mono font-bold text-xs text-zinc-900">
+                                                                {isIncluded ? (
+                                                                    <div className="space-y-0.5">
+                                                                        <div className="text-[11px] text-gray-400 line-through font-normal">{formatCurrency(originalAmount, currencySymbol)}</div>
+                                                                        <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">INCLUDED</span>
+                                                                    </div>
+                                                                ) : amount === 0 ? (
+                                                                    <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">INCLUDED</span>
+                                                                ) : (
+                                                                    formatCurrency(amount, currencySymbol)
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                        <div className="bg-gray-50 px-4 py-2 border-t border-gray-200 flex justify-between items-center text-xs">
+                                            <span className="font-bold text-gray-600 uppercase tracking-wider">{optTitle} TOTAL</span>
+                                            <span className="font-mono font-black text-sm text-[#D05E00]">{formatCurrency(optTotal, currencySymbol)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {/* Highlighted Banner for Multiple Options */}
+                            <div className="bg-[#FFF7ED] border-l-4 border-[#D05E00] p-3.5 rounded-r-xl">
+                                <span className="font-bold text-xs text-[#9A3412]">
+                                    Fixed prices for the option chosen. Please state your chosen option upon acceptance.
+                                </span>
+                            </div>
+                        </div>
+                    ) : (
+                    <>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs">
                             <thead>
@@ -449,6 +522,8 @@ export function AeroWashDocumentPreview({
                             })()}
                         </div>
                     </div>
+                    </>
+                    )}
 
                     {/* NOTICE BOX (Completed vs Required) */}
                     {siteVisitCompleted ? (
@@ -538,20 +613,31 @@ export function AeroWashDocumentPreview({
                                     </span>
                                 </div>
                                 <ul className="space-y-1.5 text-xs text-gray-700">
-                                    {Array.from(new Set(items.map(i => i.description.split('\n')[0].trim()))).map((name, i) => (
-                                        <li key={i} className="flex items-start gap-2">
-                                            <span className="text-[#D05E00] font-bold">•</span>
-                                            <span>{name}</span>
-                                        </li>
-                                    ))}
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[#D05E00] font-bold">•</span>
-                                        <span>Pre- and post-clean photographic record</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[#D05E00] font-bold">•</span>
-                                        <span>All labour, equipment and remote pilot crew</span>
-                                    </li>
+                                    {Array.isArray(invoice.metadata?.customInclusions) && invoice.metadata.customInclusions.length > 0 ? (
+                                        invoice.metadata.customInclusions.map((name: string, i: number) => (
+                                            <li key={i} className="flex items-start gap-2">
+                                                <span className="text-[#D05E00] font-bold">•</span>
+                                                <span>{name}</span>
+                                            </li>
+                                        ))
+                                    ) : (
+                                        <>
+                                            {Array.from(new Set(items.map(i => i.description.split('\n')[0].trim()))).map((name, i) => (
+                                                <li key={i} className="flex items-start gap-2">
+                                                    <span className="text-[#D05E00] font-bold">•</span>
+                                                    <span>{name}</span>
+                                                </li>
+                                            ))}
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[#D05E00] font-bold">•</span>
+                                                <span>Pre- and post-clean photographic record</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[#D05E00] font-bold">•</span>
+                                                <span>All labour, equipment and remote pilot crew</span>
+                                            </li>
+                                        </>
+                                    )}
                                 </ul>
                             </div>
 
@@ -574,6 +660,18 @@ export function AeroWashDocumentPreview({
                                                 .replace(/[^a-z0-9]/g, '')
                                                 .trim();
                                         };
+
+                                        // Custom Exclusions from quote builder if provided
+                                        const customExclusions = invoice.metadata?.customExclusions;
+                                        if (Array.isArray(customExclusions) && customExclusions.length > 0) {
+                                            customExclusions.forEach((ex: string) => {
+                                                const key = normalizeKey(ex);
+                                                if (!seenEx.has(key)) {
+                                                    seenEx.add(key);
+                                                    boldExclusions.push(ex);
+                                                }
+                                            });
+                                        }
 
                                         // 1. Condition Flags (rich warranty exclusions)
                                         (invoice.metadata?.conditionFlags || invoice.conditionFlags || []).forEach((f: any) => {
@@ -672,14 +770,23 @@ export function AeroWashDocumentPreview({
                                         <span className="text-[#D05E00] font-bold">•</span>
                                         <span>Quotations are fixed price for the scope and elevations stated.</span>
                                     </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[#D05E00] font-bold">•</span>
-                                        <span>A 60% deposit is payable on acceptance to secure the booking.</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[#D05E00] font-bold">•</span>
-                                        <span>The balance is payable on completion.</span>
-                                    </li>
+                                    {invoice.metadata?.paymentTermsOption === 'EFT_ON_COMPLETION' ? (
+                                        <li className="flex items-start gap-2 font-bold text-zinc-900">
+                                            <span className="text-[#D05E00] font-bold">•</span>
+                                            <span>Payment by EFT on completion.</span>
+                                        </li>
+                                    ) : (
+                                        <>
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[#D05E00] font-bold">•</span>
+                                                <span>A 60% deposit is payable on acceptance to secure the booking.</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[#D05E00] font-bold">•</span>
+                                                <span>The balance is payable on completion.</span>
+                                            </li>
+                                        </>
+                                    )}
                                     <li className="flex items-start gap-2">
                                         <span className="text-[#D05E00] font-bold">•</span>
                                         <span>This quotation is valid for 45 days from the date of issue.</span>
@@ -722,8 +829,19 @@ export function AeroWashDocumentPreview({
                                     ACCEPTANCE
                                 </span>
                             </div>
+                            {Boolean(invoice.metadata?.hasOptions && Array.isArray(invoice.metadata?.options) && invoice.metadata.options.length > 1) && (
+                                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-zinc-900 flex flex-wrap items-center gap-4">
+                                    <span className="text-[#D05E00] uppercase tracking-wider text-[11px]">Chosen Option:</span>
+                                    {(invoice.metadata.options as any[]).map((o: any) => (
+                                        <span key={o.id} className="flex items-center gap-2">
+                                            <span className="inline-block w-4 h-4 border-2 border-gray-400 rounded-sm" />
+                                            <span>{o.name || `Option ${o.id}`}</span>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                             <p className="text-xs text-gray-600">
-                                To proceed, sign below and return, or confirm by email to info@aerowash.co.za.
+                                To proceed, please indicate your chosen option, sign below and return, or confirm by email to info@aerowash.co.za.
                             </p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-4">
                                 <div className="space-y-2 border-t border-gray-300 pt-2">
