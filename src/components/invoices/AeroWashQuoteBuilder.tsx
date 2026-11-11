@@ -89,6 +89,15 @@ export interface ElevationState {
     exclusions?: string;
 }
 
+export interface WindowCleaningLine {
+    id: string;
+    unitType: 'window' | 'pane';
+    quantity: number;
+    rate: number;
+    customTotal?: number;
+    location: string;
+}
+
 export interface SiteProvisionsState {
     hasRoofClean: boolean;
     roofCleanPrice: number;
@@ -98,6 +107,7 @@ export interface SiteProvisionsState {
     solarMethod?: 'DRONE' | 'POLE';
     solarRatePerPanel?: number;
     hasWindowCleaningPole?: boolean;
+    windowCleaningLines?: WindowCleaningLine[];
     windowCount?: number;
     windowPricePerUnit?: number;
     windowFixedTotal?: number;
@@ -262,7 +272,26 @@ export function AeroWashQuoteBuilder({
     // 2. Site Provisions State
     const [siteProvisions, setSiteProvisions] = useState<SiteProvisionsState>(() => {
         if (initialData?.siteProvisions) {
-            return initialData.siteProvisions;
+            const p = initialData.siteProvisions;
+            let lines: WindowCleaningLine[] = p.windowCleaningLines || [];
+            if (lines.length === 0) {
+                if (p.hasWindowCleaningPole || p.windowCount || p.windowFixedTotal) {
+                    lines = [{
+                        id: 'wcl-1',
+                        unitType: (p.windowUnitType as any) || 'window',
+                        quantity: p.windowCount || 0,
+                        rate: p.windowPricePerUnit || 45,
+                        customTotal: p.windowFixedTotal || 0,
+                        location: p.windowFloorLocation || ''
+                    }];
+                } else {
+                    lines = [{ id: 'wcl-1', unitType: 'window', quantity: 0, rate: 45, location: '' }];
+                }
+            }
+            return {
+                ...p,
+                windowCleaningLines: lines
+            };
         }
         return {
             hasRoofClean: false,
@@ -273,6 +302,7 @@ export function AeroWashQuoteBuilder({
             solarMethod: 'DRONE',
             solarRatePerPanel: 150,
             hasWindowCleaningPole: false,
+            windowCleaningLines: [{ id: 'wcl-1', unitType: 'window', quantity: 0, rate: 45, location: '' }],
             windowCount: 0,
             windowPricePerUnit: 45,
             windowFixedTotal: 0,
@@ -305,6 +335,30 @@ export function AeroWashQuoteBuilder({
             extendedTravelPrice: 0
         };
     });
+
+    const addWindowCleaningLine = () => {
+        setSiteProvisions(p => ({
+            ...p,
+            windowCleaningLines: [
+                ...(p.windowCleaningLines || []),
+                { id: `wcl-${Date.now()}`, unitType: 'window', quantity: 0, rate: 45, location: '' }
+            ]
+        }));
+    };
+
+    const updateWindowCleaningLine = (id: string, updates: Partial<WindowCleaningLine>) => {
+        setSiteProvisions(p => ({
+            ...p,
+            windowCleaningLines: (p.windowCleaningLines || []).map(line => line.id === id ? { ...line, ...updates } : line)
+        }));
+    };
+
+    const removeWindowCleaningLine = (id: string) => {
+        setSiteProvisions(p => ({
+            ...p,
+            windowCleaningLines: (p.windowCleaningLines || []).filter(line => line.id !== id)
+        }));
+    };
 
     // 2b. Small Residential / Minimum Override State
     const [waiveMinimumJobAmount, setWaiveMinimumJobAmount] = useState<boolean>(() => {
@@ -341,8 +395,8 @@ export function AeroWashQuoteBuilder({
             return initialData.metadata.options;
         }
         return [
-            { id: 'A', name: 'Option A: Drone Clean', items: [], subtotal: 0, total: 0 },
-            { id: 'B', name: 'Option B: Water-Fed Pole Clean', items: [], subtotal: 0, total: 0 }
+            { id: 'A', name: 'Option A', items: [], subtotal: 0, total: 0 },
+            { id: 'B', name: 'Option B', items: [], subtotal: 0, total: 0 }
         ];
     });
 
@@ -400,7 +454,7 @@ export function AeroWashQuoteBuilder({
                 ...prev,
                 {
                     id: 'C',
-                    name: 'Option C: Custom Scope',
+                    name: 'Option C',
                     elevations: [],
                     siteProvisions: { ...siteProvisions },
                     customItems: [],
@@ -1010,58 +1064,76 @@ export function AeroWashQuoteBuilder({
         }
 
         if (prov.hasSolarClean && isItemActive(6)) {
-            const cat6 = getItem(6);
             const method = prov.solarMethod || 'DRONE';
             const defaultRate = method === 'DRONE' ? 150 : 85;
             const rate = typeof prov.solarRatePerPanel === 'number' && prov.solarRatePerPanel > 0
                 ? prov.solarRatePerPanel
                 : defaultRate;
-            const amt = roundToNearest50(prov.solarPanelCount * rate);
-            if (prov.solarPanelCount <= 0) errors.push('Solar Array Maintenance Clean requires panel count > 0.');
+            const count = prov.solarPanelCount || 0;
+            const amt = Math.round(count * rate);
+            if (count <= 0) errors.push('Solar panel cleaning requires panel count > 0.');
             cleaningLinesTotal += amt;
 
+            const methodName = method === 'DRONE' ? 'drone' : 'water-fed pole';
+            const title = `Solar panel cleaning — ${methodName}`;
             const desc = method === 'DRONE'
-                ? 'Pure water drone cleaning of photovoltaic solar panel surfaces. No detergents or abrasives are used, and no contact is made with panel wiring or mountings.'
-                : 'Pure water cleaning of photovoltaic solar panel surfaces using water-fed telescopic pole. No detergents or abrasives are used, and no contact is made with panel wiring or mountings.';
+                ? `Pure water drone cleaning of photovoltaic solar panel surfaces (${count} panels @ R${rate}/panel). No detergents or abrasives are used, and no contact is made with panel wiring or mountings.`
+                : `Pure water cleaning of photovoltaic solar panel surfaces using water-fed telescopic pole (${count} panels @ R${rate}/panel). No detergents or abrasives are used, and no contact is made with panel wiring or mountings.`;
 
-            const methodName = method === 'DRONE' ? 'Drone' : 'Water-fed pole';
             clientItems.push({
-                name: `Solar Array Maintenance Clean — ${methodName}`,
+                name: title,
                 description: desc,
                 area: provisionsArea,
                 amount: amt,
-                internalMetadata: { itemNumber: 6, panelCount: prov.solarPanelCount, method, rate }
+                internalMetadata: { itemNumber: 6, panelCount: count, method, rate }
             });
         }
 
-        // Item 25: Window cleaning — water-fed pole
+        // Item 25: Window cleaning — water-fed pole (Repeatable lines)
         if (prov.hasWindowCleaningPole) {
-            const count = prov.windowCount || 0;
-            const rate = typeof prov.windowPricePerUnit === 'number' && prov.windowPricePerUnit > 0 ? prov.windowPricePerUnit : 45;
-            const amt = (typeof prov.windowFixedTotal === 'number' && prov.windowFixedTotal > 0)
-                ? prov.windowFixedTotal
-                : roundToNearest50(count * rate);
+            const lines: WindowCleaningLine[] = (prov.windowCleaningLines && prov.windowCleaningLines.length > 0)
+                ? prov.windowCleaningLines
+                : [{
+                    id: 'wcl-default',
+                    unitType: 'window',
+                    quantity: prov.windowCount || 0,
+                    rate: prov.windowPricePerUnit || 45,
+                    customTotal: prov.windowFixedTotal || 0,
+                    location: prov.windowFloorLocation || ''
+                }];
 
-            if (count <= 0 && (!prov.windowFixedTotal || prov.windowFixedTotal <= 0)) {
-                errors.push('Window cleaning — water-fed pole requires window count or fixed total.');
-            }
-            cleaningLinesTotal += amt;
+            lines.forEach((line, idx) => {
+                const count = line.quantity || 0;
+                const rate = typeof line.rate === 'number' && line.rate > 0 ? line.rate : (line.unitType === 'pane' ? 25 : 45);
+                const amt = (typeof line.customTotal === 'number' && line.customTotal > 0)
+                    ? line.customTotal
+                    : Math.round(count * rate);
 
-            const locStr = (prov.windowFloorLocation || '').trim();
-            const locSuffix = locStr ? ` (${locStr})` : '';
-
-            clientItems.push({
-                name: 'Window cleaning — water-fed pole',
-                description: `Exterior window cleaning using water-fed telescopic pole with purified demineralised water for a spot-free finish without chemical residue${locSuffix}.`,
-                area: locStr || provisionsArea,
-                amount: amt,
-                internalMetadata: {
-                    itemNumber: 25,
-                    windowCount: count,
-                    pricePerUnit: rate,
-                    fixedTotal: prov.windowFixedTotal,
-                    floorLocation: locStr
+                if (count <= 0 && (!line.customTotal || line.customTotal <= 0)) {
+                    errors.push(`Window cleaning line #${idx + 1} requires quantity or total.`);
                 }
+                cleaningLinesTotal += amt;
+
+                const locStr = (line.location || '').trim();
+                const unitWord = line.unitType === 'pane' ? (count === 1 ? 'pane' : 'panes') : (count === 1 ? 'window' : 'windows');
+                const rateWord = line.customTotal && line.customTotal > 0 ? `(R${line.customTotal.toLocaleString()})` : `@ R${rate}/${line.unitType === 'pane' ? 'pane' : 'window'}`;
+                const specPrefix = `${count} ${unitWord} ${rateWord}${locStr ? ` — ${locStr}` : ''}`;
+
+                clientItems.push({
+                    name: 'Window cleaning — water-fed pole',
+                    description: `${specPrefix}. Exterior window cleaning using water-fed telescopic pole with purified demineralised water for a spot-free finish without chemical residue.`,
+                    area: locStr || provisionsArea,
+                    amount: amt,
+                    internalMetadata: {
+                        itemNumber: 25,
+                        windowCleaningLineId: line.id,
+                        unitType: line.unitType,
+                        quantity: count,
+                        rate: rate,
+                        customTotal: line.customTotal,
+                        location: locStr
+                    }
+                });
             });
         }
 
@@ -1228,10 +1300,13 @@ export function AeroWashQuoteBuilder({
 
         // Item 26: Aviation regulatory compliance (SACAA)
         // Auto-added when any drone method is selected, removable
-        const hasAnyDrone = elevations.some(e => e.selectedCleaning && e.selectedCleaning !== 'NONE') ||
-            (prov.hasSolarClean && (prov.solarMethod === 'DRONE' || !prov.solarMethod));
+        const hasElevationDrone = elevations.some(e => e.selectedCleaning && e.selectedCleaning !== 'NONE');
+        const hasSolarDrone = Boolean(prov.hasSolarClean && (prov.solarMethod === 'DRONE' || !prov.solarMethod));
+        const hasAnyDrone = hasElevationDrone || hasSolarDrone;
 
-        const shouldAddAviation = (prov.hasAviationCompliance !== undefined ? prov.hasAviationCompliance : hasAnyDrone) && !prov.aviationComplianceDismissed;
+        const shouldAddAviation = (hasAnyDrone && !prov.aviationComplianceDismissed) ||
+            (Boolean(prov.hasAviationCompliance) && !prov.aviationComplianceDismissed);
+
         if (shouldAddAviation) {
             const complianceFee = typeof prov.aviationCompliancePrice === 'number' && prov.aviationCompliancePrice >= 0
                 ? prov.aviationCompliancePrice
@@ -1240,7 +1315,7 @@ export function AeroWashQuoteBuilder({
                 clientItems.push({
                     name: 'Aviation regulatory compliance',
                     description: 'SACAA compliant flight planning, site risk assessment, airspace authorization and remote pilot operations compliance.',
-                    area: provisionsArea,
+                    area: 'Site Compliance',
                     amount: complianceFee,
                     internalMetadata: { itemNumber: 26, fee: complianceFee }
                 });
@@ -1289,8 +1364,9 @@ export function AeroWashQuoteBuilder({
         // Apply Programme Discounts
         const prog = CONTRACT_PROGRAMMES[programme] || CONTRACT_PROGRAMMES.ONCE_OFF;
         const discountRate = prog.discount;
-        let subtotalAfterDiscount = rawSubtotal * (1 - discountRate);
-        subtotalAfterDiscount = roundToNearest50(subtotalAfterDiscount);
+        let subtotalAfterDiscount = discountRate > 0
+            ? roundToNearest50(rawSubtotal * (1 - discountRate))
+            : rawSubtotal;
 
         // Floor Rule: Effective rate never below R12/m² after all discounts
         if (totalCalculatedArea > 0) {
@@ -1547,8 +1623,8 @@ export function AeroWashQuoteBuilder({
                                         setHasOptions(checked);
                                         if (checked && optionsList.length === 0) {
                                             setOptionsList([
-                                                { id: 'A', name: 'Option A: Drone Clean', elevations: [...elevations], siteProvisions: { ...siteProvisions }, customItems: [...customItems], waiveMinimumJobAmount },
-                                                { id: 'B', name: 'Option B: Water-Fed Pole Clean', elevations: [], siteProvisions: { ...siteProvisions, hasWindowCleaningPole: true, windowFixedTotal: 1420 }, customItems: [], waiveMinimumJobAmount: true }
+                                                { id: 'A', name: 'Option A', elevations: [...elevations], siteProvisions: { ...siteProvisions }, customItems: [...customItems], waiveMinimumJobAmount },
+                                                { id: 'B', name: 'Option B', elevations: [], siteProvisions: { ...siteProvisions }, customItems: [], waiveMinimumJobAmount }
                                             ]);
                                         }
                                     }}
@@ -2925,105 +3001,184 @@ export function AeroWashQuoteBuilder({
                                                         />
                                                     </div>
                                                 </div>
+                                                <div className="text-[11px] font-mono font-bold text-emerald-400">
+                                                    Total: {siteProvisions.solarPanelCount || 0} panels @ R{siteProvisions.solarRatePerPanel ?? ((siteProvisions.solarMethod || 'DRONE') === 'DRONE' ? 150 : 85)} = R{Math.round((siteProvisions.solarPanelCount || 0) * (siteProvisions.solarRatePerPanel ?? ((siteProvisions.solarMethod || 'DRONE') === 'DRONE' ? 150 : 85))).toLocaleString()}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
                                 )}
 
-                                {/* Window cleaning — water-fed pole */}
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
-                                    <label className="flex items-center gap-2 cursor-pointer font-bold">
-                                        <input
-                                            type="checkbox"
-                                            checked={siteProvisions.hasWindowCleaningPole}
-                                            onChange={e => setSiteProvisions(p => ({ ...p, hasWindowCleaningPole: e.target.checked }))}
-                                            className="rounded text-primary"
-                                        />
-                                        <span>Window cleaning — water-fed pole</span>
-                                        <AdminHelp text="Exterior window cleaning using water-fed telescopic pole from ground / roof access." />
-                                    </label>
+                                {/* Item 25: Window cleaning — water-fed pole (Repeatable lines) */}
+                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="flex items-center gap-2 cursor-pointer font-bold text-white text-xs">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(siteProvisions.hasWindowCleaningPole)}
+                                                onChange={e => {
+                                                    const checked = e.target.checked;
+                                                    setSiteProvisions(p => ({
+                                                        ...p,
+                                                        hasWindowCleaningPole: checked,
+                                                        windowCleaningLines: p.windowCleaningLines && p.windowCleaningLines.length > 0
+                                                            ? p.windowCleaningLines
+                                                            : [{ id: `wcl-${Date.now()}`, unitType: 'window', quantity: 0, rate: 45, location: '' }]
+                                                    }));
+                                                }}
+                                                className="rounded text-primary"
+                                            />
+                                            <span>Window cleaning — water-fed pole</span>
+                                            <AdminHelp text="Exterior window cleaning using water-fed telescopic pole from ground / roof access. Choose per window or per pane, editable rate, and location. Can be added multiple times." />
+                                        </label>
+                                        {siteProvisions.hasWindowCleaningPole && (
+                                            <button
+                                                type="button"
+                                                onClick={addWindowCleaningLine}
+                                                className="h-6 text-[11px] px-2.5 rounded bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 font-bold transition-colors"
+                                            >
+                                                + Add window line
+                                            </button>
+                                        )}
+                                    </div>
+
                                     {siteProvisions.hasWindowCleaningPole && (
-                                        <div className="space-y-2 pl-6 pt-1">
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <Label className="text-[10px] text-gray-400">Number of windows:</Label>
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="e.g. 16"
-                                                        value={siteProvisions.windowCount || ''}
-                                                        onChange={e => setSiteProvisions(p => ({ ...p, windowCount: parseInt(e.target.value) || 0 }))}
-                                                        className="h-7 text-xs font-mono mt-0.5"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-[10px] text-gray-400">Price per window (R):</Label>
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="Default 45"
-                                                        value={siteProvisions.windowPricePerUnit ?? 45}
-                                                        onChange={e => setSiteProvisions(p => ({ ...p, windowPricePerUnit: parseFloat(e.target.value) || 0 }))}
-                                                        className="h-7 text-xs font-mono mt-0.5"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <Label className="text-[10px] text-gray-400">Or Fixed Total (R) — overrides per-window calc:</Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="Optional fixed total (e.g. 1420)"
-                                                    value={siteProvisions.windowFixedTotal || ''}
-                                                    onChange={e => setSiteProvisions(p => ({ ...p, windowFixedTotal: parseFloat(e.target.value) || 0 }))}
-                                                    className="h-7 text-xs font-mono mt-0.5"
-                                                />
-                                            </div>
-                                            <div>
-                                                <Label className="text-[10px] text-gray-400">Floor / Location:</Label>
-                                                <Input
-                                                    type="text"
-                                                    placeholder='e.g. "First-floor, exterior, from ground"'
-                                                    value={siteProvisions.windowFloorLocation || ''}
-                                                    onChange={e => setSiteProvisions(p => ({ ...p, windowFloorLocation: e.target.value }))}
-                                                    className="h-7 text-xs mt-0.5"
-                                                />
-                                            </div>
+                                        <div className="space-y-3 pt-1">
+                                            {(siteProvisions.windowCleaningLines || []).map((line, idx) => {
+                                                const lineTotal = line.customTotal && line.customTotal > 0
+                                                    ? line.customTotal
+                                                    : Math.round((line.quantity || 0) * (line.rate || 0));
+
+                                                return (
+                                                    <div key={line.id} className="p-2.5 rounded-lg bg-black/40 border border-white/10 space-y-2">
+                                                        <div className="flex items-center justify-between text-[11px] font-bold text-gray-300">
+                                                            <span className="flex items-center gap-2">
+                                                                <span className="w-4 h-4 rounded-full bg-white/10 text-[10px] inline-flex items-center justify-center font-mono text-white">
+                                                                    {idx + 1}
+                                                                </span>
+                                                                Line #{idx + 1}
+                                                            </span>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="font-mono text-emerald-400 font-bold text-xs">
+                                                                    Total: R{lineTotal.toLocaleString()}
+                                                                </span>
+                                                                {(siteProvisions.windowCleaningLines?.length || 0) > 1 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeWindowCleaningLine(line.id)}
+                                                                        className="text-red-400 hover:text-red-300 text-xs px-1 font-bold"
+                                                                        title="Remove line"
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                                                            <div>
+                                                                <Label className="text-[10px] text-gray-400">Unit Type:</Label>
+                                                                <select
+                                                                    value={line.unitType}
+                                                                    onChange={e => updateWindowCleaningLine(line.id, { unitType: e.target.value as 'window' | 'pane' })}
+                                                                    className="w-full h-7 rounded border border-white/10 bg-[#1E293B] text-xs px-2 text-white mt-0.5"
+                                                                >
+                                                                    <option value="window">Per window</option>
+                                                                    <option value="pane">Per pane</option>
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-[10px] text-gray-400">
+                                                                    {line.unitType === 'pane' ? 'Number of panes:' : 'Number of windows:'}
+                                                                </Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    placeholder="e.g. 240"
+                                                                    value={line.quantity || ''}
+                                                                    onChange={e => updateWindowCleaningLine(line.id, { quantity: parseInt(e.target.value) || 0 })}
+                                                                    className="h-7 text-xs font-mono mt-0.5"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-[10px] text-gray-400">
+                                                                    Rate per {line.unitType === 'pane' ? 'pane' : 'window'} (R):
+                                                                </Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    placeholder={line.unitType === 'pane' ? '25' : '45'}
+                                                                    value={line.rate ?? (line.unitType === 'pane' ? 25 : 45)}
+                                                                    onChange={e => updateWindowCleaningLine(line.id, { rate: parseFloat(e.target.value) || 0 })}
+                                                                    className="h-7 text-xs font-mono mt-0.5"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-[10px] text-gray-400">Or Fixed Total (R):</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    placeholder="Overrides calc (e.g. 400)"
+                                                                    value={line.customTotal || ''}
+                                                                    onChange={e => updateWindowCleaningLine(line.id, { customTotal: parseFloat(e.target.value) || 0 })}
+                                                                    className="h-7 text-xs font-mono mt-0.5"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-[10px] text-gray-400">Floor / Location:</Label>
+                                                            <Input
+                                                                type="text"
+                                                                placeholder='e.g. "Ground floor" or "Floors 2–5" or "Ground floor, North elevation"'
+                                                                value={line.location || ''}
+                                                                onChange={e => updateWindowCleaningLine(line.id, { location: e.target.value })}
+                                                                className="h-7 text-xs mt-0.5"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Aviation regulatory compliance (SACAA) */}
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
-                                    <label className="flex items-center gap-2 cursor-pointer font-bold">
-                                        <input
-                                            type="checkbox"
-                                            checked={
-                                                siteProvisions.hasAviationCompliance ?? (
-                                                    (elevations.some(e => e.selectedCleaning && e.selectedCleaning !== 'NONE') || (siteProvisions.hasSolarClean && (siteProvisions.solarMethod === 'DRONE' || !siteProvisions.solarMethod))) &&
-                                                    !siteProvisions.aviationComplianceDismissed
-                                                )
-                                            }
-                                            onChange={e => setSiteProvisions(p => ({
-                                                ...p,
-                                                hasAviationCompliance: e.target.checked,
-                                                aviationComplianceDismissed: !e.target.checked
-                                            }))}
-                                            className="rounded text-primary"
-                                        />
-                                        <span>Aviation regulatory compliance (SACAA)</span>
-                                        <AdminHelp text="SACAA compliance fee. Auto-added when any drone method is selected, editable (default R800), removable." />
-                                    </label>
-                                    {(siteProvisions.hasAviationCompliance ?? ((elevations.some(e => e.selectedCleaning && e.selectedCleaning !== 'NONE') || (siteProvisions.hasSolarClean && (siteProvisions.solarMethod === 'DRONE' || !siteProvisions.solarMethod))) && !siteProvisions.aviationComplianceDismissed)) && (
-                                        <div className="flex items-center gap-2 pl-6">
-                                            <Label className="text-[10px] text-gray-400">Fee (R):</Label>
-                                            <Input
-                                                type="number"
-                                                value={siteProvisions.aviationCompliancePrice ?? 800}
-                                                onChange={e => setSiteProvisions(p => ({ ...p, aviationCompliancePrice: parseFloat(e.target.value) || 0 }))}
-                                                className="h-7 w-24 text-xs font-mono"
-                                            />
-                                            <span className="text-[10px] text-gray-400">Auto-added for drone jobs (default R800, editable, uncheck to remove)</span>
+                                {(() => {
+                                    const hasElevationDrone = elevations.some(e => e.selectedCleaning && e.selectedCleaning !== 'NONE');
+                                    const hasSolarDrone = Boolean(siteProvisions.hasSolarClean && (siteProvisions.solarMethod === 'DRONE' || !siteProvisions.solarMethod));
+                                    const hasAnyDroneMethod = hasElevationDrone || hasSolarDrone;
+                                    const isAviationChecked = (hasAnyDroneMethod && !siteProvisions.aviationComplianceDismissed) ||
+                                        (Boolean(siteProvisions.hasAviationCompliance) && !siteProvisions.aviationComplianceDismissed);
+
+                                    return (
+                                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
+                                            <label className="flex items-center gap-2 cursor-pointer font-bold">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isAviationChecked}
+                                                    onChange={e => setSiteProvisions(p => ({
+                                                        ...p,
+                                                        hasAviationCompliance: e.target.checked,
+                                                        aviationComplianceDismissed: !e.target.checked
+                                                    }))}
+                                                    className="rounded text-primary"
+                                                />
+                                                <span>Aviation regulatory compliance (SACAA)</span>
+                                                <AdminHelp text="SACAA compliance fee. Auto-added when any drone method is selected, editable (default R800), removable." />
+                                            </label>
+                                            {isAviationChecked && (
+                                                <div className="flex items-center gap-2 pl-6">
+                                                    <Label className="text-[10px] text-gray-400">Fee (R):</Label>
+                                                    <Input
+                                                        type="number"
+                                                        value={siteProvisions.aviationCompliancePrice ?? 800}
+                                                        onChange={e => setSiteProvisions(p => ({ ...p, aviationCompliancePrice: parseFloat(e.target.value) || 0 }))}
+                                                        className="h-7 w-24 text-xs font-mono"
+                                                    />
+                                                    <span className="text-[10px] text-gray-400">Auto-added for drone jobs (default R800, editable, uncheck to remove)</span>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
+                                    );
+                                })()}
 
                                 {/* Signage & Entrance Features */}
                                 {isItemActive(7) && (
@@ -3875,6 +4030,36 @@ export function AeroWashQuoteBuilder({
                         </div>
                     )}
                 </Card>
+            )}
+
+            {/* Commercial Minimum Warning & Override Banner */}
+            {(calculation.minimumJobRaised || (waiveMinimumJobAmount && calculation.subtotal < MINIMUM_JOB_AMOUNT)) && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                    <div className="flex items-center gap-2.5">
+                        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                        <div>
+                            <span className="font-bold text-white block">
+                                {waiveMinimumJobAmount ? "Commercial Minimum Overridden" : "Commercial Minimum Warning (R7,500)"}
+                            </span>
+                            <span>
+                                {waiveMinimumJobAmount
+                                    ? `R7,500 floor overridden for small residential quote. Exact subtotal: R${calculation.subtotal.toLocaleString()}.`
+                                    : `Calculated subtotal is below the R7,500 commercial minimum. Click override to keep exact small residential pricing.`}
+                            </span>
+                        </div>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 shrink-0 transition-colors">
+                        <input
+                            type="checkbox"
+                            checked={waiveMinimumJobAmount}
+                            onChange={(e) => setWaiveMinimumJobAmount(e.target.checked)}
+                            className="rounded text-primary"
+                        />
+                        <span className="font-bold text-white text-[11px]">
+                            {waiveMinimumJobAmount ? "✓ Override active (Small quote)" : "Override R7,500 minimum"}
+                        </span>
+                    </label>
+                </div>
             )}
 
             {/* Bottom Live Summary Bar */}

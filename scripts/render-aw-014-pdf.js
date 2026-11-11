@@ -42,18 +42,24 @@ async function renderPage(browser, pdfBase64, pageNum, outFilename) {
 }
 
 async function main() {
-    const pdfPath = path.join(ARTIFACT_DIR, 'AW-2026-014-Marcella.pdf');
-    const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
-
     const browser = await puppeteer.launch({
         executablePath: CHROME_PATH,
         headless: 'new',
-        args: ['--no-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
     try {
-        await renderPage(browser, pdfBase64, 1, 'preview_aw_2026_014_page1.png');
-        await renderPage(browser, pdfBase64, 2, 'preview_aw_2026_014_page2.png');
+        // 1. Render AW-2026-014
+        const pdf014Path = path.join(ARTIFACT_DIR, 'AW-2026-014-Marcella.pdf');
+        const pdf014Base64 = fs.readFileSync(pdf014Path).toString('base64');
+        await renderPage(browser, pdf014Base64, 1, 'preview_aw_2026_014_page1.png');
+        await renderPage(browser, pdf014Base64, 2, 'preview_aw_2026_014_page2.png');
+
+        // 2. Render AW Commercial Test Quote
+        const pdfCommPath = path.join(ARTIFACT_DIR, 'AW-Commercial-Test-Quote.pdf');
+        const pdfCommBase64 = fs.readFileSync(pdfCommPath).toString('base64');
+        await renderPage(browser, pdfCommBase64, 1, 'preview_aw_comm_test_page1.png');
+        await renderPage(browser, pdfCommBase64, 2, 'preview_aw_comm_test_page2.png');
     } finally {
         await browser.close();
     }
