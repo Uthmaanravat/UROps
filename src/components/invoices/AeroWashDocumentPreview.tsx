@@ -101,6 +101,14 @@ export function AeroWashDocumentPreview({
     );
 
     const clientRef = invoice.client?.codePrefix || invoice.metadata?.clientCodePrefix;
+    const realPo = (
+        invoice.clientPoNumber ||
+        invoice.metadata?.clientPoNumber ||
+        invoice.metadata?.poNumber ||
+        (invoice as any).poNumber ||
+        ""
+    ).trim();
+    const poDisplayText = realPo || "No PO";
 
     const prepName = companySettings?.preparedByName || "Uthmaan Ravat";
     const prepPhone = companySettings?.preparedByPhone || "067 829 3350";
@@ -219,6 +227,7 @@ export function AeroWashDocumentPreview({
                                 {clientRef && (
                                     <div className="font-bold text-zinc-800">Client ref: {clientRef}</div>
                                 )}
+                                <div className="font-bold text-zinc-800">PO: {poDisplayText}</div>
                                 {invoice.client?.email && <div>{invoice.client.email}</div>}
                                 {invoice.client?.phone && <div>{invoice.client.phone}</div>}
                                 {invoice.client?.companyName && invoice.client.companyName !== attentionName && (
@@ -237,7 +246,7 @@ export function AeroWashDocumentPreview({
 
                     {/* SCOPE OF WORKS */}
                     <div className="space-y-2">
-                        <div className="text-[10px] font-black tracking-[0.2em] text-[#D05E00] uppercase border-b border-gray-200 pb-1">
+                        <div className="text-[10px] font-black tracking-wider [word-spacing:0.25em] text-[#D05E00] uppercase border-b border-gray-200 pb-1">
                             SCOPE OF WORKS
                         </div>
                         <p className="text-xs text-gray-700 leading-relaxed">
@@ -488,7 +497,7 @@ export function AeroWashDocumentPreview({
                                 <div>Name: ____________________________________</div>
                                 <div>Signature: ____________________________________</div>
                                 <div>Date:   ____________________________________</div>
-                                <div>PO number: ____________________________________</div>
+                                <div>PO number: <span className="font-bold text-zinc-900">{poDisplayText}</span></div>
                             </div>
                             <div className="text-[10px] text-gray-500 italic">
                                 Please sign and return, or reply to accept by email.
@@ -556,31 +565,51 @@ export function AeroWashDocumentPreview({
                                 <ul className="space-y-1.5 text-xs text-gray-700">
                                     {(() => {
                                         const boldExclusions: string[] = [];
-                                        const elevs = invoice.metadata?.elevations || [];
-                                        elevs.forEach((e: any) => {
-                                            if (e.exclusions && String(e.exclusions).trim()) {
-                                                boldExclusions.push(`${e.name ? `${e.name}: ` : ''}${String(e.exclusions).trim()}`);
-                                            }
-                                        });
+                                        const seenEx = new Set<string>();
+
+                                        const normalizeKey = (str: string) => {
+                                            return str
+                                                .toLowerCase()
+                                                .replace(/^(north|south|east|west|all)\s*(elevation|facade)?\s*[:—–-]\s*/i, '')
+                                                .replace(/[^a-z0-9]/g, '')
+                                                .trim();
+                                        };
+
+                                        // 1. Condition Flags (rich warranty exclusions)
                                         (invoice.metadata?.conditionFlags || invoice.conditionFlags || []).forEach((f: any) => {
                                             const loc = (f.location || '').trim();
                                             const elev = (f.elevation || f.elevationName || 'Elevation').trim();
-                                            const alreadyInElev = boldExclusions.some(ex =>
-                                                loc && ex.toLowerCase().includes(loc.toLowerCase()) && (!elev || ex.toLowerCase().includes(elev.toLowerCase()) || elevs.length <= 1)
-                                            );
-                                            if (!alreadyInElev) {
-                                                const readableCond = formatConditionTypeLabel(f.conditionType || f.type, f.conditionText).toLowerCase();
-                                                boldExclusions.push(`${elev}${loc ? ` (${loc})` : ''} — existing ${readableCond} excluded from warranty`);
+                                            const readableCond = formatConditionTypeLabel(f.conditionType || f.type, f.conditionText).toLowerCase();
+                                            const exText = `${elev}${loc ? ` (${loc})` : ''} — existing ${readableCond} excluded from warranty`;
+                                            const key = normalizeKey(exText);
+                                            if (!seenEx.has(key)) {
+                                                seenEx.add(key);
+                                                boldExclusions.push(exText);
                                             }
                                         });
-                                        const seen = new Set<string>();
-                                        const uniqueBold = boldExclusions.filter(item => {
-                                            const k = item.toLowerCase().replace(/\s+/g, ' ').trim();
-                                            if (seen.has(k)) return false;
-                                            seen.add(k);
-                                            return true;
+
+                                        // 2. Elevation-specific exclusions
+                                        const elevs = invoice.metadata?.elevations || [];
+                                        elevs.forEach((e: any) => {
+                                            if (e.exclusions && String(e.exclusions).trim()) {
+                                                const parts = String(e.exclusions).split(/[,;\n]+/).map((s: string) => s.trim()).filter(Boolean);
+                                                parts.forEach((part: string) => {
+                                                    const elevName = e.name ? e.name.trim() : '';
+                                                    const fullText = elevName ? `${elevName}: ${part}` : part;
+                                                    const key = normalizeKey(part);
+                                                    const fullKey = normalizeKey(fullText);
+
+                                                    const alreadyCovered = Array.from(seenEx).some(k => k.length > 5 && (k.includes(key) || key.includes(k)));
+                                                    if (!alreadyCovered && !seenEx.has(fullKey)) {
+                                                        seenEx.add(fullKey);
+                                                        seenEx.add(key);
+                                                        boldExclusions.push(fullText);
+                                                    }
+                                                });
+                                            }
                                         });
-                                        return uniqueBold.map((exText, idx) => (
+
+                                        return boldExclusions.map((exText, idx) => (
                                             <li key={`bold-ex-${idx}`} className="flex items-start gap-2 font-bold text-zinc-900">
                                                 <span className="text-[#D05E00]">•</span>
                                                 <span>{exText}</span>

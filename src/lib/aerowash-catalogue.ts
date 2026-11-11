@@ -788,19 +788,37 @@ export function generateConditionFlagWording(params: {
 /**
  * Normalizes any stored or live condition flag wording so legacy "on the North, Floor 3"
  * phrasing is automatically upgraded to "on floor 3 of the North elevation".
+ * Also replaces any raw enum/code names (e.g. CRACKED_GLAZING) with readable labels.
  */
 export function normalizeConditionFlagWording(flag: any, fallbackDate?: string): string {
     const rawWording = (flag?.wording || '').trim();
     if (rawWording) {
-        return rawWording.replace(
-            /recorded\s+(.+?)\s+on\s+the\s+([^,().]+?),\s*((?:floor|floors|level|levels)\s+[^().]+?)(?=\s*\(|\.)/gi,
+        let wording = rawWording;
+
+        // 1. Replace known enum codes with human-readable condition text
+        wording = wording
+            .replace(/\bCRACKED_GLAZING\b/g, 'cracked or damaged glazing')
+            .replace(/\bFAILED_SEALANT\b/g, 'failed or deteriorated sealant')
+            .replace(/\bEFFLORESCENCE\b/g, 'efflorescence and mineral deposits')
+            .replace(/\bORGANIC_GROWTH\b/g, 'heavy organic growth or lichen')
+            .replace(/\bPEELING_PAINT\b/g, 'peeling or flaking paint')
+            .replace(/\bWATER_INGRESS\b/g, 'water ingress or ponding marks')
+            .replace(/\bSPALLING_CONCRETE\b/g, 'spalling concrete or exposed rebar')
+            .replace(/\bLOOSE_RENDER_CLADDING\b/g, 'loose or damaged render or cladding')
+            .replace(/\bOTHER\b/g, 'pre-existing condition');
+
+        // 2. Normalize "on the North, Floor 3" -> "on floor 3 of the North elevation"
+        wording = wording.replace(
+            /recorded\s+(.+?)\s+on\s+(?:the\s+)?([^,().]+?),\s*([^().]+?)(?=\s*\(|\.)/gi,
             (_match: string, cond: string, elev: string, loc: string) => {
                 const cleanLoc = formatLocationForSentence(loc.trim());
                 const locWithPrep = /^(on|at|in)\s+/i.test(cleanLoc) ? cleanLoc : `on ${cleanLoc}`;
-                const cleanElev = formatElevationPhrase(elev.trim());
+                const cleanElev = formatElevationPhrase(elev.trim()).replace(/^the\s+/i, '');
                 return `recorded ${cond.trim()} ${locWithPrep} of the ${cleanElev}`;
             }
         );
+
+        return wording;
     }
     const preset = CONDITION_TYPE_PRESETS[flag?.conditionType || flag?.type || ''];
     return generateConditionFlagWording({

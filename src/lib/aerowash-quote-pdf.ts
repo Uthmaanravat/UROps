@@ -207,6 +207,14 @@ export async function generateAeroWashQuotePdf({
     const labelX = 158;
     const valX = 196;
     const clientRef = invoice.client?.codePrefix || invoice.metadata?.clientCodePrefix || '';
+    const realPo = (
+        invoice.clientPoNumber ||
+        invoice.metadata?.clientPoNumber ||
+        invoice.metadata?.poNumber ||
+        (invoice as any).poNumber ||
+        ""
+    ).trim();
+    const poDisplayText = realPo || "No PO";
 
     // Doc No
     doc.setFont("helvetica", "normal");
@@ -322,6 +330,12 @@ export async function generateAeroWashQuotePdf({
         doc.text(`Client ref: ${clientRef}`, 112, attY);
         attY += 4.2;
     }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(darkGreyRGB[0], darkGreyRGB[1], darkGreyRGB[2]);
+    doc.text(`PO: ${poDisplayText}`, 112, attY);
+    attY += 4.2;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -943,41 +957,70 @@ export async function generateAeroWashQuotePdf({
         { text: "All labour, equipment and remote pilot crew", isBold: false }
     );
 
-    // Excluded Bullets (deduplicated)
+    // Excluded Bullets (deduplicated - show each exclusion once)
     const excludedList: Array<{ text: string; isBold?: boolean }> = [];
-    const rawBoldExclusions: string[] = [];
-    const elevs = invoice.metadata?.elevations || [];
-    elevs.forEach((e: any) => {
-        if (e.exclusions && typeof e.exclusions === 'string' && e.exclusions.trim().length > 0) {
-            rawBoldExclusions.push(`${e.name ? `${e.name}: ` : ''}${e.exclusions.trim()}`);
-        }
-    });
+    const seenEx = new Set<string>();
+
+    const normalizeExclusionKey = (str: string) => {
+        return str
+            .toLowerCase()
+            .replace(/^(north|south|east|west|all)\s*(elevation|facade)?\s*[:—–-]\s*/i, '')
+            .replace(/[^a-z0-9]/g, '')
+            .trim();
+    };
+
+    // 1. Condition Flags (the most descriptive exclusions with warranty notice)
     const flags = invoice.metadata?.conditionFlags || invoice.conditionFlags || [];
     flags.forEach((f: any) => {
         const loc = (f.location || '').trim();
         const elev = (f.elevation || f.elevationName || 'Elevation').trim();
-        const alreadyInElev = rawBoldExclusions.some(ex =>
-            loc && ex.toLowerCase().includes(loc.toLowerCase()) && (!elev || ex.toLowerCase().includes(elev.toLowerCase()) || elevs.length <= 1)
-        );
-        if (!alreadyInElev) {
-            const cond = formatConditionTypeLabel(f.conditionType || f.type, f.conditionText).toLowerCase();
-            rawBoldExclusions.push(`${elev}${loc ? ` (${loc})` : ''} — existing ${cond} excluded from cleaning/restoration warranty`);
-        }
-    });
-    const seenEx = new Set<string>();
-    rawBoldExclusions.forEach(exText => {
-        const k = exText.toLowerCase().replace(/\s+/g, ' ').trim();
-        if (!seenEx.has(k)) {
-            seenEx.add(k);
+        const readableCond = formatConditionTypeLabel(f.conditionType || f.type, f.conditionText).toLowerCase();
+        const exText = `${elev}${loc ? ` (${loc})` : ''} — existing ${readableCond} excluded from cleaning/restoration warranty`;
+        const key = normalizeExclusionKey(exText);
+        if (!seenEx.has(key)) {
+            seenEx.add(key);
             excludedList.push({ text: exText, isBold: true });
         }
     });
-    // Standard Exclusions
-    excludedList.push(
-        { text: "Internal faces of glass, unless separately agreed", isBold: false },
-        { text: "Hardened cement, paint and adhesive residue", isBold: false },
-        { text: "Repair of existing damage, failed sealant or penetrated staining", isBold: false }
-    );
+
+    // 2. Elevation-specific exclusions (e.g. from quote builder)
+    const elevs = invoice.metadata?.elevations || [];
+    elevs.forEach((e: any) => {
+        if (e.exclusions && typeof e.exclusions === 'string' && e.exclusions.trim().length > 0) {
+            // Split multiple exclusions if comma, semicolon, or newline separated
+            const parts = e.exclusions.split(/[,;\n]+/).map((s: string) => s.trim()).filter(Boolean);
+            parts.forEach((part: string) => {
+                const elevName = e.name ? e.name.trim() : '';
+                const fullText = elevName ? `${elevName}: ${part}` : part;
+                const key = normalizeExclusionKey(part);
+                const fullKey = normalizeExclusionKey(fullText);
+
+                // Skip if this concept is already covered by a condition flag or another exclusion
+                const alreadyCovered = Array.from(seenEx).some(k => k.length > 5 && (k.includes(key) || key.includes(k)));
+                if (!alreadyCovered && !seenEx.has(fullKey)) {
+                    seenEx.add(fullKey);
+                    seenEx.add(key);
+                    excludedList.push({ text: fullText, isBold: true });
+                }
+            });
+        }
+    });
+
+    // 3. Standard Exclusions (deduplicated against existing)
+    const standardExclusions = [
+        "Internal faces of glass, unless separately agreed",
+        "Hardened cement, paint and adhesive residue",
+        "Repair of existing damage, failed sealant or penetrated staining"
+    ];
+
+    standardExclusions.forEach(std => {
+        const key = normalizeExclusionKey(std);
+        const alreadyCovered = Array.from(seenEx).some(k => k.length > 5 && (k.includes(key) || key.includes(k)));
+        if (!alreadyCovered && !seenEx.has(key)) {
+            seenEx.add(key);
+            excludedList.push({ text: std, isBold: false });
+        }
+    });
 
     const endY1 = drawBullets(includedList, col1X, p2Y, colW);
     const endY2 = drawBullets(excludedList, col2X, p2Y, colW);
@@ -1072,7 +1115,7 @@ export async function generateAeroWashQuotePdf({
     p2Y += 10;
 
     doc.setFontSize(7);
-    doc.text("Purchase order no. (if applicable): ____________________________________", col1X, p2Y);
+    doc.text(`Purchase order no.: ${poDisplayText}`, col1X, p2Y);
     } // End if (!isInvoice) for Terms & Acceptance
 
     // ==========================================

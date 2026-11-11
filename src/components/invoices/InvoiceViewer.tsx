@@ -23,6 +23,7 @@ import { convertToInvoiceAction, recordPaymentAction, deleteInvoiceAction } from
 import { sendInvoiceEmail, requestQuoteApprovalAction, ownerApproveQuoteAction, verifyQuoteActionPermission, getQuoteShareLinkAction, sendBackQuoteAction, resubmitQuoteApprovalAction } from "@/app/(dashboard)/invoices/email-actions"
 import { updateInvoiceItemsAction, finalizeQuoteAction, updateInvoiceNoteAction } from "@/app/(dashboard)/invoices/pricing-actions"
 import { updateInvoiceProjectAction, updateProjectCommercialStatusAction, updateInvoiceDetailsAction, renameProjectAction } from "@/app/(dashboard)/invoices/project-actions"
+import { formatWhatsAppNumberZA, buildWhatsAppQuickMessages } from "@/lib/whatsapp"
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -337,7 +338,7 @@ export function InvoiceViewer({
     const [firstPaymentOption, setFirstPaymentOption] = useState<string>(
         invoice.firstPaymentPercentage
             ? invoice.firstPaymentPercentage.toString()
-            : (isAeroWashDoc ? "60" : "none")
+            : (isAeroWashDoc ? "60" : "50")
     );
     const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>(
         invoice.firstPaymentPercentage && ![20, 50, 60, 75].includes(invoice.firstPaymentPercentage)
@@ -346,6 +347,8 @@ export function InvoiceViewer({
     );
 
     const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+    const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
+    const [whatsAppPhoneNumber, setWhatsAppPhoneNumber] = useState(invoice.client?.phone || (invoice.client as any)?.mobile || "");
     const [convertError, setConvertError] = useState<string | null>(null);
     const [convertPoNumber, setConvertPoNumber] = useState("");
     const [convertPresentationStyle, setConvertPresentationStyle] = useState<'AS_PER_QUOTATION' | 'DETAILED'>('AS_PER_QUOTATION');
@@ -355,7 +358,7 @@ export function InvoiceViewer({
         if (isAeroWashDoc) {
             return isDocContract ? "per_visit" : "60";
         }
-        return "none";
+        return "50";
     };
 
     const [convertFirstPaymentOption, setConvertFirstPaymentOption] = useState<string>(getInitialConvertPaymentOption);
@@ -2649,6 +2652,102 @@ export function InvoiceViewer({
                                 </DialogContent>
                             </Dialog>
                         )}
+
+                        {/* WhatsApp Quick Messages */}
+                        <Dialog open={isWhatsAppDialogOpen} onOpenChange={setIsWhatsAppDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-10 px-4 rounded-lg hover:bg-white/10 text-white font-bold text-xs flex items-center gap-2">
+                                    <MessageSquare className="w-4 h-4 text-[#25D366]" />
+                                    <span>WhatsApp</span>
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="bg-[#0F172A] border-white/10 text-white max-w-xl max-h-[85vh] overflow-y-auto">
+                                <DialogHeader>
+                                    <DialogTitle className="text-xl font-black uppercase tracking-wider flex items-center gap-2">
+                                        <MessageSquare className="h-5 w-5 text-[#25D366]" />
+                                        WhatsApp Quick Messages
+                                    </DialogTitle>
+                                    <DialogDescription className="text-gray-400 text-xs">
+                                        Send quick messages with client phone numbers formatted in 27 format (e.g. 0821234567 → 27821234567).
+                                    </DialogDescription>
+                                </DialogHeader>
+
+                                <div className="space-y-4 py-3">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <Label htmlFor="waPhone" className="text-[10px] font-black uppercase tracking-widest text-primary">
+                                                Client Phone Number
+                                            </Label>
+                                            <span className="text-[11px] font-mono text-emerald-400">
+                                                wa.me/{formatWhatsAppNumberZA(whatsAppPhoneNumber) || "27..."}
+                                            </span>
+                                        </div>
+                                        <Input
+                                            id="waPhone"
+                                            placeholder="e.g. 082 123 4567 or 27821234567"
+                                            value={whatsAppPhoneNumber}
+                                            onChange={(e) => setWhatsAppPhoneNumber(e.target.value)}
+                                            className="bg-white/5 border-white/10 text-white h-11 focus:border-primary font-mono text-xs"
+                                        />
+                                        <p className="text-[10px] text-gray-400">
+                                            Automatically converts any local format (0821234567) to international 27 format.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-3 pt-2">
+                                        {(() => {
+                                            const waData = buildWhatsAppQuickMessages({
+                                                phone: whatsAppPhoneNumber,
+                                                clientName: invoice.client?.name || invoice.client?.companyName,
+                                                quoteNumber: invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`),
+                                                site: invoice.site || invoice.reference,
+                                                companyName: companySettings?.name || (isAeroWashDoc ? "AeroWash" : "LR Builders"),
+                                                viewUrl: typeof window !== "undefined" ? window.location.href : undefined,
+                                            });
+
+                                            if (!waData.waNumber) {
+                                                return (
+                                                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
+                                                        Please enter a valid phone number above to enable one-click WhatsApp messages.
+                                                    </div>
+                                                );
+                                            }
+
+                                            return waData.messages.map((msg) => (
+                                                <div key={msg.label} className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2 hover:border-[#25D366]/40 transition-colors">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                            <span className="w-2 h-2 rounded-full bg-[#25D366]"></span>
+                                                            {msg.label}
+                                                        </span>
+                                                        <a
+                                                            href={msg.href}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366] text-black font-black text-xs hover:bg-[#20bd5a] transition-colors"
+                                                        >
+                                                            <MessageSquare className="w-3.5 h-3.5" />
+                                                            Open WhatsApp
+                                                        </a>
+                                                    </div>
+                                                    {msg.text && (
+                                                        <p className="text-[11px] text-gray-300 bg-black/40 p-2.5 rounded-lg font-sans leading-relaxed border border-white/5">
+                                                            &ldquo;{msg.text}&rdquo;
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ));
+                                        })()}
+                                    </div>
+                                </div>
+
+                                <DialogFooter>
+                                    <Button variant="ghost" onClick={() => setIsWhatsAppDialogOpen(false)} className="text-gray-400">
+                                        Close
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
 
                         {/* Send Back with Note Dialog (Owner only) */}
                         <Dialog open={isSendBackOpen} onOpenChange={setIsSendBackOpen}>

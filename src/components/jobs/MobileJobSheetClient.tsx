@@ -31,6 +31,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { WeatherBadge } from "@/components/projects/WeatherBadge"
 import { formatConditionTypeLabel } from "@/lib/aerowash-catalogue"
+import { formatWhatsAppNumberZA } from "@/lib/whatsapp"
 import {
     compressJobPhotoFile,
     enqueueOfflinePhoto,
@@ -693,14 +694,7 @@ export function MobileJobSheetClient({
                     </a>
 
                     {(() => {
-                        const rawDigits = String(job.whatsappNumber || job.contactPhone || "").replace(/[^0-9]/g, "")
-                        const waNumber = rawDigits.startsWith("0027")
-                            ? "27" + rawDigits.slice(4)
-                            : rawDigits.startsWith("0") && rawDigits.length === 10
-                                ? "27" + rawDigits.slice(1)
-                                : !rawDigits.startsWith("27") && rawDigits.length === 9
-                                    ? "27" + rawDigits
-                                    : rawDigits
+                        const waNumber = formatWhatsAppNumberZA(job.whatsappNumber || job.contactPhone || "")
                         const quickMessages = waNumber
                             ? [
                                 {

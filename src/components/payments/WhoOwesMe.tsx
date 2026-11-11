@@ -22,6 +22,7 @@ import {
     Edit3
 } from "lucide-react"
 import { sendOverdueReminderAction, toggleClientRemindersAction } from "@/app/(dashboard)/payments/actions"
+import { formatWhatsAppNumberZA } from "@/lib/whatsapp"
 import Link from "next/link"
 
 interface OpenInvoiceItem {
@@ -97,9 +98,7 @@ export function WhoOwesMe({ invoices, currencySymbol = "R" }: { invoices: OpenIn
     }
 
     const buildWhatsAppUrl = (inv: OpenInvoiceItem) => {
-        const rawPhone = inv.client.phone || ""
-        let clean = rawPhone.replace(/[^0-9]/g, '')
-        if (clean.startsWith('0')) clean = '27' + clean.slice(1)
+        const clean = formatWhatsAppNumberZA(inv.client.phone)
         const numLabel = inv.quoteNumber || `Invoice #${inv.number}`
         const text = `Hi ${inv.client.name}, this is a friendly reminder from AeroWash regarding overdue invoice ${numLabel} for ${formatCurrency(inv.balanceDue, currencySymbol)}. Please let us know once payment has been processed. Thank you!`
         return `https://wa.me/${clean}?text=${encodeURIComponent(text)}`
