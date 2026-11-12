@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createGuardedPrismaClient } = require('./db-guard');
+const prisma = createGuardedPrismaClient();
 
 const NEW_TERMS_BODY = `INCLUDED
 Auto-list the items on this quote by name, then always add:

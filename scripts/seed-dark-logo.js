@@ -1,6 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const { createGuardedPrismaClient } = require('./db-guard');
 const fs = require('fs');
-const prisma = new PrismaClient();
+const prisma = createGuardedPrismaClient();
 
 async function updateAeroWashPrefs() {
   const settings = await prisma.companySettings.findUnique({

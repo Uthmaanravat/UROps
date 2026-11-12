@@ -853,4 +853,152 @@ export function normalizeConditionFlagWording(flag: any, fallbackDate?: string):
     });
 }
 
+export type AeroWashRateDisplay = 'FULL_DETAIL' | 'QUANTITY_ONLY' | 'LUMP_SUM';
+
+/**
+ * Formats quote line descriptions for client-facing PDF, email and acceptance pages
+ * based on the per-quote "Rate display" setting:
+ * 1. Full detail: "240 panes @ R25/pane — Ground floor"
+ * 2. Quantity only: "240 panes — Ground floor" (no rate)
+ * 3. Lump sum: "Ground floor windows" (no quantity, no rate)
+ * Default: Lump sum. Line amounts are always preserved.
+ */
+export function formatLineForRateDisplay(
+    item: { description?: string; name?: string; unitPrice?: number; quantity?: number; metadata?: any },
+    rateDisplay: string = 'LUMP_SUM'
+): { title: string; subDesc: string; raw: string } {
+    const mode = (rateDisplay || 'LUMP_SUM').toUpperCase();
+    const rawDesc = (item.description || item.name || '').trim();
+
+    // Split into title and body
+    let title = rawDesc;
+    let subDesc = '';
+    if (rawDesc.includes('\n')) {
+        const parts = rawDesc.split('\n');
+        title = parts[0].trim();
+        subDesc = parts.slice(1).join(' ').trim();
+    } else if (rawDesc.includes(' – ')) {
+        const parts = rawDesc.split(' – ');
+        title = parts[0].trim();
+        subDesc = parts.slice(1).join(' – ').trim();
+    } else if (rawDesc.includes(' - ')) {
+        const parts = rawDesc.split(' - ');
+        title = parts[0].trim();
+        subDesc = parts.slice(1).join(' - ').trim();
+    }
+
+    // Check if this is a Window Cleaning line
+    const isWindowCleaning =
+        item.metadata?.itemNumber === 25 ||
+        Boolean(item.metadata?.windowCleaningLineId) ||
+        title.toLowerCase().includes('window cleaning') ||
+        subDesc.toLowerCase().includes('window cleaning') ||
+        (subDesc.toLowerCase().includes('water-fed pole') && (subDesc.includes('pane') || subDesc.includes('window')));
+
+    // Check if this is a Solar Cleaning line
+    const isSolarCleaning =
+        item.metadata?.itemNumber === 6 ||
+        title.toLowerCase().includes('solar panel') ||
+        title.toLowerCase().includes('solar array') ||
+        subDesc.toLowerCase().includes('solar panel');
+
+    if (isWindowCleaning) {
+        const meta = item.metadata || {};
+        const count = meta.quantity || (() => {
+            const m = subDesc.match(/(\d+)\s*(?:panes?|windows?)/i);
+            return m ? parseInt(m[1], 10) : 0;
+        })();
+        const unitType = meta.unitType || (subDesc.toLowerCase().includes('pane') ? 'pane' : 'window');
+        const unitWord = unitType === 'pane' ? (count === 1 ? 'pane' : 'panes') : (count === 1 ? 'window' : 'windows');
+        const rate = meta.rate || (() => {
+            const m = subDesc.match(/@\s*R?([\d,.]+)/i);
+            return m ? parseFloat(m[1].replace(/,/g, '')) : 0;
+        })();
+        const locStr = (meta.location !== undefined ? meta.location : (() => {
+            const firstSentence = subDesc.split('.')[0] || '';
+            const m = firstSentence.match(/\s+[—–-]\s+([^.]+)/);
+            return m ? m[1].trim() : '';
+        })()).trim();
+        const customTotal = meta.customTotal;
+
+        const baseMethod = 'Exterior window cleaning using water-fed telescopic pole with purified demineralised water for a spot-free finish without chemical residue.';
+
+        if (mode === 'FULL_DETAIL') {
+            const rateWord = customTotal && customTotal > 0
+                ? `(R${customTotal.toLocaleString()})`
+                : `@ R${rate}/${unitType === 'pane' ? 'pane' : 'window'}`;
+            const spec = `${count} ${unitWord} ${rateWord}${locStr ? ` — ${locStr}` : ''}`;
+            subDesc = `${spec}. ${baseMethod}`;
+        } else if (mode === 'QUANTITY_ONLY') {
+            const spec = `${count} ${unitWord}${locStr ? ` — ${locStr}` : ''}`;
+            subDesc = `${spec}. ${baseMethod}`;
+        } else {
+            // LUMP_SUM (Default)
+            if (locStr) {
+                const cleanLoc = locStr.replace(/\s*(?:windows?|panes?|glazing)\s*$/i, '').trim();
+                const spec = `${cleanLoc} windows`;
+                subDesc = `${spec}. ${baseMethod}`;
+            } else {
+                subDesc = baseMethod;
+            }
+        }
+
+        return {
+            title: title || 'Window cleaning — water-fed pole',
+            subDesc,
+            raw: subDesc ? `${title}\n${subDesc}` : title
+        };
+    }
+
+    if (isSolarCleaning) {
+        const meta = item.metadata || {};
+        const count = meta.panelCount || (() => {
+            const m = subDesc.match(/(\d+)\s*panels?/i);
+            return m ? parseInt(m[1], 10) : 0;
+        })();
+        const rate = meta.rate || (() => {
+            const m = subDesc.match(/@\s*R?([\d,.]+)/i);
+            return m ? parseFloat(m[1].replace(/,/g, '')) : 0;
+        })();
+        const method = meta.method || (title.toLowerCase().includes('drone') || subDesc.toLowerCase().includes('drone') ? 'DRONE' : 'POLE');
+
+        const methodDesc = method === 'DRONE'
+            ? 'Pure water drone cleaning of photovoltaic solar panel surfaces. No detergents or abrasives are used, and no contact is made with panel wiring or mountings.'
+            : 'Pure water cleaning of photovoltaic solar panel surfaces using water-fed telescopic pole. No detergents or abrasives are used, and no contact is made with panel wiring or mountings.';
+
+        if (mode === 'FULL_DETAIL') {
+            const spec = count > 0 && rate > 0 ? `${count} panels @ R${rate}/panel. ` : '';
+            subDesc = `${spec}${methodDesc}`;
+        } else if (mode === 'QUANTITY_ONLY') {
+            const spec = count > 0 ? `${count} panels. ` : '';
+            subDesc = `${spec}${methodDesc}`;
+        } else {
+            // LUMP_SUM (Default): no quantity, no rate
+            subDesc = methodDesc;
+        }
+
+        return {
+            title: title || `Solar panel cleaning — ${method === 'DRONE' ? 'drone' : 'water-fed pole'}`,
+            subDesc,
+            raw: subDesc ? `${title}\n${subDesc}` : title
+        };
+    }
+
+    // Generic per-unit line handler
+    if (mode === 'QUANTITY_ONLY') {
+        subDesc = subDesc.replace(/@\s*R?[\d,.]+(?:\/[a-zA-Z²³]+)?/gi, '').replace(/\s{2,}/g, ' ').trim();
+        subDesc = subDesc.replace(/\(\s*R?[\d,.]+\s*\)/gi, '').trim();
+    } else if (mode === 'LUMP_SUM') {
+        subDesc = subDesc.replace(/\b\d+\s*[a-zA-Z²³]+\s*@\s*R?[\d,.]+(?:\/[a-zA-Z²³]+)?\s*(?:[—–-]\s*)?/gi, '').replace(/\s{2,}/g, ' ').trim();
+        subDesc = subDesc.replace(/@\s*R?[\d,.]+(?:\/[a-zA-Z²³]+)?/gi, '').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    return {
+        title,
+        subDesc,
+        raw: subDesc ? `${title}\n${subDesc}` : title
+    };
+}
+
+
 

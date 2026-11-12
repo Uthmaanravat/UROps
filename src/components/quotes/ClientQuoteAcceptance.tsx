@@ -21,6 +21,7 @@ import {
     Download
 } from "lucide-react"
 import { acceptQuotePublicAction, requestQuoteChangesPublicAction } from "@/app/(dashboard)/invoices/acceptance-actions"
+import { formatLineForRateDisplay } from "@/lib/aerowash-catalogue"
 
 interface ClientQuoteAcceptanceProps {
     quote: any
@@ -319,27 +320,33 @@ export function ClientQuoteAcceptance({
                                             </div>
                                         </div>
                                         <div className="divide-y divide-white/5">
-                                            {optItems.map((item: any, idx: number) => (
-                                                <div key={idx} className="py-2.5 flex justify-between items-start gap-4">
-                                                    <div className="space-y-0.5">
-                                                        <div className="text-xs font-bold text-white">
-                                                            {item.description ? item.description.split('\n')[0] : (item.name || `Item ${idx + 1}`)}
-                                                        </div>
-                                                        {item.description && item.description.includes('\n') && (
-                                                            <div className="text-[11px] text-gray-400">
-                                                                {item.description.split('\n').slice(1).join(' ')}
+                                            {(() => {
+                                                const rateDisplay = (quote.metadata?.rateDisplay || 'LUMP_SUM').toUpperCase();
+                                                return optItems.map((item: any, idx: number) => {
+                                                    const formatted = formatLineForRateDisplay(item, rateDisplay);
+                                                    return (
+                                                        <div key={idx} className="py-2.5 flex justify-between items-start gap-4">
+                                                            <div className="space-y-0.5">
+                                                                <div className="text-xs font-bold text-white">
+                                                                    {formatted.title}
+                                                                </div>
+                                                                {formatted.subDesc && (
+                                                                    <div className="text-[11px] text-gray-400">
+                                                                        {formatted.subDesc}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="text-xs font-mono font-bold text-white shrink-0">
-                                                        {item.unitPrice === 0 || item.amount === 0 || item.total === 0 ? (
-                                                            <span className="text-emerald-400">Included</span>
-                                                        ) : (
-                                                            formatCurrency(item.total !== undefined ? item.total : item.amount, "R")
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                            <div className="text-xs font-mono font-bold text-white shrink-0">
+                                                                {item.unitPrice === 0 || item.amount === 0 || item.total === 0 ? (
+                                                                    <span className="text-emerald-400">Included</span>
+                                                                ) : (
+                                                                    formatCurrency(item.total !== undefined ? item.total : item.amount, "R")
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
                                         </div>
                                     </div>
                                 );
@@ -351,23 +358,29 @@ export function ClientQuoteAcceptance({
                                 Quotation Breakdown
                             </div>
                             <div className="divide-y divide-white/5 border border-white/10 rounded-xl overflow-hidden bg-black/20">
-                                {quote.items.map((item: any, idx: number) => (
-                                    <div key={item.id || idx} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:bg-white/[0.02]">
-                                        <div className="space-y-1 pr-4">
-                                            <div className="text-xs font-bold text-white">
-                                                {item.description.split('\n')[0]}
-                                            </div>
-                                            {item.description.includes('\n') && (
-                                                <div className="text-[11px] text-gray-400 leading-relaxed">
-                                                    {item.description.split('\n').slice(1).join('\n')}
+                                {(() => {
+                                    const rateDisplay = (quote.metadata?.rateDisplay || 'LUMP_SUM').toUpperCase();
+                                    return quote.items.map((item: any, idx: number) => {
+                                        const formatted = formatLineForRateDisplay(item, rateDisplay);
+                                        return (
+                                            <div key={item.id || idx} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:bg-white/[0.02]">
+                                                <div className="space-y-1 pr-4">
+                                                    <div className="text-xs font-bold text-white">
+                                                        {formatted.title}
+                                                    </div>
+                                                    {formatted.subDesc && (
+                                                        <div className="text-[11px] text-gray-400 leading-relaxed">
+                                                            {formatted.subDesc}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                        <div className="text-xs sm:text-sm font-bold text-white shrink-0 self-end sm:self-center font-mono">
-                                            {formatCurrency(item.total, "R")}
-                                        </div>
-                                    </div>
-                                ))}
+                                                <div className="text-xs sm:text-sm font-bold text-white shrink-0 self-end sm:self-center font-mono">
+                                                    {formatCurrency(item.total, "R")}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
                             </div>
                         </div>
                     )}

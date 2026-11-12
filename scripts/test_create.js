@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createGuardedPrismaClient } = require('./db-guard');
+const prisma = createGuardedPrismaClient();
 
 async function testCreate() {
   const companyId = '70af7281-072d-4ed5-9f2e-af4d93e99ea9'; // AeroWash
