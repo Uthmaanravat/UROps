@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createGuardedPrismaClient } = require('./db-guard');
+const prisma = createGuardedPrismaClient();
 
 // Mirror deterministic weather generator from src/lib/weather.ts
 function getDeterministicForecast(lat, lon) {

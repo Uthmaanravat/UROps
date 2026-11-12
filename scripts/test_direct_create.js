@@ -23,8 +23,8 @@ throwawayPoolerUrl.searchParams.set('schema', 'throwaway_copy');
 process.env.DATABASE_URL = throwawayPoolerUrl.toString();
 process.env.DIRECT_URL = throwawayUrl.toString();
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createGuardedPrismaClient } = require('./db-guard');
+const prisma = createGuardedPrismaClient();
 
 async function testDirectCreate() {
     console.log('Testing createInvoiceAction directly via DB on throwaway_copy...');

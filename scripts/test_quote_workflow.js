@@ -35,8 +35,8 @@ require.cache[require.resolve('next/cache')] = {
   }
 };
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createGuardedPrismaClient } = require('./db-guard');
+const prisma = createGuardedPrismaClient();
 const { submitScopeOfWork, generateQuotationFromWBP } = require('../src/lib/workflow');
 
 async function main() {

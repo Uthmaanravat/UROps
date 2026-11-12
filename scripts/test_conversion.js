@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createGuardedPrismaClient } = require('./db-guard');
+const prisma = createGuardedPrismaClient();
 
 async function testConversion() {
   console.log("=== STARTING CONVERSION TRANSACTION INTEGRITY TEST ===");

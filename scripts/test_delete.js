@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createGuardedPrismaClient } = require('./db-guard');
+const prisma = createGuardedPrismaClient();
 
 async function main() {
   const companyId = "b0eb011a-304b-4cf7-a73c-a04279698207"; // GMAIL company id

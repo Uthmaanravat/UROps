@@ -42,8 +42,8 @@ require.cache[require.resolve('../src/lib/submission-logger')] = {
   }
 };
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createGuardedPrismaClient } = require('./db-guard');
+const prisma = createGuardedPrismaClient();
 const { createInvoiceAction } = require('../src/app/(dashboard)/invoices/actions');
 const { updateInvoiceDetailsAction } = require('../src/app/(dashboard)/invoices/project-actions');
 
