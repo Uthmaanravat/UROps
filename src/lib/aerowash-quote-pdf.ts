@@ -3,7 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatCurrency } from "@/lib/utils";
 import { parseClauses } from "@/lib/terms-utils";
-import { AEROWASH_STANDARD_TERMS_BODY, formatConditionTypeLabel, normalizeConditionFlagWording } from "@/lib/aerowash-catalogue";
+import { AEROWASH_STANDARD_TERMS_BODY, formatConditionTypeLabel, normalizeConditionFlagWording, formatLineForRateDisplay } from "@/lib/aerowash-catalogue";
 
 export interface AeroWashQuotePdfOptions {
     invoice: {
@@ -442,6 +442,7 @@ export async function generateAeroWashQuotePdf({
     // 4. ITEMS TABLE (ITEM | AMOUNT only)
     // ==========================================
     const hasOptions = Boolean(!isInvoice && invoice.metadata?.hasOptions && Array.isArray(invoice.metadata?.options) && invoice.metadata.options.length > 1);
+    const rateDisplay = (invoice.metadata?.rateDisplay || 'LUMP_SUM').toUpperCase();
 
     if (hasOptions) {
         const options: any[] = invoice.metadata.options;
@@ -456,23 +457,9 @@ export async function generateAeroWashQuotePdf({
                 const originalAmount = item.originalPrice || (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
                 const amount = (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
 
-                const rawDesc = item.description || "";
-                let title = rawDesc;
-                let subDesc = "";
-
-                if (rawDesc.includes("\n")) {
-                    const parts = rawDesc.split("\n");
-                    title = parts[0].trim();
-                    subDesc = parts.slice(1).join(" ").trim();
-                } else if (rawDesc.includes(" – ")) {
-                    const parts = rawDesc.split(" – ");
-                    title = parts[0].trim();
-                    subDesc = parts.slice(1).join(" – ").trim();
-                } else if (rawDesc.includes(" - ")) {
-                    const parts = rawDesc.split(" - ");
-                    title = parts[0].trim();
-                    subDesc = parts.slice(1).join(" - ").trim();
-                }
+                const formatted = formatLineForRateDisplay(item, rateDisplay);
+                const title = formatted.title;
+                const subDesc = formatted.subDesc;
 
                 const cleanTitle = `${optItemNumber++}. ${title.replace(/^\d+[\.\)]\s*/, '')}`;
                 const itemCellContent = subDesc ? `${cleanTitle}\n${subDesc}` : cleanTitle;
@@ -590,24 +577,9 @@ export async function generateAeroWashQuotePdf({
             const originalAmount = item.originalPrice || (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
             const amount = (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
 
-            // Clean title and description
-            const rawDesc = item.description || "";
-            let title = rawDesc;
-            let subDesc = "";
-
-            if (rawDesc.includes("\n")) {
-                const parts = rawDesc.split("\n");
-                title = parts[0].trim();
-                subDesc = parts.slice(1).join(" ").trim();
-            } else if (rawDesc.includes(" – ")) {
-                const parts = rawDesc.split(" – ");
-                title = parts[0].trim();
-                subDesc = parts.slice(1).join(" – ").trim();
-            } else if (rawDesc.includes(" - ")) {
-                const parts = rawDesc.split(" - ");
-                title = parts[0].trim();
-                subDesc = parts.slice(1).join(" - ").trim();
-            }
+            const formatted = formatLineForRateDisplay(item, rateDisplay);
+            const title = formatted.title;
+            const subDesc = formatted.subDesc;
 
             const cleanTitle = `${itemNumber++}. ${title.replace(/^\d+[\.\)]\s*/, '')}`;
 

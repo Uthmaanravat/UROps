@@ -5,7 +5,7 @@ import { formatCurrency, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Edit3, Check, FileText, CheckCircle2 } from "lucide-react";
 import { parseClauses } from "@/lib/terms-utils";
-import { AEROWASH_STANDARD_TERMS_BODY, formatConditionTypeLabel, normalizeConditionFlagWording } from "@/lib/aerowash-catalogue";
+import { AEROWASH_STANDARD_TERMS_BODY, formatConditionTypeLabel, normalizeConditionFlagWording, formatLineForRateDisplay } from "@/lib/aerowash-catalogue";
 
 interface AeroWashDocumentPreviewProps {
     invoice: any;
@@ -82,6 +82,7 @@ export function AeroWashDocumentPreview({
     const allowanceAmount = invoice.metadata?.allowanceAmount || 0;
     const allowanceName = invoice.metadata?.allowanceName || "Introductory allowance";
     const subtotalStandardRates = subtotal + allowanceAmount;
+    const rateDisplay = (invoice.metadata?.rateDisplay || 'LUMP_SUM').toUpperCase();
 
     const siteVisitCompleted = !isBalanceInvoice && Boolean(
         invoice.metadata?.siteVisitDone || 
@@ -275,14 +276,9 @@ export function AeroWashDocumentPreview({
                                         <table className="w-full text-left text-xs">
                                             <tbody className="divide-y divide-gray-100">
                                                 {optItems.map((item: any, idx: number) => {
-                                                    const rawDesc = item.description || "";
-                                                    let title = rawDesc;
-                                                    let subDesc = "";
-                                                    if (rawDesc.includes("\n")) {
-                                                        const parts = rawDesc.split("\n");
-                                                        title = parts[0].trim();
-                                                        subDesc = parts.slice(1).join(" ").trim();
-                                                    }
+                                                    const formatted = formatLineForRateDisplay(item, rateDisplay);
+                                                    const title = formatted.title;
+                                                    const subDesc = formatted.subDesc;
                                                     const cleanTitle = `${idx + 1}. ${title.replace(/^\d+[\.\)]\s*/, '')}`;
                                                     const isIncluded = item.isIncluded || item.metadata?.isIncluded || (item.unitPrice === 0 && item.originalPrice && item.originalPrice > 0);
                                                     const originalAmount = item.originalPrice || (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
@@ -376,24 +372,9 @@ export function AeroWashDocumentPreview({
                                                     const originalAmount = item.originalPrice || (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
                                                     const amount = (item.total !== undefined ? item.total : item.quantity * item.unitPrice) || 0;
 
-                                                    const rawDesc = item.description || "";
-                                                    let title = rawDesc;
-                                                    let subDesc = "";
-
-                                                    if (rawDesc.includes("\n")) {
-                                                        const parts = rawDesc.split("\n");
-                                                        title = parts[0].trim();
-                                                        subDesc = parts.slice(1).join(" ").trim();
-                                                    } else if (rawDesc.includes(" – ")) {
-                                                        const parts = rawDesc.split(" – ");
-                                                        title = parts[0].trim();
-                                                        subDesc = parts.slice(1).join(" – ").trim();
-                                                    } else if (rawDesc.includes(" - ")) {
-                                                        const parts = rawDesc.split(" - ");
-                                                        title = parts[0].trim();
-                                                        subDesc = parts.slice(1).join(" - ").trim();
-                                                    }
-
+                                                    const formatted = formatLineForRateDisplay(item, rateDisplay);
+                                                    const title = formatted.title;
+                                                    const subDesc = formatted.subDesc;
                                                     const cleanTitle = `${itemIndexCounter}. ${title.replace(/^\d+[\.\)]\s*/, '')}`;
 
                                                     return (
