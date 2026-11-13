@@ -6,7 +6,11 @@ export const BUCKET_NAME = 'quotation-photos';
 export function getSupabaseAdmin() {
     const runtimeEnv = process.env as Record<string, string | undefined>;
     const supabaseUrl = (runtimeEnv['NEXT_PUBLIC_SUPABASE_URL'] || '').trim();
-    const serviceRoleKey = (runtimeEnv['SUPABASE_SERVICE_ROLE_KEY'] || '').trim();
+    const serviceRoleKey = (
+        runtimeEnv['SUPABASE_SECRET_KEY'] ||
+        runtimeEnv['SUPABASE_SERVICE_ROLE_KEY'] ||
+        ''
+    ).trim();
 
     if (supabaseUrl && serviceRoleKey) {
         return createServiceClient(supabaseUrl, serviceRoleKey, {

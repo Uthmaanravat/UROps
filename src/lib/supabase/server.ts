@@ -4,9 +4,12 @@ import { cookies } from 'next/headers'
 export function createClient() {
     const cookieStore = cookies()
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseKey =
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl || !supabaseKey) {
         if (process.env.NODE_ENV === 'development') {
             console.warn("Supabase project URL and Key are missing. Authentication is disabled.")
         }
@@ -15,7 +18,7 @@ export function createClient() {
 
     return createServerClient(
         supabaseUrl,
-        supabaseAnonKey,
+        supabaseKey,
         {
             cookies: {
                 get(name: string) {

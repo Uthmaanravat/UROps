@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -6,9 +6,30 @@ import { prisma } from "@/lib/prisma";
 
 const inter = Inter({ subsets: ["latin"] });
 
+export const viewport: Viewport = {
+    themeColor: "#0A0A0A",
+    width: "device-width",
+    initialScale: 1,
+};
+
 export const metadata: Metadata = {
     title: "UROps",
-    description: "Professional Maintenance Business Software",
+    description: "Professional Operations & Business Software",
+    manifest: "/manifest.json",
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "black-translucent",
+        title: "UROps",
+    },
+    icons: {
+        icon: [
+            { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+            { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+        ],
+        apple: [
+            { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+        ],
+    },
 };
 
 export default async function RootLayout({
@@ -84,6 +105,12 @@ export default async function RootLayout({
                                 }
                             } catch(e) {}
                         })();
+
+                        if ('serviceWorker' in navigator) {
+                            window.addEventListener('load', function() {
+                                navigator.serviceWorker.register('/sw.js').catch(function() {});
+                            });
+                        }
                         `
                     }}
                 />

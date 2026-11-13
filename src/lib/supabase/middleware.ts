@@ -12,16 +12,19 @@ export async function updateSession(request: NextRequest) {
     })
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseKey =
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl || !supabaseKey) {
         return response
     }
 
     try {
         const supabase = createServerClient(
             supabaseUrl,
-            supabaseAnonKey,
+            supabaseKey,
             {
                 cookies: {
                     get(name: string) {

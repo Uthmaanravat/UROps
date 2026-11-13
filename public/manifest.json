@@ -1,15 +1,31 @@
 {
-    "name": "UROps Maintenance OS",
-    "short_name": "UROps",
-    "start_url": "/dashboard",
-    "display": "standalone",
-    "background_color": "#09090b",
-    "theme_color": "#09090b",
-    "icons": [
-        {
-            "src": "/icon.png",
-            "sizes": "1024x1024",
-            "type": "image/png"
-        }
-    ]
+  "name": "UROps",
+  "short_name": "UROps",
+  "description": "UROps Operations & Business Management",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
 }
