@@ -205,11 +205,12 @@ export async function sendInvoiceEmail(
             ? `Please find attached your ${docTypeLabel} ${formattedNumber}${siteText}.`
             : `Your ${docTypeLabel} ${formattedNumber}${siteText} is ready.`;
 
-        const senderName = (authUser?.name || '').trim() || undefined;
+        const isAero = isAeroWashCompany(invoice.companyId, settings);
+        const senderName = isAero ? undefined : ((authUser?.name || '').trim() || undefined);
         const composed = await composeBrandedEmail({
             companyId: invoice.companyId,
             settings,
-            fallbackSenderEmail: authUser?.email,
+            fallbackSenderEmail: isAero ? undefined : authUser?.email,
             extraAttachments,
             email: customBody
                 ? {
@@ -226,7 +227,7 @@ export async function sendInvoiceEmail(
                     cta,
                     ctaNote,
                     afterParagraphs,
-                    signOff: { name: senderName },
+                    signOff: isAero ? undefined : { name: senderName },
                 },
         });
 
