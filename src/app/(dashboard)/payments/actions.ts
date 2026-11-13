@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 import { sendRealEmail } from "@/lib/email"
 import { formatCurrency } from "@/lib/utils"
 import { composeBrandedEmail } from "@/lib/email-compose"
-import { formatLongDate, formatMoneyZA, resolveGreetingName } from "@/lib/email-templates"
+import { formatLongDate, formatMoneyZA, resolveGreetingName, isAeroWashCompany } from "@/lib/email-templates"
 import { isVatEffective } from "@/lib/vat-utils"
 import { buildAeroWashDocumentPdf } from "@/lib/server-document-pdf"
 
@@ -56,10 +56,12 @@ export async function sendOverdueReminderAction(invoiceId: string, customMessage
         })
 
         const custom = customMessage?.trim()
+        const isAero = isAeroWashCompany(companyId, settings);
+        const senderName = isAero ? undefined : ((authUser?.name || '').trim() || undefined);
         const composed = await composeBrandedEmail({
             companyId,
             settings,
-            fallbackSenderEmail: authUser?.email,
+            fallbackSenderEmail: isAero ? undefined : authUser?.email,
             extraAttachments: pdf ? [{ filename: pdf.filename, content: pdf.buffer, contentType: 'application/pdf' }] : [],
             email: custom
                 ? {
@@ -85,7 +87,7 @@ export async function sendOverdueReminderAction(invoiceId: string, customMessage
                             : []),
                         'If payment has already been made, please reply with proof of payment so we can update your account.',
                     ],
-                    signOff: { name: (authUser?.name || '').trim() || undefined },
+                    signOff: isAero ? undefined : { name: senderName },
                 },
         })
 

@@ -79,13 +79,13 @@ function accentFor(theme?: string | null): { accent: string; accentText: string 
 export function resolveBrand(settings: EmailSettings, companyId?: string | null, hasLogo = false): EmailBrand {
     const aero = isAeroWashCompany(companyId, settings)
     const { accent, accentText } = accentFor(aero ? 'dark-orange' : settings?.theme)
-    const name = (settings?.name || '').trim() || (aero ? 'AeroWash (Pty) Ltd' : 'Our team')
+    const name = aero ? 'AeroWash (Pty) Ltd' : ((settings?.name || '').trim() || 'Our team')
     return {
         name,
         shortName: shortCompanyName(name),
-        email: (settings?.email || '').trim() || (aero ? 'info@aerowash.co.za' : ''),
-        phone: (settings?.phone || '').trim(),
-        website: (settings?.website || '').trim(),
+        email: aero ? 'info@aerowash.co.za' : ((settings?.email || '').trim()),
+        phone: (settings?.phone || '').trim() || (aero ? '067 829 3350' : ''),
+        website: (settings?.website || '').trim() || (aero ? 'https://aerowash.co.za' : ''),
         accent,
         accentText,
         headerBg: aero ? '#0A0A0A' : '#FFFFFF',
@@ -178,7 +178,12 @@ export interface BrandedEmailInput {
 /** Branded HTML + plain-text email. Works for quotes, invoices, reminders and approvals. */
 export function buildBrandedEmail(input: BrandedEmailInput): BuiltEmail {
     const { brand } = input
+    const isAero = brand.shortName === 'AeroWash' || brand.name.toLowerCase().includes('aerowash')
     const signLines = (() => {
+        if (isAero) {
+            // AeroWash client emails always sign off strictly as "AeroWash (Pty) Ltd" (never personal user name)
+            return [brand.name, brand.phone, brand.email].filter(Boolean)
+        }
         if (input.signOff) {
             return [
                 input.signOff.name || '',
@@ -190,6 +195,8 @@ export function buildBrandedEmail(input: BrandedEmailInput): BuiltEmail {
         }
         return [brand.name, brand.phone, brand.email].filter(Boolean)
     })()
+
+    const hasSignOff = Boolean(input.signOff || isAero)
 
     const logoBlock = input.logoCid
         ? `<img src="cid:${esc(input.logoCid)}" alt="${esc(brand.name)}" height="44" style="display:block;height:44px;width:auto;border:0;outline:none;">`
@@ -217,7 +224,7 @@ ${paragraphsHtml(input.paragraphs)}
 ${rowsHtml(input.rows || [])}
 ${button}
 ${paragraphsHtml(input.afterParagraphs || [])}
-<p style="margin:18px 0 0 0;font-size:15px;line-height:1.6;color:#1f2937;">${input.signOff ? 'Kind regards,' : ''}</p>
+<p style="margin:18px 0 0 0;font-size:15px;line-height:1.6;color:#1f2937;">${hasSignOff ? 'Kind regards,' : ''}</p>
 <p style="margin:2px 0 22px 0;font-size:14px;line-height:1.6;color:#374151;">${signLines.map((l, i) => (i === 0 ? `<strong>${esc(l)}</strong>` : esc(l))).join('<br>')}</p>
 </td></tr>
 <tr><td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #eef0f2;font-size:11px;color:#9ca3af;">${esc(brand.name)}${brand.email ? ` &middot; ${esc(brand.email)}` : ''}${brand.phone ? ` &middot; ${esc(brand.phone)}` : ''}</td></tr>
@@ -233,7 +240,7 @@ ${paragraphsHtml(input.afterParagraphs || [])}
         textParts.push(`${input.cta.label}:\n${input.cta.url}${input.ctaNote ? `\n(${input.ctaNote})` : ''}`)
     }
     if (input.afterParagraphs?.length) textParts.push(...input.afterParagraphs.filter(p => p && String(p).trim()))
-    textParts.push(`${input.signOff ? 'Kind regards,\n' : ''}${signLines.join('\n')}`)
+    textParts.push(`${hasSignOff ? 'Kind regards,\n' : ''}${signLines.join('\n')}`)
 
     return { subject: input.subject, html, text: textParts.join('\n\n') }
 }

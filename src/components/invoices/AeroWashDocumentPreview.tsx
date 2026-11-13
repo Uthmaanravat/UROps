@@ -111,8 +111,8 @@ export function AeroWashDocumentPreview({
     ).trim();
     const poDisplayText = realPo || "No PO";
 
-    const prepName = companySettings?.preparedByName || "Uthmaan Ravat";
-    const prepPhone = companySettings?.preparedByPhone || "067 829 3350";
+    const prepName = companySettings?.name || "AeroWash (Pty) Ltd";
+    const prepPhone = companySettings?.phone || "067 829 3350";
 
     // Numbered terms clauses
     const termsBody = invoice.terms && invoice.terms.length > 0

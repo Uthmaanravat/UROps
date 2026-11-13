@@ -29,10 +29,27 @@ export type EmailSendLogRecord = {
     error?: string;
 };
 
-function getResendClient(): Resend | null {
+function getResendClientForCompany(isAero: boolean): { client: Resend | null; error?: string } {
     const runtimeEnv = process.env as Record<string, string | undefined>;
+    if (isAero) {
+        const key = (runtimeEnv['RESEND_API_KEY_AEROWASH'] || '').trim();
+        if (!key) {
+            return {
+                client: null,
+                error: 'AeroWash email provider not configured. Please add RESEND_API_KEY_AEROWASH to your environment variables.',
+            };
+        }
+        return { client: new Resend(key) };
+    }
+
     const key = (runtimeEnv['RESEND_API_KEY'] || '').trim();
-    return key ? new Resend(key) : null;
+    if (!key) {
+        return {
+            client: null,
+            error: 'Email provider not configured. Please add RESEND_API_KEY to your environment variables.',
+        };
+    }
+    return { client: new Resend(key) };
 }
 
 function mapAttachments(list?: SendEmailAttachment[]) {
@@ -200,7 +217,6 @@ export async function sendRealEmail(data: {
     isTest?: boolean;
     skipDbAuditLog?: boolean;
 }) {
-    const resend = getResendClient();
     const intendedRecipients = (Array.isArray(data.to) ? data.to : [data.to])
         .map(r => String(r || '').trim())
         .filter(Boolean);
@@ -211,6 +227,13 @@ export async function sendRealEmail(data: {
     });
 
     const { companyId, companyName } = inferCompanyContext(data);
+    const isAero =
+        companyId === AEROWASH_COMPANY_ID ||
+        companyName.toLowerCase().includes('aerowash') ||
+        Boolean(data.from && data.from.toLowerCase().includes('aerowash')) ||
+        Boolean(data.replyTo && data.replyTo.toLowerCase().includes('aerowash.co.za'));
+
+    const { client: resend, error: clientErr } = getResendClientForCompany(isAero);
 
     // Hard safety switch: in TEST mode, ALL outgoing email goes ONLY to utiravat@gmail.com with "[TEST]" in subject.
     const actualRecipients =
@@ -244,7 +267,7 @@ export async function sendRealEmail(data: {
     const finalHtml = testBannerHtml ? testBannerHtml + baseHtml : baseHtml;
 
     if (!resend) {
-        const err = "Email provider not configured. Please add RESEND_API_KEY to your environment variables.";
+        const err = clientErr || "Email provider not configured. Please add RESEND_API_KEY to your environment variables.";
         console.error("[Email Service]", err);
         await logEmailSendInApp(
             {
@@ -290,8 +313,9 @@ export async function sendRealEmail(data: {
             attachments,
         });
 
-        // If domain is not verified on Resend, automatically fall back to Resend default sender with reply-to
-        if (response.error && (response.error.message?.includes('not verified') || response.error.name === 'validation_error')) {
+        // For non-AeroWash only: If domain is not verified on Resend, automatically fall back to Resend default sender with reply-to
+        // For AeroWash: AeroWash email must fail with a clear error, NOT fall back to another sender
+        if (!isAero && response.error && (response.error.message?.includes('not verified') || response.error.name === 'validation_error')) {
             console.warn(`[Email Service] Domain in "${fromAddress}" not verified on Resend. Falling back to default sender <onboarding@resend.dev> with reply-to: ${replyTo}`);
 
             const fallbackFrom = `${defaultFromName} <onboarding@resend.dev>`;
@@ -307,9 +331,9 @@ export async function sendRealEmail(data: {
             });
         }
 
-        // Handle Resend sandbox restriction: if domain is unverified and recipient is not account owner,
+        // For non-AeroWash only: Handle Resend sandbox restriction: if domain is unverified and recipient is not account owner,
         // reroute to verified account owner (utiravat@gmail.com) so notifications never get lost
-        if (response.error && response.error.message?.includes('testing emails to your own email address')) {
+        if (!isAero && response.error && response.error.message?.includes('testing emails to your own email address')) {
             console.warn(`[Email Service] Sandbox mode: rerouting to registered account owner (${SAFE_TEST_EMAIL_RECIPIENT}) for recipients [${actualRecipients.join(', ')}]`);
             const sandboxSubject = /^\[TEST\]/i.test(finalSubject)
                 ? finalSubject

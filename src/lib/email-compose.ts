@@ -39,7 +39,8 @@ export async function composeBrandedEmail(args: {
         logoCid: logo ? LOGO_CID : undefined,
     })
 
-    const senderAddress = brand.email || (args.fallbackSenderEmail || '').trim()
+    const isAero = brand.shortName === 'AeroWash' || brand.name.toLowerCase().includes('aerowash')
+    const senderAddress = isAero ? 'info@aerowash.co.za' : (brand.email || (args.fallbackSenderEmail || '').trim())
     const from = senderAddress
         ? `${brand.name} <${senderAddress}>`
         : `${brand.name} <onboarding@resend.dev>`

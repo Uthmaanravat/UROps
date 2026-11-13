@@ -2623,14 +2623,6 @@ export function InvoiceViewer({
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="grid gap-6 py-6">
-                                        {isAeroWashDocument && (
-                                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
-                                                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                                                <div className="leading-relaxed">
-                                                    <strong className="text-amber-300">Resend DNS Verification Notice:</strong> The domain <span className="font-mono text-white text-[11px] bg-black/40 px-1 py-0.5 rounded">aerowash.co.za</span> is pending DNS record verification in Resend. Outgoing emails are routed via fallback sender with reply-to set to <span className="font-mono text-white text-[11px] bg-black/40 px-1 py-0.5 rounded">info@aerowash.co.za</span> until DNS records are active.
-                                                </div>
-                                            </div>
-                                        )}
                                         <div className="space-y-3">
                                             <Label htmlFor="emails" className="text-[10px] font-black uppercase tracking-widest text-primary">Recipient Emails</Label>
                                             <Input
@@ -3004,14 +2996,6 @@ export function InvoiceViewer({
                                             <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-start gap-2.5">
                                                 <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                                                 <div className="leading-relaxed font-medium">{convertError}</div>
-                                            </div>
-                                        )}
-                                        {isAeroWashDocument && (
-                                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
-                                                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                                                <div className="leading-relaxed">
-                                                    <strong className="text-amber-300">Resend DNS Verification Notice:</strong> The domain <span className="font-mono text-white text-[11px] bg-black/40 px-1 py-0.5 rounded">aerowash.co.za</span> is pending DNS record verification in Resend. Outgoing emails are routed via fallback sender with reply-to set to <span className="font-mono text-white text-[11px] bg-black/40 px-1 py-0.5 rounded">info@aerowash.co.za</span> until DNS records are active.
-                                                </div>
                                             </div>
                                         )}
                                         <div className="space-y-3">
