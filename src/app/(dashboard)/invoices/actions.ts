@@ -40,9 +40,10 @@ export async function createInvoiceAction(data: {
         const targetId = data.workspace ? getCompanyIdForWorkspace(data.workspace) : data.companyId!
         const authUser = await getAuthUser()
         const targetWorkspace = getWorkspaceForCompanyId(targetId)
-        if (authUser && targetWorkspace && (await canUserAccessWorkspace(authUser, targetWorkspace))) {
-            companyId = targetId
+        if (!authUser || !targetWorkspace || !(await canUserAccessWorkspace(authUser, targetWorkspace))) {
+            throw new Error("403: Forbidden - You do not have access to this company workspace.")
         }
+        companyId = targetId
     }
     console.log('[createInvoiceAction] Initiating invoice/quote creation:', {
         companyId,

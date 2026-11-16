@@ -22,6 +22,7 @@ export default function DashboardLayoutClient({
     changesRequestedQuotes = [],
     standbyApprovals = [],
     complianceAlerts = [],
+    canSwitchCompanies = false,
 }: {
     children: React.ReactNode;
     user: User;
@@ -30,6 +31,7 @@ export default function DashboardLayoutClient({
     changesRequestedQuotes?: any[];
     standbyApprovals?: any[];
     complianceAlerts?: Array<{ id: string; label: string; severity: "CRITICAL" | "EXPIRED" }>;
+    canSwitchCompanies?: boolean;
 }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUpdatingRole, setIsUpdatingRole] = useState(false);
@@ -126,6 +128,36 @@ export default function DashboardLayoutClient({
                         <span className="text-sm font-bold text-white truncate leading-tight">{appDisplayName}</span>
                     </div>
                 </div>
+                {canSwitchCompanies && (
+                    <div className="px-1 -mt-2">
+                        <div className="p-1 rounded-xl bg-white/[0.03] border border-white/5 flex items-center gap-1">
+                            <Link
+                                href="/app/aerowash"
+                                className={cn(
+                                    "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all",
+                                    isAeroWash
+                                        ? "bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm"
+                                        : "text-muted-foreground/70 hover:text-white hover:bg-white/5"
+                                )}
+                            >
+                                <img src="/icons/aerowash/icon-192x192.png" alt="AeroWash" className="w-3.5 h-3.5 rounded object-contain" />
+                                <span>AeroWash</span>
+                            </Link>
+                            <Link
+                                href="/app/lrbuilders"
+                                className={cn(
+                                    "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all",
+                                    isLRBuilders
+                                        ? "bg-red-500/20 text-red-400 border border-red-500/30 shadow-sm"
+                                        : "text-muted-foreground/70 hover:text-white hover:bg-white/5"
+                                )}
+                            >
+                                <img src="/icons/lrbuilders/icon-192x192.png" alt="LR Builders" className="w-3.5 h-3.5 rounded object-contain bg-white p-0.5" />
+                                <span>LR Builders</span>
+                            </Link>
+                        </div>
+                    </div>
+                )}
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
                     <Sidebar role={user.role} settings={settings} complianceAlertCount={complianceAlerts.length} />
                 </div>
@@ -246,6 +278,38 @@ export default function DashboardLayoutClient({
                         <X className="h-4 w-4" />
                     </Button>
                 </div>
+                {canSwitchCompanies && (
+                    <div className="px-4 pt-3 pb-1 bg-white/[0.01] border-b border-white/5">
+                        <div className="p-1 rounded-xl bg-white/[0.03] border border-white/5 flex items-center gap-1">
+                            <Link
+                                href="/app/aerowash"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className={cn(
+                                    "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all",
+                                    isAeroWash
+                                        ? "bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm"
+                                        : "text-muted-foreground/70 hover:text-white hover:bg-white/5"
+                                )}
+                            >
+                                <img src="/icons/aerowash/icon-192x192.png" alt="AeroWash" className="w-3.5 h-3.5 rounded object-contain" />
+                                <span>AeroWash</span>
+                            </Link>
+                            <Link
+                                href="/app/lrbuilders"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className={cn(
+                                    "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all",
+                                    isLRBuilders
+                                        ? "bg-red-500/20 text-red-400 border border-red-500/30 shadow-sm"
+                                        : "text-muted-foreground/70 hover:text-white hover:bg-white/5"
+                                )}
+                            >
+                                <img src="/icons/lrbuilders/icon-192x192.png" alt="LR Builders" className="w-3.5 h-3.5 rounded object-contain bg-white p-0.5" />
+                                <span>LR Builders</span>
+                            </Link>
+                        </div>
+                    </div>
+                )}
                 <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
                     <Sidebar role={user.role} settings={settings} onItemClick={() => setIsMobileMenuOpen(false)} complianceAlertCount={complianceAlerts.length} />
                 </div>

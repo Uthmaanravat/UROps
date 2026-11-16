@@ -207,6 +207,10 @@ export default async function DashboardLayout({
             complianceAlerts = await getLayoutComplianceBannerItems(dbUser.companyId, settings)
         }
 
+        const hasAW = await canUserAccessWorkspace(dbUser, 'aerowash')
+        const hasLR = await canUserAccessWorkspace(dbUser, 'lrbuilders')
+        const canSwitchCompanies = Boolean(hasAW && hasLR)
+
         let serializedUser = null
         let serializedSettings = null
         try {
@@ -225,6 +229,7 @@ export default async function DashboardLayout({
                 changesRequestedQuotes={changesRequestedQuotes}
                 standbyApprovals={standbyApprovals}
                 complianceAlerts={complianceAlerts}
+                canSwitchCompanies={canSwitchCompanies}
             >
                 {children}
             </DashboardLayoutClient>
