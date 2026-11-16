@@ -12,7 +12,6 @@ export const metadata: Metadata = {
         template: "%s | LR Builders",
     },
     description: "LR Builders Project & Operations Command Center",
-    manifest: "/manifest-lrbuilders.json",
     appleWebApp: {
         capable: true,
         statusBarStyle: "default",

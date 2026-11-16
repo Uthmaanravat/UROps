@@ -12,7 +12,6 @@ export const metadata: Metadata = {
         template: "%s | AeroWash",
     },
     description: "AeroWash Drone Cleaning Solutions & Operations Command Center",
-    manifest: "/manifest-aerowash.json",
     appleWebApp: {
         capable: true,
         statusBarStyle: "black-translucent",

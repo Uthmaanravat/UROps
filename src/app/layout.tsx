@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { prisma } from "@/lib/prisma";
@@ -15,7 +16,6 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
     title: "UROps",
     description: "Professional Operations & Business Software",
-    manifest: "/manifest.json",
     appleWebApp: {
         capable: true,
         statusBarStyle: "black-translucent",
@@ -39,6 +39,8 @@ export default async function RootLayout({
 }>) {
     let initialTheme = "dark";
     let themeClass = "dark";
+    let dbCompanyId = "";
+    let companyName = "";
 
     try {
         const { createClient } = await import("@/lib/supabase/server");
@@ -52,12 +54,14 @@ export default async function RootLayout({
             });
 
             if (dbUser?.companyId) {
+                dbCompanyId = dbUser.companyId;
                 const settings = await prisma.companySettings.findUnique({
                     where: { companyId: dbUser.companyId },
                     select: { theme: true, companyId: true, name: true }
                 });
 
                 if (settings) {
+                    companyName = settings.name;
                     if (settings.theme === "dark-orange" || settings.companyId === "70af7281-072d-4ed5-9f2e-af4d93e99ea9" || settings.name.toLowerCase().includes("aerowash")) {
                         initialTheme = "dark-orange";
                         themeClass = "dark theme-orange";
@@ -78,9 +82,27 @@ export default async function RootLayout({
         // Fallback to neutral dark gracefully
     }
 
+    let pathname = "";
+    try {
+        pathname = headers().get("x-pathname") || "";
+    } catch {}
+
+    const isLRWorkspace = dbCompanyId === "299c43ec-9578-4c45-91cb-a881a539e25d" || companyName.toLowerCase().includes("lr");
+    const isLRBuilders = pathname.startsWith("/app/lrbuilders") || (!pathname.startsWith("/app/aerowash") && isLRWorkspace);
+
+    const manifestUrl = isLRBuilders
+        ? "/manifest-lrbuilders.json"
+        : "/manifest-aerowash.json";
+
+    const appleTouchIcon = isLRBuilders
+        ? "/icons/lrbuilders/apple-touch-icon.png"
+        : "/icons/aerowash/apple-touch-icon.png";
+
     return (
         <html lang="en" className={themeClass} suppressHydrationWarning>
             <head>
+                <link rel="manifest" href={manifestUrl} crossOrigin="use-credentials" />
+                <link rel="apple-touch-icon" href={appleTouchIcon} />
                 <script
                     dangerouslySetInnerHTML={{
                         __html: `

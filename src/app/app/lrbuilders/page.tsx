@@ -17,7 +17,6 @@ export const dynamic = "force-dynamic"
 export const metadata: Metadata = {
     title: "LR Builders",
     description: "LR Builders Project & Operations Command Center",
-    manifest: "/manifest-lrbuilders.json",
     appleWebApp: {
         capable: true,
         statusBarStyle: "default",

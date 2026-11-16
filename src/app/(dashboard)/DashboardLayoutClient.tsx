@@ -54,6 +54,23 @@ export default function DashboardLayoutClient({
 
     console.log("DashboardLayoutClient rendering for role:", user.role);
 
+    const isAeroWash = Boolean(
+        pathname?.startsWith('/app/aerowash') ||
+        user?.companyId === "70af7281-072d-4ed5-9f2e-af4d93e99ea9" ||
+        settings?.theme === "dark-orange" ||
+        settings?.name?.toLowerCase().includes("aerowash")
+    );
+    const isLRBuilders = Boolean(
+        pathname?.startsWith('/app/lrbuilders') ||
+        user?.companyId === "299c43ec-9578-4c45-91cb-a881a539e25d" ||
+        settings?.name?.toLowerCase().includes("lr builders") ||
+        settings?.name?.toLowerCase().includes("lrbuilder")
+    );
+    const appDisplayName = isAeroWash ? "AeroWash" : (isLRBuilders ? "LR Builders" : (settings?.name || "UROps"));
+    const appSubtitle = isAeroWash ? "Operations" : (isLRBuilders ? "Operations" : "Operations Suite");
+    const defaultAppLogo = isAeroWash ? "/icons/aerowash/icon-192x192.png" : (isLRBuilders ? "/icons/lrbuilders/icon-192x192.png" : null);
+    const logoToDisplay = settings?.logoUrl || defaultAppLogo;
+
     const handleRoleSwitch = async () => {
         if (isUpdatingRole) return;
         setIsUpdatingRole(true);
@@ -77,9 +94,9 @@ export default function DashboardLayoutClient({
             <aside className="hidden w-64 border-r bg-[#0F0F1A] p-4 md:flex flex-col gap-6 sticky top-0 h-screen overflow-x-hidden">
                 <div className="flex items-center gap-3 px-2">
                     <div className="shrink-0 relative">
-                        {settings?.logoUrl ? (
+                        {logoToDisplay ? (
                             <img
-                                src={settings.logoUrl}
+                                src={logoToDisplay}
                                 alt="Logo"
                                 width={48}
                                 height={48}
@@ -95,7 +112,7 @@ export default function DashboardLayoutClient({
                     </div>
                     <div className="flex flex-col min-w-0">
                         <span className="text-[11px] font-black uppercase tracking-[0.2em] text-primary/80 truncate">Network Dashboard</span>
-                        <span className="text-sm font-bold text-white truncate leading-tight">{settings?.name || "UROps"}</span>
+                        <span className="text-sm font-bold text-white truncate leading-tight">{appDisplayName}</span>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -152,9 +169,9 @@ export default function DashboardLayoutClient({
             {/* Mobile Header */}
             <header className="flex h-14 items-center border-b px-4 md:hidden bg-card/80 backdrop-blur-md justify-between sticky top-0 z-50">
                 <div className="font-bold flex items-center gap-2.5">
-                    {settings?.logoUrl ? (
+                    {logoToDisplay ? (
                         <img
-                            src={settings.logoUrl}
+                            src={logoToDisplay}
                             alt="Logo"
                             width={32}
                             height={32}
@@ -167,8 +184,8 @@ export default function DashboardLayoutClient({
                         </div>
                     )}
                     <div className="flex flex-col -gap-1">
-                        <span className="text-xs font-black uppercase tracking-widest text-primary drop-shadow-sm">UROps</span>
-                        <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest truncate max-w-[80px]">{settings?.name || "Suite"}</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-primary drop-shadow-sm">{appDisplayName}</span>
+                        <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest truncate max-w-[120px]">{appSubtitle}</span>
                     </div>
                 </div>
                 <Button
@@ -197,9 +214,9 @@ export default function DashboardLayoutClient({
                 <div className="p-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
                     <div className="flex items-center gap-3">
                         <div className="shrink-0 relative">
-                            {settings?.logoUrl ? (
+                            {logoToDisplay ? (
                                 <img
-                                    src={settings.logoUrl}
+                                    src={logoToDisplay}
                                     alt="Logo"
                                     width={36}
                                     height={36}
@@ -214,7 +231,7 @@ export default function DashboardLayoutClient({
                         </div>
                         <div className="flex flex-col min-w-0">
                             <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/80 truncate">Network Dashboard</span>
-                            <span className="text-xs font-bold text-white truncate">{settings?.name || "UROps"}</span>
+                            <span className="text-xs font-bold text-white truncate">{appDisplayName}</span>
                         </div>
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(false)} className="text-muted-foreground hover:bg-white/5 h-8 w-8">

@@ -1,12 +1,12 @@
 {
-  "id": "/app/aerowash",
+  "id": "aerowash-pwa-app",
   "name": "AeroWash",
   "short_name": "AeroWash",
   "description": "AeroWash Drone Cleaning Solutions & Operations Command Center",
   "start_url": "/app/aerowash",
-  "scope": "/app/aerowash",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "theme_color": "#0A0A0A",
   "background_color": "#0A0A0A",
   "icons": [

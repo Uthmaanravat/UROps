@@ -1,12 +1,12 @@
 {
-  "id": "/app/lrbuilders",
+  "id": "lrbuilders-pwa-app",
   "name": "LR Builders",
   "short_name": "LR Builders",
   "description": "LR Builders Project & Operations Command Center",
   "start_url": "/app/lrbuilders",
-  "scope": "/app/lrbuilders",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "theme_color": "#FFFFFF",
   "background_color": "#FFFFFF",
   "icons": [

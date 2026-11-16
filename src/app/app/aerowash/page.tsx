@@ -17,7 +17,6 @@ export const dynamic = "force-dynamic"
 export const metadata: Metadata = {
     title: "AeroWash",
     description: "AeroWash Drone Cleaning Solutions & Operations Command Center",
-    manifest: "/manifest-aerowash.json",
     appleWebApp: {
         capable: true,
         statusBarStyle: "black-translucent",
