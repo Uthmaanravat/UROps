@@ -55,6 +55,18 @@ const nextConfig = {
             },
         ];
     },
+    async rewrites() {
+        return [
+            {
+                source: "/app/aerowash/:path+",
+                destination: "/:path+",
+            },
+            {
+                source: "/app/lrbuilders/:path+",
+                destination: "/:path+",
+            },
+        ];
+    },
 };
 
 export default nextConfig;

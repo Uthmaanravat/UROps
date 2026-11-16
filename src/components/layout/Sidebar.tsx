@@ -73,6 +73,13 @@ export function Sidebar({
     const type = searchParams ? searchParams.get("type") : null;
     const [openGroups, setOpenGroups] = useState<string[]>(navigation.map(n => n.title));
 
+    const appPrefix = pathname?.startsWith('/app/aerowash')
+        ? '/app/aerowash'
+        : pathname?.startsWith('/app/lrbuilders')
+        ? '/app/lrbuilders'
+        : '';
+    const cleanPathname = appPrefix ? (pathname.slice(appPrefix.length) || '/') : (pathname || '');
+
     const toggleGroup = (title: string) => {
         setOpenGroups(prev => prev.includes(title) ? prev.filter(g => g !== title) : [...prev, title]);
     }
@@ -87,7 +94,8 @@ export function Sidebar({
 
     // CREW sees ONLY "My Jobs Today" — zero prices, zero quotes, zero invoices, zero client list
     if (role === "CREW") {
-        const isActive = pathname === "/my-jobs" || pathname.startsWith("/my-jobs/");
+        const targetMyJobs = appPrefix ? `${appPrefix}/my-jobs` : "/my-jobs";
+        const isActive = cleanPathname === "/my-jobs" || cleanPathname.startsWith("/my-jobs/");
         return (
             <div className="px-3 py-4 space-y-4">
                 <div className="space-y-1">
@@ -97,7 +105,7 @@ export function Sidebar({
                     </div>
                     <div className="mt-2 pl-2">
                         <Link
-                            href="/my-jobs"
+                            href={targetMyJobs}
                             onClick={onItemClick}
                             className={cn(
                                 "group flex items-center justify-between rounded-xl px-3 py-3 text-sm font-black transition-all duration-300 relative overflow-hidden",
@@ -205,15 +213,17 @@ export function Sidebar({
                                     if (hasQuery) {
                                         const urlParams = new URLSearchParams(item.href.split('?')[1]);
                                         const itemType = urlParams.get("type");
-                                        isActive = pathname === hrefPath && type === itemType;
+                                        isActive = cleanPathname === hrefPath && type === itemType;
                                     } else {
-                                        isActive = pathname === hrefPath || pathname.startsWith(hrefPath + "/");
+                                        isActive = cleanPathname === hrefPath || cleanPathname.startsWith(hrefPath + "/");
                                     }
+
+                                    const targetHref = appPrefix ? `${appPrefix}${item.href}` : item.href;
 
                                     return (
                                         <Link
                                             key={item.href}
-                                            href={item.href}
+                                            href={targetHref}
                                             onClick={onItemClick}
                                             className={cn(
                                                 "group flex items-center justify-between rounded-xl px-3 py-2 text-[13px] font-bold transition-all duration-300 relative overflow-hidden",

@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import DashboardLayoutClient from "./DashboardLayoutClient"
 import { getLayoutComplianceBannerItems } from "@/lib/compliance-alerts"
+import {
+    canUserAccessWorkspace,
+    switchUserWorkspace,
+    AEROWASH_COMPANY_ID,
+    LRBUILDERS_COMPANY_ID,
+} from "@/lib/workspace-auth"
+import WorkspaceAccessDenied from "@/components/auth/WorkspaceAccessDenied"
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +54,43 @@ export default async function DashboardLayout({
 
         const pathname = headers().get('x-pathname') || ''
 
+        // 1. Dual-PWA workspace isolation & automatic switching
+        if (pathname.startsWith('/app/aerowash')) {
+            const hasAccess = await canUserAccessWorkspace(dbUser, 'aerowash')
+            if (!hasAccess) {
+                const hasLRAccess = await canUserAccessWorkspace(dbUser, 'lrbuilders')
+                return (
+                    <WorkspaceAccessDenied
+                        workspaceName="AeroWash"
+                        userEmail={dbUser.email || ""}
+                        alternativeWorkspaceHref={hasLRAccess ? "/app/lrbuilders" : undefined}
+                        alternativeWorkspaceName={hasLRAccess ? "LR Builders" : undefined}
+                    />
+                )
+            }
+            if (dbUser.companyId !== AEROWASH_COMPANY_ID) {
+                await switchUserWorkspace(dbUser.id, 'aerowash')
+                dbUser.companyId = AEROWASH_COMPANY_ID
+            }
+        } else if (pathname.startsWith('/app/lrbuilders')) {
+            const hasAccess = await canUserAccessWorkspace(dbUser, 'lrbuilders')
+            if (!hasAccess) {
+                const hasAWAccess = await canUserAccessWorkspace(dbUser, 'aerowash')
+                return (
+                    <WorkspaceAccessDenied
+                        workspaceName="LR Builders"
+                        userEmail={dbUser.email || ""}
+                        alternativeWorkspaceHref={hasAWAccess ? "/app/aerowash" : undefined}
+                        alternativeWorkspaceName={hasAWAccess ? "AeroWash" : undefined}
+                    />
+                )
+            }
+            if (dbUser.companyId !== LRBUILDERS_COMPANY_ID) {
+                await switchUserWorkspace(dbUser.id, 'lrbuilders')
+                dbUser.companyId = LRBUILDERS_COMPANY_ID
+            }
+        }
+
         // Strict server-side CREW role isolation: CREW users can ONLY access /my-jobs and /my-jobs/[projectId]
         if (dbUser.role === 'CREW') {
             if (pathname && pathname !== '/my-jobs' && !pathname.startsWith('/my-jobs/')) {
@@ -56,7 +100,17 @@ export default async function DashboardLayout({
             redirect("/onboarding")
         }
 
-        const settings = dbUser.company?.settings || null
+        // Fetch company settings for effective companyId (in case company was switched)
+        let effectiveCompany = dbUser.company
+        if (effectiveCompany?.id !== dbUser.companyId) {
+            const fetched = await prisma.company.findUnique({
+                where: { id: dbUser.companyId },
+                include: { settings: true }
+            })
+            if (fetched) effectiveCompany = fetched as any
+        }
+
+        const settings = effectiveCompany?.settings || null
         const approvalThreshold = (settings as any)?.approvalThreshold
 
         let pendingApprovals: any[] = []

@@ -16,6 +16,7 @@ export function LoginForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const message = searchParams.get("message")
+    const returnTo = searchParams.get("returnTo")
 
     const handleSignIn = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -30,7 +31,8 @@ export function LoginForm() {
             const result = await signInAction(formData)
 
             if (result.success) {
-                router.push((result as any).redirectTo || "/dashboard")
+                const target = returnTo || (result as any).redirectTo || "/dashboard"
+                router.push(target)
                 router.refresh()
             } else {
                 setError(result.error || "Invalid email or password")

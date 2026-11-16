@@ -1,0 +1,32 @@
+{
+  "id": "/app/aerowash",
+  "name": "AeroWash",
+  "short_name": "AeroWash",
+  "description": "AeroWash Drone Cleaning Solutions & Operations Command Center",
+  "start_url": "/app/aerowash",
+  "scope": "/app/aerowash",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0A0A0A",
+  "background_color": "#0A0A0A",
+  "icons": [
+    {
+      "src": "/icons/aerowash/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/aerowash/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/aerowash/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "id": "/app/lrbuilders",
+  "name": "LR Builders",
+  "short_name": "LR Builders",
+  "description": "LR Builders Project & Operations Command Center",
+  "start_url": "/app/lrbuilders",
+  "scope": "/app/lrbuilders",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#FFFFFF",
+  "background_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "/icons/lrbuilders/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/lrbuilders/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/lrbuilders/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
