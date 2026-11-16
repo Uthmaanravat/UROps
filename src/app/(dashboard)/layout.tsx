@@ -54,7 +54,7 @@ export default async function DashboardLayout({
 
         const pathname = headers().get('x-pathname') || ''
 
-        // 1. Dual-PWA workspace isolation & automatic switching
+        // 1. Dual-PWA workspace isolation (strictly stateless in-memory assignment)
         if (pathname.startsWith('/app/aerowash')) {
             const hasAccess = await canUserAccessWorkspace(dbUser, 'aerowash')
             if (!hasAccess) {
@@ -68,10 +68,7 @@ export default async function DashboardLayout({
                     />
                 )
             }
-            if (dbUser.companyId !== AEROWASH_COMPANY_ID) {
-                await switchUserWorkspace(dbUser.id, 'aerowash')
-                dbUser.companyId = AEROWASH_COMPANY_ID
-            }
+            dbUser.companyId = AEROWASH_COMPANY_ID
         } else if (pathname.startsWith('/app/lrbuilders')) {
             const hasAccess = await canUserAccessWorkspace(dbUser, 'lrbuilders')
             if (!hasAccess) {
@@ -85,10 +82,7 @@ export default async function DashboardLayout({
                     />
                 )
             }
-            if (dbUser.companyId !== LRBUILDERS_COMPANY_ID) {
-                await switchUserWorkspace(dbUser.id, 'lrbuilders')
-                dbUser.companyId = LRBUILDERS_COMPANY_ID
-            }
+            dbUser.companyId = LRBUILDERS_COMPANY_ID
         }
 
         // Strict server-side CREW role isolation: CREW users can ONLY access /my-jobs and /my-jobs/[projectId]

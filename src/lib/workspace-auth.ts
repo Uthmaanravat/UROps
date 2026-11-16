@@ -23,6 +23,39 @@ export function getWorkspaceForCompanyId(companyId: string): WorkspaceType | nul
     return null
 }
 
+export function detectWorkspaceFromHeaders(headersList: { get: (name: string) => string | null }): WorkspaceType | null {
+    // 1. Check custom per-tab workspace header (e.g. x-workspace)
+    const explicitWorkspace = headersList.get('x-workspace')
+    if (explicitWorkspace === 'aerowash' || explicitWorkspace === 'lrbuilders') {
+        return explicitWorkspace
+    }
+
+    // 2. Check x-pathname (set by middleware from request.nextUrl.pathname)
+    const pathname = headersList.get('x-pathname') || ''
+    if (pathname.startsWith('/app/aerowash')) return 'aerowash'
+    if (pathname.startsWith('/app/lrbuilders')) return 'lrbuilders'
+
+    // 3. Check next-url (Next.js internal routing header for RSC and actions)
+    const nextUrl = headersList.get('next-url') || ''
+    if (nextUrl.startsWith('/app/aerowash')) return 'aerowash'
+    if (nextUrl.startsWith('/app/lrbuilders')) return 'lrbuilders'
+
+    // 4. Check referer (sent automatically by browser on every tab request/action)
+    const referer = headersList.get('referer') || ''
+    if (referer) {
+        try {
+            const url = new URL(referer)
+            if (url.pathname.startsWith('/app/aerowash')) return 'aerowash'
+            if (url.pathname.startsWith('/app/lrbuilders')) return 'lrbuilders'
+        } catch {
+            if (referer.includes('/app/aerowash')) return 'aerowash'
+            if (referer.includes('/app/lrbuilders')) return 'lrbuilders'
+        }
+    }
+
+    return null
+}
+
 export async function canUserAccessWorkspace(
     user: { id?: string; email?: string | null; role?: string; isOwner?: boolean; companyId?: string },
     workspace: WorkspaceType
@@ -54,20 +87,15 @@ export async function canUserAccessWorkspace(
     return !!matchingProfile
 }
 
+/**
+ * Workspace switching is strictly stateless and per-tab URL/scope driven.
+ * Database mutations are prohibited so that concurrent tabs in separate companies
+ * never contaminate each other's active session or data.
+ */
 export async function switchUserWorkspace(
     userId: string,
     workspace: WorkspaceType
 ): Promise<{ success: boolean; companyId: string }> {
     const targetCompanyId = getCompanyIdForWorkspace(workspace)
-
-    try {
-        await prisma.user.update({
-            where: { id: userId },
-            data: { companyId: targetCompanyId }
-        })
-        return { success: true, companyId: targetCompanyId }
-    } catch (err) {
-        console.error(`Failed to switch user ${userId} to workspace ${workspace}:`, err)
-        return { success: false, companyId: targetCompanyId }
-    }
+    return { success: true, companyId: targetCompanyId }
 }

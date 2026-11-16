@@ -4,7 +4,8 @@ import { isVatEffective, getVatRate, calculateVatAndTotal } from "@/lib/vat-util
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { ensureAuth } from "@/lib/auth-actions"
+import { ensureAuth, getAuthUser } from "@/lib/auth-actions"
+import { canUserAccessWorkspace, getCompanyIdForWorkspace, getWorkspaceForCompanyId } from "@/lib/workspace-auth"
 
 import { updateProjectStatus } from "../projects/actions"
 
@@ -29,8 +30,20 @@ export async function createInvoiceAction(data: {
     termsTemplateId?: string | null
     customTermsBody?: string | null
     prospectId?: string
+    workspace?: 'aerowash' | 'lrbuilders'
+    companyId?: string
 }) {
-    const companyId = await ensureAuth()
+    let companyId = await ensureAuth()
+
+    // Explicit client workspace context validated strictly against user's actual permissions
+    if (data.workspace || data.companyId) {
+        const targetId = data.workspace ? getCompanyIdForWorkspace(data.workspace) : data.companyId!
+        const authUser = await getAuthUser()
+        const targetWorkspace = getWorkspaceForCompanyId(targetId)
+        if (authUser && targetWorkspace && (await canUserAccessWorkspace(authUser, targetWorkspace))) {
+            companyId = targetId
+        }
+    }
     console.log('[createInvoiceAction] Initiating invoice/quote creation:', {
         companyId,
         clientId: data.clientId,

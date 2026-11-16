@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
-import { headers, cookies } from "next/headers"
+import { headers } from "next/headers"
 import React from "react"
 import {
     canUserAccessWorkspace,
     getCompanyIdForWorkspace,
-    switchUserWorkspace,
+    detectWorkspaceFromHeaders,
     WorkspaceType
 } from "@/lib/workspace-auth"
 
@@ -31,30 +31,21 @@ export const getAuthUser = cache(async () => {
 
     if (!dbUser) return null
 
-    // Check if a specific workspace is requested via route path or active cookie
-    let pathname = ""
+    // Determine active company strictly from request headers (x-workspace, x-pathname, next-url, referer).
+    // Never mutate User.companyId in the database, and never read/write a shared cookie,
+    // ensuring concurrent tabs/PWAs in separate workspaces never contaminate each other.
+    let headersList: Headers | null = null
     try {
-        pathname = headers().get('x-pathname') || ""
+        headersList = headers()
     } catch {}
 
-    let cookieWorkspace: string | undefined
-    try {
-        cookieWorkspace = cookies().get('active_workspace')?.value
-    } catch {}
-
-    const requestedWorkspace: WorkspaceType | null =
-        pathname.startsWith('/app/aerowash') ? 'aerowash' :
-        pathname.startsWith('/app/lrbuilders') ? 'lrbuilders' :
-        (cookieWorkspace === 'aerowash' || cookieWorkspace === 'lrbuilders') ? (cookieWorkspace as WorkspaceType) :
-        null
-
-    if (requestedWorkspace) {
-        const targetCompanyId = getCompanyIdForWorkspace(requestedWorkspace)
-        const hasAccess = await canUserAccessWorkspace(dbUser, requestedWorkspace)
-        if (hasAccess && dbUser.companyId !== targetCompanyId) {
-            dbUser.companyId = targetCompanyId
-            // Sync database asynchronously
-            switchUserWorkspace(dbUser.id, requestedWorkspace).catch(() => {})
+    if (headersList) {
+        const detectedWorkspace = detectWorkspaceFromHeaders(headersList)
+        if (detectedWorkspace) {
+            const hasAccess = await canUserAccessWorkspace(dbUser, detectedWorkspace)
+            if (hasAccess) {
+                dbUser.companyId = getCompanyIdForWorkspace(detectedWorkspace)
+            }
         }
     }
 

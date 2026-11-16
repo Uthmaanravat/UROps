@@ -3,7 +3,7 @@
 import { isVatEffective, getVatRate, getVatNoticeText } from "@/lib/vat-utils"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -103,6 +103,12 @@ export function QuoteForm({
 }: QuoteFormProps) {
     const isTendersEnabled = tendersEnabled
     const router = useRouter()
+    const pathname = usePathname()
+    const appPrefix = pathname?.startsWith('/app/aerowash')
+        ? '/app/aerowash'
+        : pathname?.startsWith('/app/lrbuilders')
+        ? '/app/lrbuilders'
+        : (isAeroWashWorkspace ? '/app/aerowash' : '')
     const [isMounted, setIsMounted] = useState(false)
     useEffect(() => { setIsMounted(true) }, [])
     const docType = initialType
@@ -688,7 +694,9 @@ export function QuoteForm({
                 rateYear: workType === "TENDER" ? effectiveRateYear : 1,
                 termsTemplateId: docType === 'QUOTE' ? (selectedTermsTemplateId || null) : null,
                 customTermsBody: docType === 'QUOTE' ? (customTermsText.trim() || null) : null,
-                prospectId: initialProspectId || undefined
+                prospectId: initialProspectId || undefined,
+                workspace: isAeroWashWorkspace ? 'aerowash' : 'lrbuilders',
+                companyId: isAeroWashWorkspace ? '70af7281-072d-4ed5-9f2e-af4d93e99ea9' : '299c43ec-9578-4c45-91cb-a881a539e25d'
             })
 
             if (!invoiceId || typeof invoiceId !== 'string') {
@@ -701,7 +709,7 @@ export function QuoteForm({
             hasUserEditedRef.current = false
             setSubmitted(true)
             setLastInvoiceId(invoiceId)
-            router.push(`/invoices/${invoiceId}`)
+            router.push(`${appPrefix}/invoices/${invoiceId}`)
         } catch (error) {
             console.error("Save Quotation Error:", error)
             const errorMsg = error instanceof Error ? error.message : "Failed to create document"

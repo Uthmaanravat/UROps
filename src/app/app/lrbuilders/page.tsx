@@ -85,10 +85,6 @@ export default async function LRBuildersAppPage() {
         )
     }
 
-    // User is authorized for LR Builders - switch active company and enter workspace
-    if (user.companyId !== LRBUILDERS_COMPANY_ID) {
-        await switchUserWorkspace(user.id, "lrbuilders")
-    }
-
+    // User is authorized for LR Builders - enter workspace directly (stateless)
     redirect("/app/lrbuilders/dashboard")
 }

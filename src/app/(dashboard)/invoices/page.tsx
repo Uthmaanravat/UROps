@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { Button } from "@/components/ui/button";
 import { Plus, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, ArrowUpRight, Flame } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -27,6 +28,15 @@ export default async function InvoicesPage({
     }
 }) {
     const companyId = await ensureAuth();
+    let pathname = "";
+    try {
+        pathname = headers().get('x-pathname') || "";
+    } catch {}
+    const appPrefix = pathname.startsWith('/app/aerowash')
+        ? '/app/aerowash'
+        : pathname.startsWith('/app/lrbuilders')
+        ? '/app/lrbuilders'
+        : (companyId === '70af7281-072d-4ed5-9f2e-af4d93e99ea9' ? '/app/aerowash' : '');
     const query = searchParams.q || "";
     const statusFilter = searchParams.status || "";
     const typeFilter = searchParams.type || "";
@@ -377,7 +387,7 @@ export default async function InvoicesPage({
                             : 'Manage billing, track commercial status, and record client payments.'}
                     </p>
                 </div>
-                <Link href={typeFilter === 'INVOICE' ? '/invoices/new?type=INVOICE' : '/invoices/new'}>
+                <Link href={typeFilter === 'INVOICE' ? `${appPrefix}/invoices/new?type=INVOICE` : `${appPrefix}/invoices/new`}>
                     <Button>
                         <Plus className="mr-2 h-4 w-4" /> {typeFilter === 'INVOICE' ? 'New Invoice' : 'New Quote'}
                     </Button>
@@ -397,7 +407,7 @@ export default async function InvoicesPage({
                         </div>
                     </div>
                 </div>
-                <Link href={typeFilter === 'INVOICE' ? '/payments' : (isDroneEnabled ? '/drone' : '/prospects')}>
+                <Link href={typeFilter === 'INVOICE' ? `${appPrefix}/payments` : (isDroneEnabled ? `${appPrefix}/drone` : `${appPrefix}/prospects`)}>
                     <Button size="sm" variant="outline" className="h-8 text-xs font-bold border-white/10 text-white hover:bg-white/5">
                         {typeFilter === 'INVOICE' ? 'Payments ↗' : 'Sales Pipeline ↗'}
                     </Button>
@@ -719,7 +729,7 @@ export default async function InvoicesPage({
                                         <td className="p-4 align-middle">
                                             {invoice.project ? (
                                                 <div className="flex flex-col gap-1">
-                                                    <Link href={`/projects/${invoice.projectId}`} className="text-blue-500 hover:underline font-semibold">
+                                                    <Link href={`${appPrefix}/projects/${invoice.projectId}`} className="text-blue-500 hover:underline font-semibold">
                                                         {invoice.project.name}
                                                     </Link>
                                                     {invoice.project.commercialStatus && (
@@ -832,7 +842,7 @@ export default async function InvoicesPage({
                                         </td>
                                         <td className="p-4 align-middle text-right">
                                             <div className="flex justify-end gap-2">
-                                                <Link href={`/invoices/${invoice.id}`}>
+                                                <Link href={`${appPrefix}/invoices/${invoice.id}`}>
                                                     <Button variant="ghost" size="sm">View</Button>
                                                 </Link>
                                                 <DeleteButton

@@ -85,10 +85,6 @@ export default async function AeroWashAppPage() {
         )
     }
 
-    // User is authorized for AeroWash - switch active company and enter workspace
-    if (user.companyId !== AEROWASH_COMPANY_ID) {
-        await switchUserWorkspace(user.id, "aerowash")
-    }
-
+    // User is authorized for AeroWash - enter workspace directly (stateless)
     redirect("/app/aerowash/dashboard")
 }
