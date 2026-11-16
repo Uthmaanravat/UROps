@@ -56,16 +56,28 @@ const nextConfig = {
         ];
     },
     async rewrites() {
-        return [
-            {
-                source: "/app/aerowash/:path+",
-                destination: "/:path+",
-            },
-            {
-                source: "/app/lrbuilders/:path+",
-                destination: "/:path+",
-            },
-        ];
+        return {
+            beforeFiles: [
+                {
+                    source: "/app/aerowash",
+                    destination: "/dashboard",
+                },
+                {
+                    source: "/app/aerowash/:path+",
+                    destination: "/:path+",
+                },
+                {
+                    source: "/app/lrbuilders",
+                    destination: "/dashboard",
+                },
+                {
+                    source: "/app/lrbuilders/:path+",
+                    destination: "/:path+",
+                },
+            ],
+            afterFiles: [],
+            fallback: [],
+        };
     },
 };
 

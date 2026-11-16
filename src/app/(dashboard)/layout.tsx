@@ -7,6 +7,7 @@ import { getLayoutComplianceBannerItems } from "@/lib/compliance-alerts"
 import {
     canUserAccessWorkspace,
     switchUserWorkspace,
+    detectWorkspaceFromHeaders,
     AEROWASH_COMPANY_ID,
     LRBUILDERS_COMPANY_ID,
 } from "@/lib/workspace-auth"
@@ -20,16 +21,20 @@ export default async function DashboardLayout({
     children: React.ReactNode
 }) {
     try {
+        const headersList = headers()
+        const pathname = headersList.get('x-pathname') || ''
+        const returnToParam = pathname && pathname !== '/' ? `?returnTo=${encodeURIComponent(pathname)}` : ''
+
         const supabase = createClient()
         if (!supabase) {
             console.error("DashboardLayout: Supabase client is null")
-            redirect("/login")
+            redirect(`/login${returnToParam}`)
         }
 
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            redirect("/login")
+            redirect(`/login${returnToParam}`)
         }
 
         const dbUser = await prisma.user.findFirst({
@@ -49,13 +54,15 @@ export default async function DashboardLayout({
         })
 
         if (!dbUser) {
-            redirect("/login")
+            redirect(`/login${returnToParam}`)
         }
 
-        const pathname = headers().get('x-pathname') || ''
-
         // 1. Dual-PWA workspace isolation (strictly stateless in-memory assignment)
-        if (pathname.startsWith('/app/aerowash')) {
+        const detectedWorkspace = detectWorkspaceFromHeaders(headersList) || (
+            pathname.startsWith('/app/lrbuilders') ? 'lrbuilders' : (pathname.startsWith('/app/aerowash') ? 'aerowash' : null)
+        )
+
+        if (detectedWorkspace === 'aerowash') {
             const hasAccess = await canUserAccessWorkspace(dbUser, 'aerowash')
             if (!hasAccess) {
                 const hasLRAccess = await canUserAccessWorkspace(dbUser, 'lrbuilders')
@@ -69,7 +76,7 @@ export default async function DashboardLayout({
                 )
             }
             dbUser.companyId = AEROWASH_COMPANY_ID
-        } else if (pathname.startsWith('/app/lrbuilders')) {
+        } else if (detectedWorkspace === 'lrbuilders') {
             const hasAccess = await canUserAccessWorkspace(dbUser, 'lrbuilders')
             if (!hasAccess) {
                 const hasAWAccess = await canUserAccessWorkspace(dbUser, 'aerowash')

@@ -71,6 +71,17 @@ export default function DashboardLayoutClient({
     const defaultAppLogo = isAeroWash ? "/icons/aerowash/icon-192x192.png" : (isLRBuilders ? "/icons/lrbuilders/icon-192x192.png" : null);
     const logoToDisplay = settings?.logoUrl || defaultAppLogo;
 
+    const handleSignOut = async () => {
+        setIsLoggingOut(true);
+        await signOutAction();
+        const targetLogin = isLRBuilders
+            ? "/login?returnTo=/app/lrbuilders"
+            : isAeroWash
+            ? "/login?returnTo=/app/aerowash"
+            : "/login";
+        window.location.href = targetLogin;
+    };
+
     const handleRoleSwitch = async () => {
         if (isUpdatingRole) return;
         setIsUpdatingRole(true);
@@ -150,10 +161,7 @@ export default function DashboardLayoutClient({
                     </div>
                     )}
                     <button
-                        onClick={async () => {
-                            setIsLoggingOut(true);
-                            await signOutAction();
-                        }}
+                        onClick={handleSignOut}
                         disabled={isLoggingOut}
                         className="flex w-full items-center justify-center gap-2 h-10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:text-red-400 hover:bg-red-400/5 transition-all disabled:opacity-50"
                     >
@@ -262,10 +270,7 @@ export default function DashboardLayoutClient({
                     </button>
                     )}
                     <button
-                        onClick={async () => {
-                            setIsLoggingOut(true);
-                            await signOutAction();
-                        }}
+                        onClick={handleSignOut}
                         disabled={isLoggingOut}
                         className="flex w-full items-center justify-center gap-2 px-4 h-12 rounded-xl bg-red-500/5 text-red-500 hover:bg-red-500/10 transition-all font-black text-xs uppercase tracking-widest active:scale-95 disabled:opacity-50"
                     >
