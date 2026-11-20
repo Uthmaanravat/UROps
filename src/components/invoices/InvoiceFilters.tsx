@@ -6,11 +6,14 @@ import { ArrowUpDown } from "lucide-react"
 
 const statuses = [
     { value: "", label: "All Statuses" },
-    { value: "UNINVOICED", label: "⚡ Uninvoiced" },
-    { value: "INVOICED", label: "🧾 Invoiced" },
+    { value: "AWAITING_PO", label: "⏳ Awaiting PO" },
     { value: "DRAFT", label: "Draft" },
     { value: "SENT", label: "Sent" },
     { value: "ACCEPTED", label: "Accepted" },
+    { value: "DECLINED", label: "Declined" },
+    { value: "EXPIRED", label: "Expired" },
+    { value: "UNINVOICED", label: "⚡ Uninvoiced" },
+    { value: "INVOICED", label: "🧾 Invoiced" },
     { value: "PAID", label: "Paid" },
 ]
 

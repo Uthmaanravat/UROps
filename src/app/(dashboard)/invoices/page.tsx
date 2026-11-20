@@ -176,6 +176,10 @@ export default async function InvoicesPage({
     let activeQuotesCount = 0;
     let uninvoicedQuotesCount = 0;
     let invoicedAwaitingCount = 0;
+    let draftQuotesCount = 0;
+    let sentQuotesCount = 0;
+    let awaitingPoQuotesCount = 0;
+    let acceptedQuotesCount = 0;
 
     let totalInvoicesCount = 0;
     let paidInvoicesCount = 0;
@@ -192,6 +196,15 @@ export default async function InvoicesPage({
                 paidQuotesCount++;
             } else {
                 activeQuotesCount++;
+                if (inv.status === 'DRAFT') {
+                    draftQuotesCount++;
+                } else if (inv.status === 'SENT') {
+                    sentQuotesCount++;
+                } else if (inv.status === 'AWAITING_PO' || (inv.project?.commercialStatus === 'AWAITING_PO' && inv.status !== 'DRAFT')) {
+                    awaitingPoQuotesCount++;
+                } else if (inv.status === 'ACCEPTED') {
+                    acceptedQuotesCount++;
+                }
                 if (!isInvoiced) {
                     uninvoicedQuotesCount++;
                 } else {
@@ -227,6 +240,18 @@ export default async function InvoicesPage({
         } else if (statusFilter === 'INVOICED') {
             // View invoiced quotes awaiting payment (or including paid if showPaid is true)
             invoices = invoices.filter(inv => getIsInvoiced(inv) && (showPaid || !getIsRecordPaid(inv)));
+        } else if (statusFilter === 'DRAFT') {
+            invoices = invoices.filter(inv => inv.status === 'DRAFT');
+        } else if (statusFilter === 'SENT') {
+            invoices = invoices.filter(inv => inv.status === 'SENT');
+        } else if (statusFilter === 'AWAITING_PO') {
+            invoices = invoices.filter(inv => inv.status === 'AWAITING_PO' || (inv.project?.commercialStatus === 'AWAITING_PO' && inv.status !== 'DRAFT'));
+        } else if (statusFilter === 'ACCEPTED') {
+            invoices = invoices.filter(inv => inv.status === 'ACCEPTED');
+        } else if (statusFilter === 'DECLINED') {
+            invoices = invoices.filter(inv => inv.status === 'DECLINED' || inv.status === 'REJECTED');
+        } else if (statusFilter === 'EXPIRED') {
+            invoices = invoices.filter(inv => inv.status === 'EXPIRED');
         } else {
             // Default active quotes view: hide old paid quotes unless showPaid is toggled
             if (!showPaid) {
@@ -477,6 +502,62 @@ export default async function InvoicesPage({
                                     : "bg-muted text-muted-foreground"
                             )}>
                                 {activeQuotesCount}
+                            </span>
+                        </Link>
+                        <Link
+                            href={getQuickFilterUrl("AWAITING_PO")}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                                statusFilter === 'AWAITING_PO'
+                                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm font-black"
+                                    : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                            )}
+                        >
+                            ⏳ Awaiting PO
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-300 font-black leading-none">
+                                {awaitingPoQuotesCount}
+                            </span>
+                        </Link>
+                        <Link
+                            href={getQuickFilterUrl("DRAFT")}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                                statusFilter === 'DRAFT'
+                                    ? "bg-gray-500/20 text-gray-200 border border-gray-500/40 shadow-sm font-black"
+                                    : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                            )}
+                        >
+                            Draft
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-gray-500/20 text-gray-300 font-black leading-none">
+                                {draftQuotesCount}
+                            </span>
+                        </Link>
+                        <Link
+                            href={getQuickFilterUrl("SENT")}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                                statusFilter === 'SENT'
+                                    ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm font-black"
+                                    : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                            )}
+                        >
+                            Sent
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-500/20 text-purple-300 font-black leading-none">
+                                {sentQuotesCount}
+                            </span>
+                        </Link>
+                        <Link
+                            href={getQuickFilterUrl("ACCEPTED")}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                                statusFilter === 'ACCEPTED'
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm font-black"
+                                    : "text-muted-foreground hover:bg-muted/80 bg-muted/30"
+                            )}
+                        >
+                            Accepted
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-black leading-none">
+                                {acceptedQuotesCount}
                             </span>
                         </Link>
                         <Link
@@ -732,7 +813,7 @@ export default async function InvoicesPage({
                                                     <Link href={`${appPrefix}/projects/${invoice.projectId}`} className="text-blue-500 hover:underline font-semibold">
                                                         {invoice.project.name}
                                                     </Link>
-                                                    {invoice.project.commercialStatus && (
+                                                    {invoice.project.commercialStatus && (invoice.status !== 'DRAFT' || invoice.project.commercialStatus !== 'AWAITING_PO') && (
                                                         <span className={cn(
                                                             "inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold w-fit tracking-wide uppercase",
                                                             invoice.project.commercialStatus === 'AWAITING_PO' ? "bg-rose-500/10 text-rose-500 border border-rose-500/20" :
@@ -798,16 +879,37 @@ export default async function InvoicesPage({
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <span className={cn(
-                                                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                                                        invoice.status === 'SENT' ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" :
-                                                        invoice.status === 'ACCEPTED' ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                                                        invoice.status === 'REJECTED' ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" :
-                                                        invoice.status === 'DRAFT' ? "bg-gray-500/10 text-gray-400 border border-gray-500/20" :
-                                                        "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
-                                                    )}>
-                                                        {invoice.status}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        <span className={cn(
+                                                            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                                                            invoice.status === 'SENT' ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" :
+                                                            invoice.status === 'AWAITING_PO' ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold" :
+                                                            invoice.status === 'ACCEPTED' ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                                                            invoice.status === 'REJECTED' || invoice.status === 'DECLINED' ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" :
+                                                            invoice.status === 'EXPIRED' ? "bg-slate-500/15 text-slate-400 border border-slate-500/30" :
+                                                            invoice.status === 'DRAFT' ? "bg-gray-500/10 text-gray-400 border border-gray-500/20" :
+                                                            "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
+                                                        )}>
+                                                            {invoice.status === 'AWAITING_PO' ? 'Awaiting PO' :
+                                                             invoice.status === 'REJECTED' || invoice.status === 'DECLINED' ? 'Declined' :
+                                                             invoice.status}
+                                                        </span>
+                                                        {(() => {
+                                                            const meta = (invoice.metadata as any) || {};
+                                                            const sentDateRaw = meta.sentAt || (['SENT', 'AWAITING_PO', 'ACCEPTED', 'INVOICED'].includes(invoice.status) ? (invoice.updatedAt || invoice.date) : null);
+                                                            if (!sentDateRaw || invoice.status === 'DRAFT') return null;
+                                                            const sentDate = new Date(sentDateRaw);
+                                                            const dd = String(sentDate.getDate()).padStart(2, '0');
+                                                            const mm = String(sentDate.getMonth() + 1).padStart(2, '0');
+                                                            const method = meta.sentMethod ? (meta.sentMethod === 'hand_delivered' ? 'hand' : meta.sentMethod === 'whatsapp' ? 'WhatsApp' : 'email') : null;
+                                                            return (
+                                                                <span className="text-[10px] text-muted-foreground font-mono font-semibold flex items-center gap-1 pl-1" title={meta.sentAt ? `Sent on ${sentDate.toLocaleDateString()}${meta.sentMethod ? ` via ${meta.sentMethod}` : ''}` : undefined}>
+                                                                    <span>Sent {dd}/{mm}</span>
+                                                                    {method && <span className="text-[9px] text-gray-400 font-sans">({method})</span>}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
                                                 )
                                             ) : (
                                                 <div className="flex flex-col gap-1 items-start">

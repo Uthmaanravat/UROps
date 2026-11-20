@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { FileText, Loader2, Table } from "lucide-react"
+import { FileText, Loader2, Table, Eye, Download } from "lucide-react"
 import jsPDF from "jspdf"
 import { drawPdfHeader, getThemePrimaryRGB, getThemePrimaryHex } from "@/lib/pdf-utils"
 import autoTable from "jspdf-autotable"
@@ -10,6 +10,27 @@ import { saveAs } from "file-saver"
 import { useState } from "react"
 import { formatCurrency } from "@/lib/utils"
 import { createStatementAction } from "@/app/(dashboard)/invoices/actions"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+
+export function getInvoiceQuoteReference(i: any): string | null {
+    if (i.reference && typeof i.reference === 'string') {
+        const match = i.reference.match(/(?:as per quotation\s*)?([A-Z0-9]+-Q-\d{4}-\d+|Q-\d{4}-\d+|AW-\d{4}-\d+)/i);
+        if (match) return match[1];
+        if (i.reference.trim().startsWith('Q-') || i.reference.trim().startsWith('AW-')) {
+            return i.reference.trim();
+        }
+    }
+    if (i.project?.invoices && Array.isArray(i.project.invoices)) {
+        const linkedQuote = i.project.invoices.find((inv: any) => inv.type === 'QUOTE');
+        if (linkedQuote) {
+            return linkedQuote.quoteNumber || `Q-${new Date(linkedQuote.date).getFullYear()}-${String(linkedQuote.number).padStart(3, '0')}`;
+        }
+    }
+    const meta = (i.metadata as any) || {};
+    if (meta.quoteNumber && typeof meta.quoteNumber === 'string') return meta.quoteNumber;
+    if (meta.linkedQuoteNumber && typeof meta.linkedQuoteNumber === 'string') return meta.linkedQuoteNumber;
+    return null;
+}
 
 export function ClientStatementButton({ client, settings }: { client: any, settings?: any }) {
     const [loading, setLoading] = useState(false)
@@ -170,8 +191,10 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
                 if (outstanding > 0.01) {
                     processedTotalDue += outstanding
-                    // Logic to ensure we show the correct formatted number
-                    const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
+                    // Format invoice line with quote reference: e.g. "INV-2026-029 (Q-2026-034)"
+                    const baseDocNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
+                    const quoteRef = i.type === 'INVOICE' ? getInvoiceQuoteReference(i) : null;
+                    const docNumber = quoteRef ? `${baseDocNumber} (${quoteRef})` : baseDocNumber;
 
                     rows.push([
                         new Date(i.date).toLocaleDateString('en-GB'),
@@ -454,7 +477,9 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
 
                 if (outstanding > 0.01) {
                     processedExcelTotalDue += outstanding
-                    const docNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
+                    const baseDocNumber = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${i.number.toString().padStart(3, '0')}`);
+                    const quoteRef = i.type === 'INVOICE' ? getInvoiceQuoteReference(i) : null;
+                    const docNumber = quoteRef ? `${baseDocNumber} (${quoteRef})` : baseDocNumber;
 
                     const row = worksheet.getRow(currentRow);
                     row.values = [
@@ -516,8 +541,126 @@ export function ClientStatementButton({ client, settings }: { client: any, setti
         }
     }
 
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+    const unpaidInvoices = (client.invoices || [])
+        .filter((i: any) =>
+            i.type === 'INVOICE' &&
+            i.status !== 'PAID' &&
+            i.status !== 'CANCELLED'
+        )
+        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let calculatedTotalDue = 0;
+    const statementLines = unpaidInvoices.map((i: any) => {
+        const paid = i.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0;
+        let outstanding = i.total - paid;
+        if (i.firstPaymentPercentage && i.firstPaymentPercentage > 0 && i.firstPaymentPercentage < 100) {
+            const firstPaymentAmount = i.total * (i.firstPaymentPercentage / 100);
+            if (paid < firstPaymentAmount) {
+                outstanding = firstPaymentAmount - paid;
+            }
+        }
+        if (outstanding > 0.01) {
+            calculatedTotalDue += outstanding;
+        }
+        const baseDoc = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${String(i.number).padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${String(i.number).padStart(3, '0')}`);
+        const quoteRef = i.type === 'INVOICE' ? getInvoiceQuoteReference(i) : null;
+        const formattedNumber = quoteRef ? `${baseDoc} (${quoteRef})` : baseDoc;
+        const projectOrSite = i.site || i.project?.name || '-';
+        return {
+            id: i.id,
+            date: new Date(i.date).toLocaleDateString('en-GB'),
+            docNumber: formattedNumber,
+            projectOrSite,
+            fullLine: `${formattedNumber} – ${projectOrSite}`,
+            total: i.total,
+            outstanding
+        };
+    }).filter((l: any) => l.outstanding > 0.01);
+
     return (
         <div className="flex gap-2">
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="outline" className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 font-bold">
+                        <Eye className="mr-2 h-4 w-4" />
+                        Preview Statement
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-[#0F172A] border-white/10 text-white max-w-3xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-black uppercase tracking-wider flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-primary" />
+                            Statement of Account — {client.companyName || client.name}
+                        </DialogTitle>
+                        <DialogDescription className="text-gray-400 text-xs">
+                            Outstanding invoices showing quote reference next to each invoice number.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="rounded-xl border border-white/10 overflow-hidden bg-black/40">
+                            <table className="w-full text-xs text-left">
+                                <thead className="bg-[#1E293B] text-gray-300 uppercase text-[10px] font-bold tracking-wider">
+                                    <tr>
+                                        <th className="p-3">Date</th>
+                                        <th className="p-3">Invoice & Quote Reference</th>
+                                        <th className="p-3 text-right">Total</th>
+                                        <th className="p-3 text-right">Outstanding</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5 font-sans">
+                                    {statementLines.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={4} className="p-6 text-center text-muted-foreground">
+                                                No outstanding invoices found for this client.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        statementLines.map((line: any) => (
+                                            <tr key={line.id} className="hover:bg-white/[0.02]">
+                                                <td className="p-3 font-mono text-gray-400">{line.date}</td>
+                                                <td className="p-3">
+                                                    <div className="font-semibold text-white">
+                                                        <span>{line.docNumber}</span>
+                                                        <span className="text-gray-400 font-normal"> – {line.projectOrSite}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 text-right font-mono text-gray-300">{formatCurrency(line.total)}</td>
+                                                <td className="p-3 text-right font-mono font-bold text-emerald-400">{formatCurrency(line.outstanding)}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                                <tfoot className="bg-[#1E293B]/60 border-t border-white/10 font-black">
+                                    <tr>
+                                        <td colSpan={3} className="p-3 text-right uppercase tracking-wider text-xs">Total Amount Due:</td>
+                                        <td className="p-3 text-right font-mono text-sm text-emerald-400">{formatCurrency(calculatedTotalDue)}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex items-center justify-between gap-2">
+                        <Button variant="ghost" onClick={() => setIsPreviewOpen(false)} className="text-gray-400">
+                            Close
+                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="default" onClick={generateExcelStatement} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">
+                                {loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Table className="mr-1.5 h-3.5 w-3.5" />}
+                                Export Excel
+                            </Button>
+                            <Button variant="default" onClick={generateStatement} disabled={loading} className="bg-primary text-black font-black text-xs hover:bg-primary/90">
+                                {loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
+                                Download PDF
+                            </Button>
+                        </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Button variant="default" onClick={generateExcelStatement} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500">
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Table className="mr-2 h-4 w-4" />}
                 Statement (Excel)

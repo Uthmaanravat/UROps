@@ -356,7 +356,7 @@ export async function createInvoiceAction(data: {
             quoteNumber: formattedQuoteNumber,
             reference: data.reference,
             paymentNotes: data.paymentNotes,
-            firstPaymentPercentage: data.firstPaymentPercentage,
+            firstPaymentPercentage: data.firstPaymentPercentage !== undefined ? data.firstPaymentPercentage : (isAeroWash ? 60 : null),
             workType: data.workType || 'GENERAL',
             tenderId: data.tenderId || (isTender ? tender?.id : null),
             rateYear: data.rateYear || 1,
@@ -595,6 +595,26 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
     
     if (status === 'PAID') {
         await markAssociatedQuotesAsPaid(id, companyId);
+    } else if (status === 'AWAITING_PO') {
+        if (invoice.projectId) {
+            await prisma.project.update({
+                where: { id: invoice.projectId },
+                data: { commercialStatus: 'AWAITING_PO' }
+            });
+        }
+    } else if (status === 'SENT') {
+        const currentMeta = (invoice.metadata as any) || {};
+        if (!currentMeta.sentAt) {
+            await prisma.invoice.update({
+                where: { id: invoice.id },
+                data: {
+                    metadata: {
+                        ...currentMeta,
+                        sentAt: new Date().toISOString()
+                    }
+                }
+            });
+        }
     }
 
     // PART 4: Link prospect updates
@@ -618,6 +638,22 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
                                     date: now.toISOString(),
                                     method: 'email',
                                     outcome: `Quote #${invoice.quoteNumber || invoice.number} sent to client`,
+                                    quoteId: invoice.id
+                                }
+                            ]
+                        }
+                    });
+                } else if (status === 'AWAITING_PO') {
+                    await prisma.prospect.update({
+                        where: { id: prospectId },
+                        data: {
+                            lastContactDate: now,
+                            contactLog: [
+                                ...existingLog,
+                                {
+                                    date: now.toISOString(),
+                                    method: 'status',
+                                    outcome: `Quote #${invoice.quoteNumber || invoice.number} awaiting client PO`,
                                     quoteId: invoice.id
                                 }
                             ]
@@ -650,7 +686,7 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
                                 clientId: invoice.clientId,
                                 status: 'SCHEDULED',
                                 workflowStage: 'SOW',
-                                commercialStatus: 'AWAITING_PO',
+                                commercialStatus: invoice.clientPoNumber ? 'PO_RECEIVED' : 'AWAITING_PO',
                                 description: `Project auto-created from accepted Quote #${invoice.quoteNumber || invoice.number}`
                             }
                         });
@@ -664,11 +700,11 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
                             data: {
                                 status: 'SCHEDULED',
                                 workflowStage: 'SOW',
-                                commercialStatus: 'AWAITING_PO'
+                                commercialStatus: invoice.clientPoNumber ? 'PO_RECEIVED' : 'AWAITING_PO'
                             }
                         });
                     }
-                } else if (status === 'REJECTED' || status === 'CANCELLED') {
+                } else if (status === 'REJECTED' || status === 'DECLINED' || status === 'CANCELLED' || status === 'EXPIRED') {
                     await prisma.prospect.update({
                         where: { id: prospectId },
                         data: {
@@ -679,7 +715,7 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
                                 {
                                     date: now.toISOString(),
                                     method: 'status',
-                                    outcome: `Quote #${invoice.quoteNumber || invoice.number} rejected/cancelled`,
+                                    outcome: `Quote #${invoice.quoteNumber || invoice.number} ${status.toLowerCase()}`,
                                     quoteId: invoice.id
                                 }
                             ]
@@ -694,12 +730,82 @@ export async function updateInvoiceStatus(id: string, status: any) { // Type che
     
     revalidatePath(`/invoices/${id}`)
     revalidatePath("/invoices")
+    revalidatePath("/app/lrbuilders/invoices")
+    revalidatePath("/app/aerowash/invoices")
     revalidatePath("/drone")
     revalidatePath("/clients")
     revalidatePath(`/clients/${invoice.clientId}`)
     if (invoice.projectId) {
         revalidatePath(`/projects/${invoice.projectId}`)
     }
+}
+
+export async function markQuoteAsSentAction(data: {
+    invoiceId: string;
+    sentAt?: string;
+    sentMethod?: 'email' | 'whatsapp' | 'hand_delivered';
+    sentNotes?: string;
+}) {
+    const companyId = await ensureAuth();
+    const invoice = await prisma.invoice.findUnique({
+        where: { id: data.invoiceId, companyId },
+        include: { client: true }
+    });
+    if (!invoice) throw new Error("Invoice or quote not found");
+
+    const currentMeta = (invoice.metadata as any) || {};
+    const sentDate = data.sentAt ? new Date(data.sentAt) : new Date();
+    const updatedMeta = {
+        ...currentMeta,
+        sentAt: sentDate.toISOString(),
+        sentMethod: data.sentMethod || 'email',
+        sentNotes: data.sentNotes || null,
+        sentOutsideApp: true
+    };
+
+    await prisma.invoice.update({
+        where: { id: data.invoiceId },
+        data: {
+            status: 'SENT',
+            metadata: updatedMeta
+        }
+    });
+
+    const prospectId = (invoice.client?.customFields as any)?.prospectId;
+    if (prospectId) {
+        try {
+            const p = await prisma.prospect.findUnique({ where: { id: prospectId } });
+            if (p && p.companyId === companyId) {
+                const existingLog = (p.contactLog as any[]) || [];
+                const methodLabel = data.sentMethod === 'whatsapp' ? 'WhatsApp' : data.sentMethod === 'hand_delivered' ? 'Hand Delivered' : 'External Email';
+                await prisma.prospect.update({
+                    where: { id: prospectId },
+                    data: {
+                        status: 'quoted',
+                        lastContactDate: sentDate,
+                        contactLog: [
+                            ...existingLog,
+                            {
+                                date: sentDate.toISOString(),
+                                method: data.sentMethod || 'email',
+                                outcome: `Quote #${invoice.quoteNumber || invoice.number} marked as sent via ${methodLabel}`,
+                                quoteId: invoice.id
+                            }
+                        ]
+                    }
+                });
+            }
+        } catch (pErr) {
+            console.warn("Could not update prospect in markQuoteAsSentAction:", pErr);
+        }
+    }
+
+    revalidatePath(`/invoices/${data.invoiceId}`);
+    revalidatePath("/invoices");
+    revalidatePath("/app/lrbuilders/invoices");
+    revalidatePath("/app/aerowash/invoices");
+    revalidatePath(`/clients/${invoice.clientId}`);
+    return { success: true, sentAt: sentDate.toISOString(), sentMethod: data.sentMethod || 'email' };
 }
 
 export async function getQuoteSequenceAction(clientId?: string, workType: 'GENERAL' | 'TENDER' = 'GENERAL', tenderId?: string) {

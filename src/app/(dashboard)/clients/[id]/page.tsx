@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Pencil, ArrowUpRight, Repeat } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
-import { ClientStatementButton } from "@/components/clients/ClientStatementButton";
+import { ClientStatementButton, getInvoiceQuoteReference } from "@/components/clients/ClientStatementButton";
 import { DeleteClientButton } from "@/components/clients/DeleteClientButton";
 import { InteractionList } from "@/components/clients/InteractionList";
 import { ActivityTimeline } from "@/components/clients/ActivityTimeline";
@@ -31,7 +31,16 @@ export default async function ClientPage({ params }: { params: { id: string } })
                 orderBy: { updatedAt: 'desc' }
             },
             invoices: {
-                include: { payments: true, project: true },
+                include: {
+                    payments: true,
+                    project: {
+                        include: {
+                            invoices: {
+                                select: { id: true, type: true, quoteNumber: true, number: true, date: true }
+                            }
+                        }
+                    }
+                },
                 orderBy: { date: 'desc' }
             },
             interactions: {
@@ -78,14 +87,20 @@ export default async function ClientPage({ params }: { params: { id: string } })
             status: p.status,
             description: p.description
         })),
-        ...client.invoices.map((i: any) => ({
-            id: i.id,
-            type: 'INVOICE',
-            date: new Date(i.date),
-            title: `${i.type} ${i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${String(i.number).padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${String(i.number).padStart(3, '0')}`)}`,
-            status: i.status,
-            amount: i.total
-        })),
+        ...client.invoices.map((i: any) => {
+            const baseDoc = i.quoteNumber || (i.type === 'QUOTE' ? `Q-${new Date(i.date).getFullYear()}-${String(i.number).padStart(3, '0')}` : `INV-${new Date(i.date).getFullYear()}-${String(i.number).padStart(3, '0')}`);
+            const quoteRef = i.type === 'INVOICE' ? getInvoiceQuoteReference(i) : null;
+            const fullDoc = quoteRef ? `${baseDoc} (${quoteRef})` : baseDoc;
+            const projectOrSite = i.site || i.project?.name;
+            return {
+                id: i.id,
+                type: 'INVOICE',
+                date: new Date(i.date),
+                title: `${i.type} ${fullDoc}${projectOrSite ? ` – ${projectOrSite}` : ''}`,
+                status: i.status,
+                amount: i.total
+            };
+        }),
         ...client.interactions.map((i: any) => ({
             id: i.id,
             type: 'INTERACTION',
@@ -244,18 +259,32 @@ export default async function ClientPage({ params }: { params: { id: string } })
                                 </tr>
                             </thead>
                             <tbody>
-                                {client.invoices.map((invoice: any) => (
-                                    <tr key={invoice.id} className="border-b transition-colors hover:bg-muted/50">
-                                        <td className="p-4 align-middle">{new Date(invoice.date).toLocaleDateString()}</td>
-                                        <td className="p-4 align-middle">{invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`)} <br /><span className="text-xs text-muted-foreground">{invoice.type}</span></td>
-                                        <td className="p-4 align-middle font-medium">{formatCurrency(invoice.total)}</td>
-                                        <td className="p-4 align-middle text-right">
-                                            <Link href={`/invoices/${invoice.id}`}>
-                                                <Button variant="ghost" size="sm">View</Button>
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {client.invoices.map((invoice: any) => {
+                                    const baseDoc = invoice.quoteNumber || (invoice.type === 'QUOTE' ? `Q-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}` : `INV-${new Date(invoice.date).getFullYear()}-${String(invoice.number).padStart(3, '0')}`);
+                                    const quoteRef = invoice.type === 'INVOICE' ? getInvoiceQuoteReference(invoice) : null;
+                                    const docNumber = quoteRef ? `${baseDoc} (${quoteRef})` : baseDoc;
+                                    const projectOrSite = invoice.site || invoice.project?.name;
+                                    return (
+                                        <tr key={invoice.id} className="border-b transition-colors hover:bg-muted/50">
+                                            <td className="p-4 align-middle">{new Date(invoice.date).toLocaleDateString()}</td>
+                                            <td className="p-4 align-middle">
+                                                <div className="font-semibold text-white">
+                                                    <span>{docNumber}</span>
+                                                    {projectOrSite && (
+                                                        <span className="text-muted-foreground font-normal"> – {projectOrSite}</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs text-muted-foreground">{invoice.type}</span>
+                                            </td>
+                                            <td className="p-4 align-middle font-medium">{formatCurrency(invoice.total)}</td>
+                                            <td className="p-4 align-middle text-right">
+                                                <Link href={`/invoices/${invoice.id}`}>
+                                                    <Button variant="ghost" size="sm">View</Button>
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                                 {client.statements.map((statement: any) => (
                                     <tr key={statement.id} className="border-b transition-colors hover:bg-muted/50">
                                         <td className="p-4 align-middle">{new Date(statement.date).toLocaleDateString()}</td>

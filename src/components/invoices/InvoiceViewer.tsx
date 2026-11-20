@@ -5,7 +5,7 @@ import React from 'react'
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency, LINE_ITEM_REASONS, isReasonAlreadyInDescription } from "@/lib/utils"
-import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3, ListFilter, ShieldCheck, ChevronDown, ChevronUp, RotateCcw, History, MessageSquare } from "lucide-react"
+import { Download, FileCheck, CreditCard, ArrowLeft, Trash2, Mail, FileText, Lock, Unlock, ArrowUp, ArrowDown, GripVertical, Copy, CopyPlus, AlertTriangle, AlertCircle, Loader2, Database, Sparkles, ClipboardPaste, CheckCircle2, ArrowRight, Book, Edit3, ListFilter, ShieldCheck, ChevronDown, ChevronUp, RotateCcw, History, MessageSquare, Send } from "lucide-react"
 import { BulkItemImportDialog, ParsedBulkItem } from "@/components/invoices/BulkItemImportDialog"
 import { LineItemEditor } from "@/components/invoices/LineItemEditor"
 import { CatalogSidePanel } from "@/components/invoices/CatalogSidePanel"
@@ -335,13 +335,15 @@ export function InvoiceViewer({
     const isDocContract = Boolean(docProgInfo && docProgInfo.id !== 'ONCE_OFF');
     const docVisitsPerYear = Number(docProgInfo?.visitsPerYear) || 1;
 
-    const [firstPaymentOption, setFirstPaymentOption] = useState<string>(
-        invoice.firstPaymentPercentage
-            ? invoice.firstPaymentPercentage.toString()
-            : (isAeroWashDoc ? "60" : "50")
-    );
+    const [firstPaymentOption, setFirstPaymentOption] = useState<string>(() => {
+        if (invoice.firstPaymentPercentage !== null && invoice.firstPaymentPercentage !== undefined) {
+            if (invoice.firstPaymentPercentage >= 100 || invoice.firstPaymentPercentage <= 0) return "none";
+            return invoice.firstPaymentPercentage.toString();
+        }
+        return isAeroWashDoc ? "60" : "none";
+    });
     const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>(
-        invoice.firstPaymentPercentage && ![20, 50, 60, 75].includes(invoice.firstPaymentPercentage)
+        invoice.firstPaymentPercentage && ![20, 50, 60, 75].includes(invoice.firstPaymentPercentage) && invoice.firstPaymentPercentage < 100
             ? invoice.firstPaymentPercentage.toString()
             : ""
     );
@@ -354,19 +356,38 @@ export function InvoiceViewer({
     const [convertPresentationStyle, setConvertPresentationStyle] = useState<'AS_PER_QUOTATION' | 'DETAILED'>('AS_PER_QUOTATION');
 
     const getInitialConvertPaymentOption = () => {
-        if (invoice.firstPaymentPercentage) return invoice.firstPaymentPercentage.toString();
+        if (invoice.firstPaymentPercentage !== null && invoice.firstPaymentPercentage !== undefined) {
+            if (invoice.firstPaymentPercentage >= 100 || invoice.firstPaymentPercentage <= 0) return "none";
+            return invoice.firstPaymentPercentage.toString();
+        }
         if (isAeroWashDoc) {
             return isDocContract ? "per_visit" : "60";
         }
-        return "50";
+        return "none";
     };
 
     const [convertFirstPaymentOption, setConvertFirstPaymentOption] = useState<string>(getInitialConvertPaymentOption);
     const [convertCustomPercentage, setConvertCustomPercentage] = useState<string>(
-        invoice.firstPaymentPercentage && ![20, 50, 60, 75].includes(invoice.firstPaymentPercentage)
+        invoice.firstPaymentPercentage && ![20, 50, 60, 75].includes(invoice.firstPaymentPercentage) && invoice.firstPaymentPercentage < 100
             ? invoice.firstPaymentPercentage.toString()
             : ""
     );
+
+    const [isMarkSentDialogOpen, setIsMarkSentDialogOpen] = useState(false);
+    const [markSentDate, setMarkSentDate] = useState(() => {
+        const meta = (invoice.metadata as any) || {};
+        if (meta.sentAt) return new Date(meta.sentAt).toISOString().split('T')[0];
+        return new Date().toISOString().split('T')[0];
+    });
+    const [markSentMethod, setMarkSentMethod] = useState<'email' | 'whatsapp' | 'hand_delivered'>(() => {
+        const meta = (invoice.metadata as any) || {};
+        return meta.sentMethod || 'whatsapp';
+    });
+    const [markSentNotes, setMarkSentNotes] = useState(() => {
+        const meta = (invoice.metadata as any) || {};
+        return meta.sentNotes || '';
+    });
+    const [isMarkingSent, setIsMarkingSent] = useState(false);
 
     const handleAddItem = () => {
         const newItem = {
@@ -2741,6 +2762,106 @@ export function InvoiceViewer({
                             </DialogContent>
                         </Dialog>
 
+                        {/* Mark as Sent Dialog (for external sends: WhatsApp, own email, hand delivered) */}
+                        {invoice.type === 'QUOTE' && invoice.status !== 'PAID' && (
+                            <Dialog open={isMarkSentDialogOpen} onOpenChange={setIsMarkSentDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-10 px-4 rounded-lg bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 border border-purple-500/30 font-bold text-xs flex items-center gap-2"
+                                        title="Record quote sent outside the app (e.g. WhatsApp, personal email, hand delivered)"
+                                    >
+                                        <Send className="w-4 h-4 text-purple-400" />
+                                        <span>Mark as Sent</span>
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="bg-[#0F172A] border-white/10 text-white max-w-md">
+                                    <DialogHeader>
+                                        <DialogTitle className="text-xl font-black uppercase tracking-wider flex items-center gap-2">
+                                            <Send className="h-5 w-5 text-purple-400" />
+                                            Mark Quote as Sent
+                                        </DialogTitle>
+                                        <DialogDescription className="text-gray-400 text-xs">
+                                            Record details for quotes sent outside the system (e.g. via WhatsApp, personal email, or hand delivered).
+                                        </DialogDescription>
+                                    </DialogHeader>
+
+                                    <div className="space-y-4 py-2">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary">
+                                                Date Sent
+                                            </Label>
+                                            <Input
+                                                type="date"
+                                                value={markSentDate}
+                                                onChange={(e) => setMarkSentDate(e.target.value)}
+                                                className="bg-white/5 border-white/10 text-white h-11 focus:border-primary text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary">
+                                                Delivery Method
+                                            </Label>
+                                            <select
+                                                value={markSentMethod}
+                                                onChange={(e) => setMarkSentMethod(e.target.value as any)}
+                                                className="w-full h-11 rounded-md border border-white/10 bg-[#1E293B] px-3 text-xs text-white shadow-sm font-semibold focus:border-primary cursor-pointer"
+                                            >
+                                                <option value="whatsapp">📱 WhatsApp</option>
+                                                <option value="email">✉️ Email (External / Personal)</option>
+                                                <option value="hand_delivered">🤝 Hand Delivered</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                Notes (Optional)
+                                            </Label>
+                                            <Input
+                                                placeholder="e.g. Sent PDF to client contact on WhatsApp"
+                                                value={markSentNotes}
+                                                onChange={(e) => setMarkSentNotes(e.target.value)}
+                                                className="bg-white/5 border-white/10 text-white h-11 focus:border-primary text-xs"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <DialogFooter>
+                                        <Button variant="ghost" onClick={() => setIsMarkSentDialogOpen(false)} className="text-gray-400">
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            onClick={async () => {
+                                                setIsMarkingSent(true);
+                                                try {
+                                                    const { markQuoteAsSentAction } = await import("@/app/(dashboard)/invoices/actions");
+                                                    await markQuoteAsSentAction({
+                                                        invoiceId: invoice.id,
+                                                        sentAt: markSentDate,
+                                                        sentMethod: markSentMethod,
+                                                        sentNotes: markSentNotes
+                                                    });
+                                                    setIsMarkSentDialogOpen(false);
+                                                    router.refresh();
+                                                } catch (err: any) {
+                                                    alert(err.message || "Failed to mark as sent");
+                                                } finally {
+                                                    setIsMarkingSent(false);
+                                                }
+                                            }}
+                                            disabled={isMarkingSent}
+                                            className="bg-purple-600 hover:bg-purple-700 text-white font-black px-6"
+                                        >
+                                            {isMarkingSent ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <CheckCircle2 className="w-4 h-4 mr-1.5" />}
+                                            Confirm Mark as Sent
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        )}
+
                         {/* Send Back with Note Dialog (Owner only) */}
                         <Dialog open={isSendBackOpen} onOpenChange={setIsSendBackOpen}>
                             <DialogContent className="bg-[#14141E] border border-amber-500/40 text-white max-w-lg shadow-2xl">
@@ -3249,13 +3370,35 @@ export function InvoiceViewer({
                                 } else if (invoice.status === 'INVOICED') {
                                     displayStatus = "INVOICED";
                                     badgeColor = "bg-indigo-500/15 text-indigo-400 border-indigo-500/30";
+                                } else if (invoice.status === 'AWAITING_PO') {
+                                    displayStatus = "AWAITING PO";
+                                    badgeColor = "bg-amber-500/15 text-amber-300 border-amber-500/30 font-bold";
+                                } else if (invoice.status === 'ACCEPTED') {
+                                    displayStatus = "ACCEPTED";
+                                    badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                                } else if (invoice.status === 'DECLINED' || invoice.status === 'REJECTED') {
+                                    displayStatus = "DECLINED";
+                                    badgeColor = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+                                } else if (invoice.status === 'EXPIRED') {
+                                    displayStatus = "EXPIRED";
+                                    badgeColor = "bg-slate-500/15 text-slate-400 border-slate-500/30";
                                 } else if (invoice.status === 'SENT') {
+                                    displayStatus = "SENT";
                                     badgeColor = "bg-purple-500/10 text-purple-400 border-purple-500/20";
                                 } else if (invoice.status === 'DRAFT') {
+                                    displayStatus = "DRAFT";
                                     badgeColor = "bg-gray-500/10 text-gray-400 border-gray-500/20";
                                 } else {
                                     badgeColor = "bg-primary/10 text-primary border-primary/20";
                                 }
+
+                                const meta = (invoice.metadata as any) || {};
+                                const sentDateRaw = meta.sentAt || (['SENT', 'AWAITING_PO', 'ACCEPTED', 'INVOICED'].includes(invoice.status) ? (invoice.updatedAt || invoice.date) : null);
+                                const sentDdMm = sentDateRaw && invoice.status !== 'DRAFT' ? (() => {
+                                    const d = new Date(sentDateRaw);
+                                    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                                })() : null;
+                                const sentMethodLabel = meta.sentMethod ? (meta.sentMethod === 'hand_delivered' ? 'Hand' : meta.sentMethod === 'whatsapp' ? 'WA' : 'Email') : null;
                                 
                                 return (
                                     <div className="flex flex-wrap items-center justify-center md:justify-end gap-1.5 mb-1">
@@ -3268,6 +3411,12 @@ export function InvoiceViewer({
                                         <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-widest ${badgeColor}`}>
                                             {displayStatus}
                                         </span>
+                                        {sentDdMm && (
+                                            <span className="text-[10px] text-gray-500 font-mono font-semibold flex items-center gap-1 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
+                                                <span>Sent {sentDdMm}</span>
+                                                {sentMethodLabel && <span className="text-[9px] uppercase font-sans">({sentMethodLabel})</span>}
+                                            </span>
+                                        )}
                                     </div>
                                 );
                             })()}
@@ -3475,27 +3624,68 @@ export function InvoiceViewer({
                                     </div>
                                 </div>
                             )}
+                            {invoice.type === 'QUOTE' && (
+                                <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
+                                    <span className="text-[7px] font-black uppercase tracking-widest text-primary">Quote Status</span>
+                                    <select
+                                        value={invoice.status}
+                                        onChange={async (e) => {
+                                            const nextStatus = e.target.value;
+                                            setLoading(true);
+                                            const { updateInvoiceStatus } = await import("@/app/(dashboard)/invoices/actions");
+                                            await updateInvoiceStatus(invoice.id, nextStatus);
+                                            setLoading(false);
+                                            router.refresh();
+                                        }}
+                                        className={cn(
+                                            "bg-transparent border-none text-right font-black outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer px-2 py-0 md:py-1 rounded transition-colors",
+                                            invoice.status === 'SENT' ? "bg-purple-500/20 text-purple-400 mr-[-8px]" :
+                                            invoice.status === 'AWAITING_PO' ? "bg-amber-500/20 text-amber-300 mr-[-8px]" :
+                                            invoice.status === 'ACCEPTED' ? "bg-emerald-500/20 text-emerald-400 mr-[-8px]" :
+                                            invoice.status === 'INVOICED' ? "bg-indigo-500/20 text-indigo-400 mr-[-8px]" :
+                                            invoice.status === 'DECLINED' || invoice.status === 'REJECTED' ? "bg-rose-500/20 text-rose-400 mr-[-8px]" :
+                                            invoice.status === 'EXPIRED' ? "bg-slate-500/20 text-slate-400 mr-[-8px]" :
+                                            "bg-gray-500/20 text-gray-400 mr-[-8px]"
+                                        )}
+                                    >
+                                        <option value="DRAFT" className="bg-[#1E293B]">DRAFT</option>
+                                        <option value="SENT" className="bg-[#1E293B]">SENT</option>
+                                        <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
+                                        <option value="ACCEPTED" className="bg-[#1E293B]">ACCEPTED</option>
+                                        <option value="DECLINED" className="bg-[#1E293B]">DECLINED</option>
+                                        <option value="EXPIRED" className="bg-[#1E293B]">EXPIRED</option>
+                                        {isInvoiced && <option value="INVOICED" className="bg-[#1E293B]">INVOICED</option>}
+                                    </select>
+                                </div>
+                            )}
                             {invoice.projectId && (
                                 <>
                                     <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20">
                                         <span className="text-[7px] font-black uppercase tracking-widest text-[#64748B]">Commercial Status</span>
-                                        <select
-                                            value={commercialStatus}
-                                            onChange={(e) => handleCommercialStatusChange(e.target.value)}
-                                            className={cn(
-                                                "bg-transparent border-none text-right font-black outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer px-2 py-0 md:py-1 rounded transition-colors",
-                                                commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 text-red-500 mr-[-8px]" :
-                                                    commercialStatus === 'REACTIVE_WORK' ? "bg-orange-500/20 text-orange-500 mr-[-8px]" :
-                                                    commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 text-primary mr-[-8px]" :
-                                                        "text-white"
-                                            )}
-                                            disabled={isLocked}
-                                        >
-                                            <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
-                                            <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
-                                            {!isAeroWashDocument && <option value="EMERGENCY_WORK" className="bg-[#1E293B]">EMERGENCY WORK</option>}
-                                            {!isAeroWashDocument && isReactiveEnabled && <option value="REACTIVE_WORK" className="bg-[#1E293B]">REACTIVE WORK</option>}
-                                        </select>
+                                        {invoice.status === 'DRAFT' ? (
+                                            <span className="text-gray-500 text-[10px] font-medium italic">
+                                                Draft (Not Sent)
+                                            </span>
+                                        ) : (
+                                            <select
+                                                value={commercialStatus}
+                                                onChange={(e) => handleCommercialStatusChange(e.target.value)}
+                                                className={cn(
+                                                    "bg-transparent border-none text-right font-black outline-none focus:ring-0 text-[10px] md:text-xs cursor-pointer px-2 py-0 md:py-1 rounded transition-colors",
+                                                    commercialStatus === 'EMERGENCY_WORK' ? "bg-red-500/20 text-red-500 mr-[-8px]" :
+                                                        commercialStatus === 'REACTIVE_WORK' ? "bg-orange-500/20 text-orange-500 mr-[-8px]" :
+                                                        commercialStatus === 'PO_RECEIVED' ? "bg-primary/20 text-primary mr-[-8px]" :
+                                                        commercialStatus === 'AWAITING_PO' ? "bg-rose-500/20 text-rose-400 mr-[-8px]" :
+                                                            "text-white"
+                                                )}
+                                                disabled={isLocked}
+                                            >
+                                                <option value="AWAITING_PO" className="bg-[#1E293B]">AWAITING PO</option>
+                                                <option value="PO_RECEIVED" className="bg-[#1E293B]">PO RECEIVED</option>
+                                                {!isAeroWashDocument && <option value="EMERGENCY_WORK" className="bg-[#1E293B]">EMERGENCY WORK</option>}
+                                                {!isAeroWashDocument && isReactiveEnabled && <option value="REACTIVE_WORK" className="bg-[#1E293B]">REACTIVE WORK</option>}
+                                            </select>
+                                        )}
                                     </div>
                                     <div className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 transition-all group-hover:border-primary/20 mt-2">
                                         <label htmlFor="show-status" className="text-[7px] font-black uppercase tracking-widest text-[#64748B] cursor-pointer">Show Status on Doc</label>

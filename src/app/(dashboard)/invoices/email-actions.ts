@@ -253,10 +253,17 @@ export async function sendInvoiceEmail(
             return { success: false, error: result.error || "Failed to send email" }
         }
 
+        const currentMeta = (invoice.metadata as any) || {}
         await prisma.invoice.update({
             where: { id: invoice.id },
             data: {
-                status: invoice.status === 'DRAFT' ? 'SENT' : invoice.status
+                status: invoice.status === 'DRAFT' ? 'SENT' : invoice.status,
+                metadata: {
+                    ...currentMeta,
+                    sentAt: new Date().toISOString(),
+                    sentMethod: 'email',
+                    sentViaApp: true
+                }
             }
         })
 

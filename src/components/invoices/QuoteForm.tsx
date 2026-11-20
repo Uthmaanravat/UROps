@@ -236,7 +236,7 @@ export function QuoteForm({
     const [isProjectNameManual, setIsProjectNameManual] = useState(false)
     const [paymentNotes, setPaymentNotes] = useState("")
     const [showPaymentNotes, setShowPaymentNotes] = useState(true)
-    const [firstPaymentOption, setFirstPaymentOption] = useState<string>(isAeroWashWorkspace ? "60" : "50")
+    const [firstPaymentOption, setFirstPaymentOption] = useState<string>(isAeroWashWorkspace ? "60" : "none")
     const [customFirstPaymentPercentage, setCustomFirstPaymentPercentage] = useState<string>("")
 
     // Contacts state
@@ -375,7 +375,7 @@ export function QuoteForm({
         setProjectName("")
         setIsProjectNameManual(false)
         setPaymentNotes("")
-        setFirstPaymentOption(isAeroWashWorkspace ? "60" : "50")
+        setFirstPaymentOption(isAeroWashWorkspace ? "60" : "none")
         setCustomFirstPaymentPercentage("")
         setAeroWashPayload(null)
     }
@@ -643,8 +643,10 @@ export function QuoteForm({
             if (!isNaN(parsed) && parsed > 0 && parsed <= 100) {
                 finalFirstPaymentPercentage = parsed
             }
-        } else if (docType === "QUOTE" && firstPaymentOption !== "none") {
-            finalFirstPaymentPercentage = isAeroWashWorkspace ? 60 : 50
+        } else if (firstPaymentOption === "none") {
+            finalFirstPaymentPercentage = undefined
+        } else if (docType === "QUOTE" && isAeroWashWorkspace) {
+            finalFirstPaymentPercentage = 60
         }
 
         try {
@@ -1044,6 +1046,45 @@ export function QuoteForm({
                                     className="bg-[#0F0F1A]"
                                 />
                             </div>
+
+                            <div className="space-y-2" data-testid="quote-payment-terms-section">
+                                <div className="flex items-center justify-between">
+                                    <Label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-muted-foreground">
+                                        Payment Terms / Deposit
+                                    </Label>
+                                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-white/10 text-primary border border-primary/30">
+                                        {firstPaymentOption === "none"
+                                            ? "Full Payment (100%)"
+                                            : `${firstPaymentOption === "custom" ? customFirstPaymentPercentage || 0 : firstPaymentOption}% Deposit`}
+                                    </span>
+                                </div>
+                                <select
+                                    value={firstPaymentOption}
+                                    onChange={(e) => setFirstPaymentOption(e.target.value)}
+                                    className="w-full h-10 rounded-md border border-input bg-[#0F0F1A] px-3 py-1 text-xs text-white shadow-sm font-semibold focus:border-primary cursor-pointer"
+                                >
+                                    <option value="none">Full Payment (100%) {!isAeroWashWorkspace ? "— [Default]" : ""}</option>
+                                    <option value="50">50% Deposit</option>
+                                    <option value="60">60% Deposit {isAeroWashWorkspace ? "— [Default]" : ""}</option>
+                                    <option value="20">20% Deposit</option>
+                                    <option value="75">75% Deposit</option>
+                                    <option value="custom">Custom % Deposit</option>
+                                </select>
+                                {firstPaymentOption === "custom" && (
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <span className="text-xs text-gray-400">Custom Deposit %:</span>
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="99"
+                                            placeholder="e.g. 30"
+                                            value={customFirstPaymentPercentage}
+                                            onChange={(e) => setCustomFirstPaymentPercentage(e.target.value)}
+                                            className="w-28 h-8 bg-[#0F0F1A] text-xs font-mono"
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -1414,6 +1455,32 @@ export function QuoteForm({
                                 <span>Total:</span>
                                 <span className="font-mono text-primary text-xl">{formatCurrency(total)}</span>
                             </div>
+
+                            {firstPaymentOption !== "none" && (() => {
+                                const pct = firstPaymentOption === "custom" ? parseFloat(customFirstPaymentPercentage) : parseFloat(firstPaymentOption);
+                                if (!isNaN(pct) && pct > 0 && pct < 100) {
+                                    const depAmt = total * (pct / 100);
+                                    const balAmt = total - depAmt;
+                                    return (
+                                        <div className="pt-2 border-t border-white/5 space-y-1 text-xs">
+                                            <div className="flex justify-between text-emerald-400 font-bold">
+                                                <span>Deposit ({pct}%):</span>
+                                                <span className="font-mono">{formatCurrency(depAmt)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-gray-400">
+                                                <span>Balance on Completion:</span>
+                                                <span className="font-mono">{formatCurrency(balAmt)}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+                            {firstPaymentOption === "none" && (
+                                <div className="pt-1 text-[11px] text-muted-foreground text-right font-medium">
+                                    <span>Terms: 100% Full Payment on Completion</span>
+                                </div>
+                            )}
 
                             {saveError && (
                                 <div className="p-4 rounded-xl bg-red-500/20 border-2 border-red-500/50 text-red-200 text-sm font-bold flex items-start justify-between gap-3 animate-in fade-in my-3">
